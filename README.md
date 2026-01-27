@@ -10,10 +10,14 @@ Make a distributed social network!
 
 ## License
 
-* Choose an OSI approved license, name it here, and copy the license text to a file called `LICENSE`.
+* MIT License
 
 ## Copyright
 
 The authors claiming copyright, if they wish to be known, can list their names here...
 
-* 
+* Bhoomi Bhoomi
+* Dalton Low
+* Boyan Song
+* Nevin Xu
+* Willam Yang Yang
