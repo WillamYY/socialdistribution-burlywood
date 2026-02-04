@@ -21,3 +21,4 @@ The authors claiming copyright, if they wish to be known, can list their names h
 * Boyan Song
 * Nevin Xu
 * Willam Yang Yang
+* Aaryan Muku
