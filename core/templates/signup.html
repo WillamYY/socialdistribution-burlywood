@@ -1,0 +1,13 @@
+<html>
+    <head>
+        <title>Sign Up</title>
+    </head>
+    <body>
+        <form method = "POST" action = "/app/proccess-signup">
+            Username <input name = "username">
+            Password <input name = "password">
+            <input type = "submit">
+            {% csrf_token %}
+        </form>
+    </body>
+</html>
