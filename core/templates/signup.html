@@ -1,13 +1,17 @@
+<!DOCTYPE html>
 <html>
     <head>
         <title>Sign Up</title>
     </head>
     <body>
-        <form method = "POST" action = "/app/proccess-signup">
+        <h1>Sign up for node {{node}}</h1>
+        <!-- Sends a post request with the info to the process signup of the specific node-->
+        <form method = "POST" action = "/app/{{node}}/process-signup/">
             Username <input name = "username">
             Password <input name = "password">
             <input type = "submit">
             {% csrf_token %}
         </form>
+        <p>{{errormessage}}</p> 
     </body>
 </html>
