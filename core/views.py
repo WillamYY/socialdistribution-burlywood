@@ -13,7 +13,7 @@ def SignUpView(request,id):
             error_string += error.message
         return render(request,"signup.html",{"errormessage":error_string,"node":id})
     # Renders an error screen if the node being signed up to doesn't exist
-    return render(request,"error.html")
+    return render(request,"error.html",{"errormessage": "Node does not exist"})
 """
 Handles the sign up from the info of the form
 """
@@ -35,7 +35,7 @@ def SignUpProcessing(request,id):
         return redirect("SignUp",id = id) # Redirects back to signup, change later
     # Renders and error message if the node being signed up to doesn't exist
     else:
-        return render(request,"error.html")
+        return render(request,"error.html",{"errormessage": "Node does not exist"})
 
 
 
@@ -49,8 +49,8 @@ def SignInView(request,id):
         for error in messages.get_messages(request):
             error_string += error.message
         return render(request,"signin.html",{"errormessage":error_string,"node":id})
-    # Renders an error screen if the node being signed up to doesn't exist
-    return render(request,"error.html")
+    # Renders an error screen if the node being signed in to doesn't exist
+    return render(request,"error.html",{"errormessage": "Node does not exist"})
 """
 Handles Signing in
 """
@@ -67,9 +67,9 @@ def SignInProcessing(request,id):
             else:
                 messages.error(request,"Username or password incorrect")
         return redirect("SignIn",id = id) # Redirects back to signup, change later
-    # Renders and error message if the node being signed up to doesn't exist
+    # Renders and error message if the node being signed in to doesn't exist
     else:
-        return render(request,"error.html")
+        return render(request,"error.html",{"errormessage": "Node does not exist"})
 
 
 
@@ -115,4 +115,26 @@ def NodeDisplay(request,id):
         return render(request,"node.html",{"users": node_authors})
     # Renders and error message if the node being signed up to doesn't exist
     else:
-        return render(request,"error.html")
+        return render(request,"error.html", {"errormessage": "Node does not exist"})
+
+
+
+
+"""
+Handles displaying the user profile page
+"""
+def ProfileDisplay(request,id,username):
+    # Ensures the node exists
+    if Node.objects.filter(id = id).exists():
+        # Gets the node the profile is part of
+        node = get_object_or_404(Node,pk=id)
+        # Ensures the user exists
+        if Author.objects.filter(username = username, node = node):
+            # Renders the authors information
+            return render(request,"profileview.html",{"username": username,"nodeId":id})
+        # Renders and error message if the user does not exist
+        else:
+            return render(request,"error.html",{"errormessage": "User does not exist"})
+    # Renders and error message if the node doesn't exist
+    else:
+        return render(request,"error.html",{"errormessage": "Node does not exist"})

@@ -13,4 +13,6 @@ urlpatterns = [
     # Create node urls
     path("create-node/",views.CreateNodeView,name="CreateNode"),
     path("process-node/",views.CreateNodeProcessing,name="ProcessNode"), # Handles the processing of node creation
+    # User profile page
+    path("<int:id>/<str:username>/",views.ProfileDisplay,name="ProfileDisplay")
 ]
