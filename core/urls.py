@@ -11,5 +11,5 @@ urlpatterns = [
     path("signin/",views.SignInView,name="SignIn"),
     path("process-signin/",views.SignInProcessing,name="SignInProcessing"),
     # User profile page
-    path("user/<str:username>/",views.ProfileDisplay,name="ProfileDisplay")
+    path("user/<int:id>/",views.ProfileDisplay,name="ProfileDisplay")
 ]

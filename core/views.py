@@ -64,11 +64,12 @@ def NodeDisplay(request):
 """
 Handles displaying the user profile page
 """
-def ProfileDisplay(request,username):
+def ProfileDisplay(request,id):
     # Ensures the user exists
-    if Author.objects.filter(username = username):
+    if Author.objects.filter(id = id):
+        author = get_object_or_404(Author,pk=id)
         # Renders the authors information
-        return render(request,"profileview.html",{"username": username})
+        return render(request,"profileview.html",{"username": author.username})
     # Renders and error message if the user does not exist
     else:
         return render(request,"error.html",{"errormessage": "User does not exist"})
