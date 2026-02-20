@@ -1,15 +1,13 @@
 from django.urls import path
 from . import views
 
-# Specifies the url patterns for all in the core of the project
 urlpatterns = [
-    path("",views.NodeDisplay,name="NodeDisplay"),
-    # Sign up urls
-    path("signup/",views.SignUpView,name="SignUp"),
-    path("process-signup/",views.SignUpProcessing,name="SignUpProcessing"),
-    # Sign In urls
-    path("signin/",views.SignInView,name="SignIn"),
-    path("process-signin/",views.SignInProcessing,name="SignInProcessing"),
-    # User profile page
-    path("user/<int:id>/",views.ProfileDisplay,name="ProfileDisplay")
+    path("", views.NodeDisplay, name="NodeDisplay"),
+    path("signup/", views.SignUpView, name="SignUp"),
+    path("process-signup/", views.SignUpProcessing, name="SignUpProcessing"),
+    path("login/", views.login_view, name="Login"),
+    path("logout/", views.logout_view, name="Logout"),
+    path("profile/", views.profile_view, name="ProfileView"),
+    path("edit-profile/", views.edit_profile, name="EditProfileView"),
+    path("user/<int:id>/", views.ProfileDisplay, name="ProfileDisplay"),
 ]
