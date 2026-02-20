@@ -3,8 +3,11 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# pelican output
+# Pelican output
 output/
+
+# Media files
+media/
 
 # C extensions
 *.so

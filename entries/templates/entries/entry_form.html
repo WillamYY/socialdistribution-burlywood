@@ -1,0 +1,52 @@
+{% csrf_token %}
+
+{% if messages %}
+    <div class="messages-container" style="margin-bottom: 20px;">
+        {% for message in messages %}
+            <div style="background-color: #fee2e2; border: 1px solid #ef4444; color: #b91c1c; padding: 12px; border-radius: 6px; font-weight: 500;">
+                {{ message }}
+            </div>
+        {% endfor %}
+    </div>
+{% endif %}
+
+{% csrf_token %}
+<div class="form-group">
+    <label>Title</label>
+    <input type="text" name="title" value="{{ entry.title|default:'' }}" class="form-control" required>
+</div>
+
+<div class="form-group">
+    <label>Description</label>
+    <input type="text" name="description" value="{{ entry.description|default:'' }}" class="form-control">
+</div>
+
+<div class="form-group">
+    <label>Content Type</label>
+    <select name="contentType" class="form-control">
+        <option value="text/plain" {% if entry.contentType == 'text/plain' %}selected{% endif %}>Plain Text</option>
+        <option value="text/markdown" {% if entry.contentType == 'text/markdown' %}selected{% endif %}>Markdown</option>
+        {% if entry and "image" in entry.contentType %}
+            <option value="{{ entry.contentType }}" selected>Current Image ({{ entry.contentType }})</option>
+        {% endif %}
+    </select>
+</div>
+
+<div class="form-group">
+    <label>Text Content</label>
+    <textarea name="content" rows="6" class="form-control">{% if not entry or "text" in entry.contentType %}{{ entry.content|default:'' }}{% endif %}</textarea>
+</div>
+
+<div class="form-group">
+    <label>{% if entry %}Replace Image{% else %}Upload Image{% endif %}</label>
+    <input type="file" name="image_file" accept="image/png, image/jpeg" class="form-control">
+</div>
+
+<div class="form-group">
+    <label>Visibility</label>
+    <select name="visibility" class="form-control">
+        <option value="PUBLIC" {% if entry.visibility == 'PUBLIC' %}selected{% endif %}>Public</option>
+        <option value="FRIENDS" {% if entry.visibility == 'FRIENDS' %}selected{% endif %}>Friends Only</option>
+        <option value="UNLISTED" {% if entry.visibility == 'UNLISTED' %}selected{% endif %}>Unlisted</option>
+    </select>
+</div>
