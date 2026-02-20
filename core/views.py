@@ -68,6 +68,7 @@ def login_view(request):
     if request.method == "POST":
         username = request.POST.get("username", "").strip()
         password = request.POST.get("password", "")
+        next_url = request.POST.get("next") or request.GET.get("next")
 
         try:
             author = Author.objects.get(username=username)
@@ -75,6 +76,9 @@ def login_view(request):
             if check_password(password, author.password) or author.password == password:
                 request.session['author_id'] = author.id
                 request.session['username'] = author.username
+
+                if next_url:
+                    return redirect(next_url)
                 return redirect('/app/profile')  # or NodeDisplay
             else:
                 error = "Invalid username or password"
