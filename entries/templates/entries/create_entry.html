@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Create Entry</title>
+</head>
+<body>
+    <h1>Make a New Entry</h1>
+
+    <form method="POST" action="" enctype="multipart/form-data">
+        {% csrf_token %} <label>Title:</label><br>
+        <input type="text" name="title" required><br><br>
+
+        <label>Description:</label><br>
+        <input type="text" name="description"><br><br>
+
+        <label>Content Type:</label><br>
+        <select name="contentType">
+            <option value="text/plain">Plain Text</option>
+            <option value="text/markdown">Markdown</option>
+            <option value="image/png;base64">PNG Image</option>
+            <option value="image/jpeg;base64">JPEG Image</option>
+        </select><br><br>
+
+        <label>Text Content (only for plain/markdown):</label><br>
+        <textarea name="content" rows="5" cols="40"></textarea><br><br>
+
+        <label>Upload Image (if image type selected):</label><br>
+        <input type="file" name="image_file" accept="image/png, image/jpeg"><br><br>
+
+        <label>Visibility:</label><br>
+        <select name="visibility">
+            <option value="PUBLIC">Public</option>
+            <option value="FRIENDS">Friends Only</option>
+            <option value="UNLISTED">Unlisted</option>
+        </select><br><br>
+
+        <button type="submit">Post Entry</button>
+    </form>
+</body>
+</html>
