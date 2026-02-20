@@ -23,7 +23,8 @@ from core import views
 urlpatterns = [
     path("", views.NodeDisplay, name="Home"),
     path('admin/', admin.site.urls),
-    path('app/', include('core.urls')),
+    path('app/',include("core.urls")),
+    path('app/', include('entries.urls')),
 ]
 
 if settings.DEBUG:
