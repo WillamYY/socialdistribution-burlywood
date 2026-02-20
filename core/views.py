@@ -1,6 +1,6 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
-from .models import Author
+from .models import Author, AuthorRequest
 from django.contrib.auth.hashers import check_password
 
 
@@ -9,10 +9,10 @@ def SignUpView(request):
     Displays the signup form.
     Also collects and shows any error messages from previous attempts.
     """
-    error_string = ""
-    for error in messages.get_messages(request):
-        error_string += error.message
-    return render(request, "signup.html", {"errormessage": error_string})
+    message_string = ""
+    for message in messages.get_messages(request):
+        message_string += message.message
+    return render(request, "signup.html", {"message": message_string})
 
 def SignUpProcessing(request):
     """
@@ -21,26 +21,25 @@ def SignUpProcessing(request):
     if request.method == "POST":
         username = request.POST.get("username")
         password = request.POST.get("password")
-        name = request.POST.get("name", "")
-        description = request.POST.get("description", "")
-        github = request.POST.get("github", "")
-        picture = request.FILES.get("picture", None)
+        #name = request.POST.get("name", "")
+        #description = request.POST.get("description", "")
+        #github = request.POST.get("github", "")
+        #picture = request.FILES.get("picture", None)
 
-        if not Author.objects.filter(username=username).exists():
-            new_author = Author(
+        # Ensures the username is not taken and that it isn't currently pending in an author request
+        if not Author.objects.filter(username=username).exists() and not AuthorRequest.objects.filter(username=username).exists():
+            new_author = AuthorRequest(
                 username=username,
-                name=name,
-                description=description,
-                github=github,
-                picture=picture
+                #name=name,
+                #description=description,
+                #github=github,
+                #picture=picture
+                password = password
             )
-            new_author.set_password(password)  # hash password
+            #new_author.set_password(password)  # hash password
             new_author.save()
-
-            # Store session
-            request.session["author_id"] = new_author.id
-            request.session["username"] = new_author.username
-            return redirect("NodeDisplay")
+            messages.info(request,"Approval Pending") # Tells the user that the approval for siging up is pending
+            return redirect("SignUp")
         else:
             messages.error(request, "Username already taken")
             return redirect("SignUp")

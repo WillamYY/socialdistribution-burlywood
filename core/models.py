@@ -22,3 +22,11 @@ class Author(models.Model):
 
     def check_password(self, raw_password):
         return check_password(raw_password, self.password)
+
+"""
+Creates a class for the request to create a new author
+"""
+class AuthorRequest(models.Model):
+    id = models.AutoField(primary_key = True) # Makes each request unique
+    username = models.CharField(max_length=40, unique=True)  # Login ID
+    password = models.CharField(max_length=40)           # Hashed password
