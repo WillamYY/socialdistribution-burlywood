@@ -41,14 +41,16 @@ def update_entry_from_request(request, entry):
 
     return True, None   # Success
 
-@login_required
 def create_entry(request):
     """
     Handles the creation of a new entry, including processing image uploads and text content.
     """
     if request.method == "POST":
+        if not request.session.get("author_id"):
+            return redirect("/app/login")
+
         # Get the author first
-        author = Author.objects.get(id=request.user.id)
+        author = Author.objects.get(id=request.session["author_id"])
         
         # Create a blank Entry instance in memory
         new_entry = Entry(author=author)
@@ -68,13 +70,15 @@ def create_entry(request):
     # Show the empty form for GET requests
     return render(request, "entries/create_entry.html")
 
-@login_required
 def edit_entry(request, entry_id):
     """
     Handles the editing of an existing entry. 
     Only the author of the entry can edit it.
     """
-    author = Author.objects.get(id=request.user.id)
+    if not request.session.get("author_id"):
+        return redirect("/app/login")
+
+    author = Author.objects.get(id=request.session["author_id"])
     entry = get_object_or_404(Entry, id=entry_id, author=author)
 
     if request.method == "POST":
@@ -92,14 +96,16 @@ def edit_entry(request, entry_id):
     
     return render(request, "entries/edit_entry.html", {"entry": entry})
 
-@login_required
 @require_POST
 def delete_entry(request, entry_id):
     """
     Handles the deletion of an entry. 
     Only the author of the entry can delete it.
     """
-    author = Author.objects.get(id=request.user.id)
+    if not request.session.get("author_id"):
+        return redirect("/app/login")
+
+    author = Author.objects.get(id=request.session["author_id"])
     
     # Fetch the entry by this author
     entry = get_object_or_404(Entry, id=entry_id, author=author)
@@ -109,13 +115,14 @@ def delete_entry(request, entry_id):
     
     return redirect("my_entries")
 
-@login_required
 def my_entries(request):
     """
     Displays a list of entries created by the currently logged-in author, 
     ordered by publication date (newest first).
     """
-    author = Author.objects.get(id=request.user.id)
+    if not request.session.get("author_id"): 
+        return redirect("/app/login")
+    author = Author.objects.get(id=request.session["author_id"])
 
     # Get all entries by this author, ordered by newest first
     entries = Entry.objects.filter(author=author).order_by("-published")
