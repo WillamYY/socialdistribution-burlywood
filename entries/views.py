@@ -1,5 +1,5 @@
 import base64
-from django.shortcuts import render, redirect
+from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from .models import Entry
 from core.models import Author
@@ -43,8 +43,17 @@ def create_entry(request):
             visibility=visibility
         )
         
-        # Redirect the user back to profile page temporarily (Just temporarily for now)
-        return redirect('ProfileDisplay', id=author.id)
+        # Redirect the user back to my-entries page
+        return redirect("my_entries")
 
     # Show the empty form for GET requests
     return render(request, 'entries/create_entry.html')
+
+@login_required
+def my_entries(request):
+    author = Author.objects.get(id=request.user.id)
+
+    # Get all entries by this author, ordered by newest first
+    entries = Entry.objects.filter(author=author).order_by('-published')
+    
+    return render(request, 'entries/my_entries.html', {'entries': entries})

@@ -1,13 +1,14 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Create Entry</title>
-</head>
-<body>
-    <h1>Make a New Entry</h1>
+{% extends 'entries/base.html' %}
 
+{% block title %}Create New Entry{% endblock %}
+
+{% block content %}
+    <h1>Make a New Entry</h1>
+    
     <form method="POST" action="" enctype="multipart/form-data">
-        {% csrf_token %} <label>Title:</label><br>
+        {% csrf_token %}
+        
+        <label>Title:</label><br>
         <input type="text" name="title" required><br><br>
 
         <label>Description:</label><br>
@@ -21,7 +22,7 @@
             <option value="image/jpeg;base64">JPEG Image</option>
         </select><br><br>
 
-        <label>Text Content (only for plain/markdown):</label><br>
+        <label>Text Content (if plain/markdown):</label><br>
         <textarea name="content" rows="5" cols="40"></textarea><br><br>
 
         <label>Upload Image (if image type selected):</label><br>
@@ -36,5 +37,4 @@
 
         <button type="submit">Post Entry</button>
     </form>
-</body>
-</html>
+{% endblock %}

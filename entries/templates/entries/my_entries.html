@@ -1,0 +1,41 @@
+{% extends 'entries/base.html' %}
+
+{% block title %}My Shared Thoughts{% endblock %}
+
+{% block content %}
+    <div class="entries-container">
+        <h1>My Shared Thoughts and Pictures</h1>
+        <hr>
+
+        {% for entry in entries %}
+            <div class="entry-card">
+                
+                <div class="entry-header">
+                    <h2 class="entry-title">{{ entry.title }}</h2>
+                    <span class="badge-visibility">{{ entry.visibility }}</span>
+                </div>
+
+                <p class="entry-description">{{ entry.description }}</p>
+
+                <div class="entry-content">
+                    {% if "image" in entry.contentType %}
+                        <img class="entry-image" src="data:{{ entry.contentType }},{{ entry.content }}" alt="{{ entry.title }}">
+                    {% else %}
+                        <div class="entry-text">
+                            {{ entry.content|linebreaks }}
+                        </div>
+                    {% endif %}
+                </div>
+
+                <div class="entry-footer">
+                    <span class="entry-date">Published: {{ entry.published|date:"M d, Y H:i" }}</span>
+                </div>
+                
+            </div>
+        {% empty %}
+            <div class="empty-state">
+                <p>You haven't posted anything yet! Time to share a thought.</p>
+            </div>
+        {% endfor %}
+    </div>
+{% endblock %}
