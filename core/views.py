@@ -1,6 +1,6 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
-from .models import Author
+from .models import Author, FollowRequest
 from django.contrib.auth.hashers import check_password
 
 
@@ -132,20 +132,24 @@ def profile_view(request):
 def ProfileDisplay(request, id):
     author = get_object_or_404(Author, pk=id)
     logged_in_id = request.session.get("author_id")
-
     is_following = False
+    request_sent = False
+
     if logged_in_id and Author.objects.filter(id=logged_in_id).exists():
         me = Author.objects.get(id=logged_in_id)
         is_following = author in me.following.all()
+        request_sent = FollowRequest.objects.filter(requester=me, target=author).exists()
 
     context = {
         "author": author,
         "followers_count": author.followers.count(),
         "following_count": author.following.count(),
         "is_following": is_following,
+        "request_sent": request_sent,
         "logged_in_id": logged_in_id,
     }
     return render(request, "profileview.html", context)
+
 def follow_author(request, author_id):
     if not request.session.get('author_id'):
         return redirect('/app/login')
@@ -154,10 +158,18 @@ def follow_author(request, author_id):
     target = get_object_or_404(Author, id=author_id)
 
     if target != me:
-        me.following.add(target)
-        messages.success(request, f"You are now following {target.username}!")
-    return redirect(f'/app/user/{author_id}/')
+        # Check if already following
+        if target in me.following.all():
+            messages.info(request, f"You are already following {target.username}.")
+        # Check if a request already exists
+        elif FollowRequest.objects.filter(requester=me, target=target).exists():
+            messages.info(request, "Follow request already sent.")
+        else:
+            # Create a follow request instead of immediately following
+            FollowRequest.objects.create(requester=me, target=target)
+            messages.success(request, f"Follow request sent to {target.username}!")
 
+    return redirect(f'/app/user/{author_id}/')
 
 def unfollow_author(request, author_id):
     if not request.session.get('author_id'):
@@ -170,3 +182,27 @@ def unfollow_author(request, author_id):
         me.following.remove(target)
         messages.success(request, f"You unfollowed {target.username}.")
     return redirect(f'/app/user/{author_id}/')
+
+def view_follow_requests(request):
+    author_id = request.session.get('author_id')
+    if not author_id:
+        return redirect('/app/login')
+
+    author = get_object_or_404(Author, id=author_id)
+    requests = FollowRequest.objects.filter(target=author)  # Requests sent to this author
+
+    return render(request, 'follow_request.html', {
+        'author': author,
+        'requests': requests
+    })
+
+def approve_follow(request, req_id):
+    follow_request = get_object_or_404(FollowRequest, id=req_id)
+    follow_request.target.followers.add(follow_request.requester)
+    follow_request.delete()
+    return redirect('view_follow_requests')
+
+def deny_follow(request, req_id):
+    follow_request = get_object_or_404(FollowRequest, id=req_id)
+    follow_request.delete()
+    return redirect('view_follow_requests')

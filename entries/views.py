@@ -7,11 +7,17 @@ from core.models import Author
 """
 Handles the creation of a new entry, including processing image uploads and text content.
 """
-@login_required
+#@login_required
 def create_entry(request):
     if request.method == 'POST':
         # Get the author first
-        author = Author.objects.get(id=request.user.id)
+        author_id = request.session.get('author_id')
+        if not author_id:
+            return redirect('/app/login')  # Just in case
+        try:
+            author = Author.objects.get(id=author_id)
+        except Author.DoesNotExist:
+            return redirect('/app/login')
 
         # Extract standard text fields from the form
         title = request.POST.get('title')
@@ -48,3 +54,15 @@ def create_entry(request):
 
     # Show the empty form for GET requests
     return render(request, 'entries/create_entry.html')
+
+def view_entries(request, author_id):
+    """
+    Shows all entries of a given author (public or visible to the viewer)
+    """
+    author = Author.objects.get(id=author_id)
+    entries = Entry.objects.filter(author=author).order_by('-published')
+
+    return render(request, 'entries/view_entries.html', {
+        'author': author,
+        'entries': entries
+    })

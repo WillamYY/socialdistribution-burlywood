@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Follow Requests</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f2f2f2;
+            display: flex;
+            justify-content: center;
+        }
+        .requests-card {
+            background-color: #fff;
+            margin: 50px 20px;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            max-width: 400px;
+            width: 100%;
+        }
+        h1 { color: #333; text-align: center; }
+        .request {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 10px 0;
+            padding: 10px;
+            border-bottom: 1px solid #ddd;
+        }
+        .request p { margin: 0; }
+        .button {
+            padding: 6px 12px;
+            border-radius: 5px;
+            text-decoration: none;
+            color: white;
+            background-color: #1a73e8;
+        }
+        .button:hover { background-color: #155ab6; }
+    </style>
+</head>
+<body>
+    <div class="requests-card">
+        <h1>Follow Requests</h1>
+        {% if requests %}
+            {% for req in requests %}
+                <div class="request">
+                    <p>{{ req.requester.username }}</p>
+                    <a href="{% url 'ApproveFollow' req.id %}" class="button">Approve</a>
+                    <a href="{% url 'DenyFollow' req.id %}" class="button" style="background-color: #dc3545;">Deny</a>
+                </div>
+            {% endfor %}
+        {% else %}
+            <p style="text-align:center;">No follow requests at the moment.</p>
+        {% endif %}
+    </div>
+</body>
+</html>

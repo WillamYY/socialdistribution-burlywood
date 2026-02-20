@@ -59,6 +59,8 @@
         }
         .follow { background-color: #1a73e8; }
         .unfollow { background-color: #dc3545; }
+        .request-sent { background-color: #999; cursor: default; }
+        .view-entries { background-color: #4caf50; }
         .stats {
             margin-top: 15px;
             font-size: 14px;
@@ -95,10 +97,14 @@
         {% if logged_in_id and logged_in_id != author.id %}
             {% if is_following %}
                 <a href="{% url 'UnfollowAuthor' author.id %}" class="follow-btn unfollow">Unfollow</a>
+                <br>
+                <a href="{% url 'view_entries' author.id %}" class="follow-btn" style="background-color:#4caf50;">View Entries</a>
+            {% elif request_sent %}
+                <button class="follow-btn" disabled style="background-color:#aaa;">Request Sent</button>
             {% else %}
                 <a href="{% url 'FollowAuthor' author.id %}" class="follow-btn follow">Follow</a>
             {% endif %}
         {% endif %}
     </div>
 </body>
-</html>
+</html> 
