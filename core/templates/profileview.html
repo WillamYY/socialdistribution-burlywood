@@ -46,6 +46,24 @@
         .profile-info a:hover {
             text-decoration: underline;
         }
+        .follow-btn {
+            display: inline-block;
+            margin-top: 15px;
+            padding: 8px 18px;
+            border: none;
+            border-radius: 5px;
+            font-size: 15px;
+            cursor: pointer;
+            text-decoration: none;
+            color: white;
+        }
+        .follow { background-color: #1a73e8; }
+        .unfollow { background-color: #dc3545; }
+        .stats {
+            margin-top: 15px;
+            font-size: 14px;
+            color: #666;
+        }
     </style>
 </head>
 <body>
@@ -69,6 +87,18 @@
                 <p><strong>GitHub:</strong> <a href="{{ author.github }}" target="_blank">{{ author.github }}</a></p>
             {% endif %}
         </div>
+
+        <div class="stats">
+            <p><strong>Followers:</strong> {{ followers_count }} | <strong>Following:</strong> {{ following_count }}</p>
+        </div>
+
+        {% if logged_in_id and logged_in_id != author.id %}
+            {% if is_following %}
+                <a href="{% url 'UnfollowAuthor' author.id %}" class="follow-btn unfollow">Unfollow</a>
+            {% else %}
+                <a href="{% url 'FollowAuthor' author.id %}" class="follow-btn follow">Follow</a>
+            {% endif %}
+        {% endif %}
     </div>
 </body>
 </html>

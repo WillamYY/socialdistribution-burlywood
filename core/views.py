@@ -53,13 +53,6 @@ def NodeDisplay(request):
     node_authors = Author.objects.all()
     return render(request, "node.html", {"users": node_authors})
 
-def ProfileDisplay(request, id):
-    """
-    Displays a public profile page for any author given their id.
-    """
-    author = get_object_or_404(Author, pk=id)
-    return render(request, "profileview.html", {"username": author.username})
-
 def login_view(request):
     """
     Handles login for both plain text (legacy) and hashed passwords (signup users).
@@ -123,15 +116,57 @@ def edit_profile(request):
     return render(request, "edit_profile.html", {"author": author})
 
 def profile_view(request):
-    """
-    Displays the profile page for the currently logged-in author.
-    """
     if not request.session.get("author_id"):
         return redirect("/app/login")
 
     author = Author.objects.get(id=request.session["author_id"])
-    return render(request, "profile.html", {"author": author})
+    followers_count = author.followers.count()
+    following_count = author.following.count()
+
+    return render(request, "profile.html", {
+        "author": author,
+        "followers_count": followers_count,
+        "following_count": following_count
+    })
 
 def ProfileDisplay(request, id):
     author = get_object_or_404(Author, pk=id)
-    return render(request, "profileview.html", {"author": author})
+    logged_in_id = request.session.get("author_id")
+
+    is_following = False
+    if logged_in_id and Author.objects.filter(id=logged_in_id).exists():
+        me = Author.objects.get(id=logged_in_id)
+        is_following = author in me.following.all()
+
+    context = {
+        "author": author,
+        "followers_count": author.followers.count(),
+        "following_count": author.following.count(),
+        "is_following": is_following,
+        "logged_in_id": logged_in_id,
+    }
+    return render(request, "profileview.html", context)
+def follow_author(request, author_id):
+    if not request.session.get('author_id'):
+        return redirect('/app/login')
+
+    me = Author.objects.get(id=request.session['author_id'])
+    target = get_object_or_404(Author, id=author_id)
+
+    if target != me:
+        me.following.add(target)
+        messages.success(request, f"You are now following {target.username}!")
+    return redirect(f'/app/user/{author_id}/')
+
+
+def unfollow_author(request, author_id):
+    if not request.session.get('author_id'):
+        return redirect('/app/login')
+
+    me = Author.objects.get(id=request.session['author_id'])
+    target = get_object_or_404(Author, id=author_id)
+
+    if target != me:
+        me.following.remove(target)
+        messages.success(request, f"You unfollowed {target.username}.")
+    return redirect(f'/app/user/{author_id}/')

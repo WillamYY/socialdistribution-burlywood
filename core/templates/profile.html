@@ -61,6 +61,8 @@
     <p><strong>GitHub:</strong> 
       {% if author.github %}
         <a href="{{ author.github }}" target="_blank">{{ author.github }}</a>
+        <p><strong>Followers:</strong> {{ followers_count }} |
+        <strong>Following:</strong> {{ following_count }}</p>
       {% else %}
         Not provided
       {% endif %}
@@ -69,6 +71,9 @@
     <div style="text-align:center;">
       <a href="/app/edit-profile" class="button">Edit Profile</a>
       <a href="/app/logout" class="button" style="background-color: #555;">Logout</a>
+      <div style="text-align:center; margin-top: 10px;">
+      <a href="/app/" class="button" style="background-color: #1a73e8;">View All Authors</a>
+      </div>
     </div>
   </body>
 </html>
