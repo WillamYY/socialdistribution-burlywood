@@ -29,6 +29,12 @@ class Author(models.Model):
     def check_password(self, raw_password):
         return check_password(raw_password, self.password)
     
+    def friends(self):
+        """
+        Returns a queryset of authors where both authors follow each other.
+        """
+        return self.followers.filter(followers=self)
+    
 class FollowRequest(models.Model):
     requester = models.ForeignKey('Author', on_delete=models.CASCADE, related_name='sent_requests')
     target = models.ForeignKey('Author', on_delete=models.CASCADE, related_name='received_requests')

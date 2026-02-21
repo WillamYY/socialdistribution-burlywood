@@ -110,13 +110,14 @@
         {% if logged_in_id and logged_in_id != author.id %}
             {% if is_following %}
                 <a href="{% url 'UnfollowAuthor' author.id %}" class="follow-btn unfollow">Unfollow</a>
-                <br>
-                <a href="{% url 'view_entries' author.id %}" class="follow-btn view-entries">View Entries</a>
             {% elif request_sent %}
                 <button class="follow-btn request-sent" disabled>Request Sent</button>
             {% else %}
                 <a href="{% url 'FollowAuthor' author.id %}" class="follow-btn follow">Follow</a>
             {% endif %}
+    
+            <!-- View Entries button always visible (except on own profile) -->
+            <a href="{% url 'view_entries' author.id %}" class="follow-btn view-entries">View Entries</a>
         {% endif %}
     </div>
 </body>

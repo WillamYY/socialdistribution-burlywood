@@ -130,23 +130,26 @@ def my_entries(request):
     return render(request, "entries/my_entries.html", {"entries": entries})
 
 def view_entries(request, author_id):
-    """
-    Shows all entries of a given author (public or visible to the viewer)
-    """
-    from core.models import Author  # to avoid circular imports
     author = get_object_or_404(Author, id=author_id)
+    logged_in_id = request.session.get('author_id')
+    is_owner = logged_in_id == author.id
 
-    # Get all entries by this author, newest first
     entries = Entry.objects.filter(author=author).order_by('-published')
 
-    logged_in_id = request.session.get('author_id')
-    is_owner = (logged_in_id == author.id)
-
-    # Filter visibility
     if not is_owner:
-        entries = entries.filter(visibility__in=['PUBLIC', 'FRIENDS'])
-
+        if logged_in_id:
+            viewer = get_object_or_404(Author, id=logged_in_id)
+            if viewer in author.friends():
+                # friend: show PUBLIC + FRIENDS
+                entries = entries.filter(visibility__in=['PUBLIC', 'FRIENDS'])
+            else:
+                # non-friend: show only PUBLIC
+                entries = entries.filter(visibility='PUBLIC')
+        else:
+            # not logged in: show only PUBLIC
+            entries = entries.filter(visibility='PUBLIC')
+    # owner sees all entries, including UNLISTED
     return render(request, 'entries/view_entries.html', {
         'author': author,
-        'entries': entries
+        'entries': entries,
     })
