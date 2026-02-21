@@ -1,0 +1,31 @@
+{% extends 'entries/base.html' %}
+
+{% block title %}Edit Entry{% endblock %}
+
+{% block content %}
+{% if messages %}
+  <div class="messages" style="max-width:600px;margin:10px auto;">
+    {% for message in messages %}
+      {% if 'follow' not in message.tags %}
+        <div class="message {{ message.tags }}" style="padding:10px;border-radius:6px;margin-bottom:8px;background:#eef7ff;border-left:4px solid #1a73e8;">
+          {{ message }}
+        </div>
+      {% endif %}
+    {% endfor %}
+  </div>
+{% endif %}
+<div class="page-container">
+    <div class="card">
+        <h1>Edit Entry</h1>
+        <form method="POST" enctype="multipart/form-data" class="form-container">
+            {% include 'entries/entry_form.html' %}
+            <div class="form-footer">
+                <div class="footer-save-cancel-actions">
+                    <button type="submit" class="btn-save">Save Changes</button>
+                    <a href="{% url 'my_entries' %}" class="btn-cancel">Cancel</a>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

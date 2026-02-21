@@ -61,6 +61,7 @@ def login_view(request):
     if request.method == "POST":
         username = request.POST.get("username", "").strip()
         password = request.POST.get("password", "")
+        next_url = request.POST.get("next") or request.GET.get("next")
 
         try:
             author = Author.objects.get(username=username)
@@ -68,6 +69,9 @@ def login_view(request):
             if check_password(password, author.password) or author.password == password:
                 request.session['author_id'] = author.id
                 request.session['username'] = author.username
+
+                if next_url:
+                    return redirect(next_url)
                 return redirect('/app/profile')  # or NodeDisplay
             else:
                 error = "Invalid username or password"
@@ -123,10 +127,14 @@ def profile_view(request):
     followers_count = author.followers.count()
     following_count = author.following.count()
 
+    # Count pending follow requests for this author
+    pending_requests_count = FollowRequest.objects.filter(target=author).count()
+
     return render(request, "profile.html", {
         "author": author,
         "followers_count": followers_count,
-        "following_count": following_count
+        "following_count": following_count,
+        "pending_requests_count": pending_requests_count
     })
 
 def ProfileDisplay(request, id):
@@ -165,10 +173,9 @@ def follow_author(request, author_id):
         elif FollowRequest.objects.filter(requester=me, target=target).exists():
             messages.info(request, "Follow request already sent.")
         else:
-            # Create a follow request instead of immediately following
+            # Create a follow request 
             FollowRequest.objects.create(requester=me, target=target)
-            messages.success(request, f"Follow request sent to {target.username}!")
-
+            messages.success(request, f"Follow request sent to {target.username}!", extra_tags='follow')
     return redirect(f'/app/user/{author_id}/')
 
 def unfollow_author(request, author_id):
@@ -180,7 +187,7 @@ def unfollow_author(request, author_id):
 
     if target != me:
         me.following.remove(target)
-        messages.success(request, f"You unfollowed {target.username}.")
+        messages.success(request, f"You unfollowed {target.username}.", extra_tags='follow')
     return redirect(f'/app/user/{author_id}/')
 
 def view_follow_requests(request):
@@ -200,9 +207,11 @@ def approve_follow(request, req_id):
     follow_request = get_object_or_404(FollowRequest, id=req_id)
     follow_request.target.followers.add(follow_request.requester)
     follow_request.delete()
+    messages.success(request, f"You are now following {follow_request.requester.username}!", extra_tags='follow')
     return redirect('view_follow_requests')
 
 def deny_follow(request, req_id):
     follow_request = get_object_or_404(FollowRequest, id=req_id)
     follow_request.delete()
+    messages.info(request, "Request denied.", extra_tags='follow')
     return redirect('view_follow_requests')

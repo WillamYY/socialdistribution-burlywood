@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Following Feed</title>
+    <style>
+        body { font-family: Arial; background-color: #fafafa; }
+        .entry-card {
+            background: white; border-radius: 10px; padding: 15px;
+            margin: 15px auto; max-width: 600px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        h2 { color: #333; }
+        img { max-width: 100%; border-radius: 8px; margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <h1>Entries from Authors You Follow</h1>
+    {% for entry in entries %}
+        <div class="entry-card">
+            <h2>{{ entry.title }} — by {{ entry.author.username }}</h2>
+            <p>{{ entry.description }}</p>
+            <p><em>Published: {{ entry.published }}</em></p>
+            {% if entry.contentType == "text/plain" or entry.contentType == "text/markdown" %}
+                <p>{{ entry.content }}</p>
+            {% elif "image" in entry.contentType %}
+                <img src="data:{{ entry.contentType }},{{ entry.content }}" alt="Image Entry">
+            {% endif %}
+        </div>
+    {% empty %}
+        <p>No entries from authors you follow yet.</p>
+    {% endfor %}
+</body>
+</html>

@@ -1,97 +1,90 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Create Entry</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #fafafa;
-            margin: 0;
-            padding: 0;
-            display: flex;
-            justify-content: center;
-        }
-        .form-container {
-            background-color: #fff;
-            margin: 50px 20px;
-            padding: 30px;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            max-width: 600px;
-            width: 100%;
-        }
-        h1 {
-            text-align: center;
-            color: #333;
-            margin-bottom: 25px;
-        }
-        label {
-            font-weight: bold;
-            display: block;
-            margin-top: 15px;
-            margin-bottom: 5px;
-            color: #555;
-        }
-        input[type="text"], textarea, select {
-            width: 100%;
-            padding: 10px;
-            border-radius: 5px;
-            border: 1px solid #ccc;
-            box-sizing: border-box;
-            font-size: 14px;
-        }
-        textarea {
-            resize: vertical;
-        }
-        button {
-            margin-top: 20px;
-            padding: 10px 20px;
-            background-color: #FF9800;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 16px;
-        }
-        button:hover {
-            background-color: #e68900;
-        }
-    </style>
-</head>
-<body>
-    <div class="form-container">
-        <h1>Make a New Entry</h1>
-        <form method="POST" action="" enctype="multipart/form-data">
-            {% csrf_token %}
-            <label>Title:</label>
-            <input type="text" name="title" required>
+{% extends 'entries/base.html' %}
+{% block title %}Create Entry{% endblock %}
 
-            <label>Description:</label>
-            <input type="text" name="description">
+{% block content %}
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        background-color: #fafafa;
+    }
+    .form-container {
+        background-color: #fff;
+        margin: 50px auto;
+        padding: 30px;
+        border-radius: 10px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        max-width: 600px;
+        width: 90%;
+    }
+    h1 {
+        text-align: center;
+        color: #333;
+        margin-bottom: 25px;
+    }
+    label {
+        font-weight: bold;
+        display: block;
+        margin-top: 15px;
+        margin-bottom: 5px;
+        color: #555;
+    }
+    input[type="text"], textarea, select {
+        width: 100%;
+        padding: 10px;
+        border-radius: 5px;
+        border: 1px solid #ccc;
+        font-size: 14px;
+    }
+    textarea {
+        resize: vertical;
+    }
+    button {
+        margin-top: 20px;
+        padding: 10px 20px;
+        background-color: #FF9800;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 16px;
+    }
+    button:hover {
+        background-color: #e68900;
+    }
+</style>
 
-            <label>Content Type:</label>
-            <select name="contentType">
-                <option value="text/plain">Plain Text</option>
-                <option value="text/markdown">Markdown</option>
-                <option value="image/png;base64">PNG Image</option>
-                <option value="image/jpeg;base64">JPEG Image</option>
-            </select>
+<div class="form-container">
+    <h1>Make a New Entry</h1>
+    <form method="POST" enctype="multipart/form-data">
+        {% csrf_token %}
+        <label>Title:</label>
+        <input type="text" name="title" required>
 
-            <label>Text Content (only for plain/markdown):</label>
-            <textarea name="content" rows="5"></textarea>
+        <label>Description:</label>
+        <input type="text" name="description">
 
-            <label>Upload Image (if image type selected):</label>
-            <input type="file" name="image_file" accept="image/png, image/jpeg">
+        <label>Content Type:</label>
+        <select name="contentType">
+            <option value="text/plain">Plain Text</option>
+            <option value="text/markdown">Markdown</option>
+            <option value="image/png;base64">PNG Image</option>
+            <option value="image/jpeg;base64">JPEG Image</option>
+        </select>
 
-            <label>Visibility:</label>
-            <select name="visibility">
-                <option value="PUBLIC">Public</option>
-                <option value="FRIENDS">Friends Only</option>
-                <option value="UNLISTED">Unlisted</option>
-            </select>
+        <label>Text Content (for plain/markdown):</label>
+        <textarea name="content" rows="5"></textarea>
 
-            <button type="submit">Post Entry</button>
-        </form>
-    </div>
-</body>
-</html>
+        <label>Upload Image (if image type selected):</label>
+        <input type="file" name="image_file" accept="image/png, image/jpeg">
+
+        <label>Visibility:</label>
+        <select name="visibility">
+            <option value="PUBLIC">Public</option>
+            <option value="FRIENDS">Friends Only</option>
+            <option value="UNLISTED">Unlisted</option>
+        </select>
+
+        <button type="submit">Post Entry</button>
+    </form>
+</div>
+{% endblock %}
