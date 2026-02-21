@@ -42,3 +42,11 @@ class FollowRequest(models.Model):
 
     class Meta:
         unique_together = ('requester', 'target')  # prevent duplicate requests
+
+"""
+Creates a class for the request to create a new author
+"""
+class AuthorRequest(models.Model):
+    id = models.AutoField(primary_key = True) # Makes each request unique
+    username = models.CharField(max_length=40, unique=True)  # Login ID
+    password = models.CharField(max_length=40)           # Hashed password
