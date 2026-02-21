@@ -3,7 +3,8 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST
-from .models import Entry
+from django.db.models import Count
+from .models import Entry, Like
 from core.models import Author
 
 def update_entry_from_request(request, entry):
@@ -135,6 +136,7 @@ def view_entries(request, author_id):
     is_owner = logged_in_id == author.id
 
     entries = Entry.objects.filter(author=author).order_by('-published')
+    entries = Entry.objects.annotate(likeCount = Count("like")) # Attaches a likeCount value to every entry
 
     if not is_owner:
         if logged_in_id:
@@ -153,3 +155,19 @@ def view_entries(request, author_id):
         'author': author,
         'entries': entries,
     })
+
+def like_entry(request,author_id,entry_id):
+    if request.session.get('author_id'):
+        entry = get_object_or_404(Entry,id = entry_id) # Gets the entry being liked
+        author = get_object_or_404(Author,id = request.session.get('author_id')) # Gets the author liking the entry
+        # Clicking like button when you have already liked it leads to removing the like
+        if Like.objects.filter(entry = entry, user = author).exists():
+            Like.objects.get(entry = entry, user = author).delete()
+        # Creates a like if it has not already been liked
+        else:
+            like = Like(entry = entry,user = author)
+            like.save()
+        return redirect("view_entries",author_id)
+    # Returns a redirect immediately if there is no author signed in
+    else:
+        return redirect("view_entries",author_id)
