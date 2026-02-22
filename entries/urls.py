@@ -7,4 +7,5 @@ urlpatterns = [
     path('my-entries/', views.my_entries, name='my_entries'),
     path('edit/<uuid:entry_id>/', views.edit_entry, name='edit_entry'),
     path('delete/<uuid:entry_id>/', views.delete_entry, name='delete_entry'),
+    path('author/<int:author_id>/entries/<uuid:entry_id>/like/', views.like_entry, name='like_entry'),
 ]

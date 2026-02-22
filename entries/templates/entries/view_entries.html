@@ -10,6 +10,11 @@ body { font-family: Arial; background-color: #fafafa; }
 }
 h2 { color: #333; }
 img { max-width: 100%; border-radius: 8px; margin-top: 10px; }
+button {
+  background: #333; border-radius: 1px; padding: 1.5px;
+  color: white;
+  width: 40px
+}
 </style>
 </head>
 <body>
@@ -25,6 +30,11 @@ img { max-width: 100%; border-radius: 8px; margin-top: 10px; }
   {% elif "image" in entry.contentType %}
     <img src="data:{{ entry.contentType }},{{ entry.content }}" alt="Image Entry">
   {% endif %}
+  <p>Likes: {{entry.likeCount}}</p>
+  <form method = "POST" action="{% url 'like_entry' author.id entry.id %}">
+    {% csrf_token %}
+    <button type="submit">Like</button>
+  </form>
 </div>
 {% empty %}
 <p>No entries yet.</p>
