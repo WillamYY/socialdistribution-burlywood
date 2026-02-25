@@ -127,6 +127,13 @@
     text-transform: uppercase;
 }
 
+.entry-content, .entry-plain-text, .entry-markdown, .entry-description {
+    overflow-wrap: break-word;
+    word-wrap: break-word;
+    word-break: break-word;
+    max-width: 100%;
+}
+
 .entry-description, .entry-plain-text, .entry-markdown {
     border-radius: 8px;
     padding: 12px;
@@ -140,6 +147,14 @@
     font-style: italic; 
     color: var(--text-muted); 
     margin: 0; 
+}
+
+.entry-image, .entry-markdown img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 8px;
+    display: block; 
+    margin: 10px 0;
 }
 
 /* Markdown Specifics */
