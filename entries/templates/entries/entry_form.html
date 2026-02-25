@@ -34,7 +34,7 @@
 
 <div class="form-group">
     <label>Text Content</label>
-    <textarea name="content" rows="6" class="form-control">{% if not entry or "text" in entry.contentType %}{{ entry.content|default:'' }}{% endif %}</textarea>
+    <textarea name="content" rows="6" class="form-control">{% if entry.content_raw %}{{ entry.content_raw }}{% else %}{{ entry.content }}{% endif %}</textarea>
 </div>
 
 <div class="form-group">

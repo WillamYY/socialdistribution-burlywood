@@ -17,6 +17,7 @@ class Entry(models.Model):
     ]
     contentType = models.CharField(max_length=50, choices=CONTENT_TYPE_CHOICES)
     content = models.TextField()
+    content_raw = models.TextField(blank=True, null=True)    # Store Markdown raw text
 
     author = models.ForeignKey("core.Author", on_delete=models.CASCADE)
     # TODO: comments and likes
