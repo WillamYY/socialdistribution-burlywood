@@ -2,6 +2,7 @@ import base64
 import markdown
 import bleach
 from django.shortcuts import render, redirect, get_object_or_404
+from django.http import HttpResponse
 from django.contrib import messages
 from django.views.decorators.http import require_POST
 from django.db.models import Count
@@ -47,10 +48,9 @@ def update_entry_from_request(request, entry):
     text_content = request.POST.get("content", "")
     image = request.FILES.get("image_file")
 
-    # Current logic: we prioritize uploaded image over text content
-    # TODO: Modify this logic based on the frontend modifications later to improve UX
+    # Check if an image entry or text entry being created/edited
     if image:
-        # Check the file type
+        # Check the actual file type
         if not image.content_type.startswith("image/"):
             return False, "Only an image in .jpg/.png format is allowed."
         
@@ -62,7 +62,7 @@ def update_entry_from_request(request, entry):
     else:
         # Check if text content is provided for text entries
         if "text" in contentType:
-            if not text_content:
+            if not text_content.strip():
                 return False, "Text content is required for a text entry."
             
             # Store the raw text
@@ -156,6 +156,35 @@ def delete_entry(request, entry_id):
     entry.delete()
     
     return redirect("my_entries")
+
+def get_entry_image(request, author_id, entry_id):
+    """
+    Returns the raw image data for an entry.
+    Allows Markdown to link to images.
+    """
+    # Get the entry
+    entry = get_object_or_404(Entry, id=entry_id, author_id=author_id)
+
+    # Check if base64 data, implying an image
+    if ";base64" not in entry.contentType:
+        return HttpResponse("This entry is not an image.", status=404)
+
+    # Extract the actual base64 string and the MIME type
+    # MIME == Multipurpose Internet Mail Extension: type of data being transmitted over internet 
+    mime_type = entry.contentType.split(';')[0]     # i.e. format like "image/png;base64"
+
+    try:
+        # Strip the content string to get the actual base64 data 
+        content_str = entry.content
+        if "," in content_str:  # i.e. data:image/png;base64,... prefix
+            content_str = content_str.split(",")[1]
+            
+        image_binary = base64.b64decode(content_str.strip())
+        # Return raw binary data with the correct MIME type
+        return HttpResponse(image_binary, content_type=mime_type)
+    except Exception as e:
+        # Failed to decode base64; internal server error
+        return HttpResponse(f"Failed to decode image: {str(e)}", status=500)
 
 def my_entries(request):
     """
