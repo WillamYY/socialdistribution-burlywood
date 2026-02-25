@@ -3,7 +3,8 @@ from django.shortcuts import render,get_object_or_404
 from django.urls import path
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from .models import Author
+from .models import Author, Entry, Like
+from .serializers import LikesSerializer, LikeSerializer
 
 # Create your views here.
 @api_view(['GET'])
@@ -92,3 +93,47 @@ def ApiAuthor(request,id):
     # Returns a 405 error if using invalid method
     else:
         return Response(status = 405)
+
+# Returns who liked a specific entry with author described
+@api_view(["GET"])
+def ApiAuthorAndEntryLikes(request,author_id,entry_id):
+    # Ensures the entry exists before accessing it
+    if Entry.objects.filter(id = entry_id).exists():
+        entry = Entry.objects.get(id = entry_id)
+        likes = Like.objects.filter(entry = entry)
+        # Finds the link to the object that was liked
+        entryURL = request.build_absolute_uri()
+        # Serializes the data
+        likesSerializer = LikesSerializer({"page_number":1,"size":5,"count":likes.count(),"src":likes},context = {"link":entryURL})
+        return Response(likesSerializer.data)
+    else:
+        # Returns 404 if the entry does not exist
+        return Response(status = 404)
+
+# Returns who liked a specific entry with no author
+@api_view(["GET"])
+def ApiEntryLikes(request,entry_id):
+    # Ensures the entry exists before accessing it
+    if Entry.objects.filter(id = entry_id).exists():
+        entry = Entry.objects.get(id = entry_id)
+        likes = Like.objects.filter(entry = entry)
+        # Finds the link to the object that was liked
+        entryURL = request.build_absolute_uri()
+        # Serializes the data
+        likesSerializer = LikesSerializer({"page_number":1,"size":5,"count":likes.count(),"src":likes},context = {"link":entryURL})
+        return Response(likesSerializer.data)
+    else:
+        # Returns 404 if the entry does not exist
+        return Response(status = 404)
+
+# Sends a like to the author (Currently creates a like on an entry only)
+@api_view(["POST"])
+def ApiSendLike(request,author_id):
+    # Gets the id of the liked entry from the url
+    entry_id = request.data.get("object").split("/")[-1]
+    # Ensures the entry exists before accessing it
+    if Entry.objects.filter(id = entry_id).exists():
+        entry = Entry.objects.get(id = entry_id)
+        # If the entry is from a different author show an error code
+        if entry.author.id != author_id:
+            return Response(status = 400)

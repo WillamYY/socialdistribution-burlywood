@@ -3,12 +3,15 @@ from django.contrib import admin
 # Register your models here.
 # core/admin.py
 from django.contrib import admin
-from .models import Author, AuthorRequest
+from .models import Author, AuthorRequest,Like,Entry
 
 @admin.register(Author)
 class AuthorAdmin(admin.ModelAdmin):
     list_display = ('username', 'name', 'github')  # columns in list
     search_fields = ('username', 'name')          # search box
+
+admin.site.register(Like)
+admin.site.register(Entry)
 
 @admin.register(AuthorRequest)
 class AuthorRequestAdmin(admin.ModelAdmin):
