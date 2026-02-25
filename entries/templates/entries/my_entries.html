@@ -20,8 +20,12 @@
                 <div class="entry-content">
                     {% if "image" in entry.contentType %}
                         <img class="entry-image" src="data:{{ entry.contentType }},{{ entry.content }}" alt="{{ entry.title }}">
-                    {% else %}
-                        <div class="entry-text">
+                    {% elif entry.contentType == "text/markdown" %}
+                        <div class="entry-markdown">
+                            {{ entry.content|safe }}
+                        </div>
+                    {% elif entry.contentType == "text/plain" %}
+                        <div class="entry-plain-text">
                             {{ entry.content|linebreaks }}
                         </div>
                     {% endif %}
@@ -33,7 +37,7 @@
                         
                         <form action="{% url 'delete_entry' entry.id %}" method="POST" style="display:inline;">
                             {% csrf_token %}
-                            <button type="submit" class="delete-btn" onclick="return confirm('Are you sure you want to delete this thought?')">Delete</button>
+                            <button type="submit" class="btn-delete" onclick="return confirm('Are you sure you want to delete this thought?')">Delete</button>
                         </form>
                     </div>
                     

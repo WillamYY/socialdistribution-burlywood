@@ -1,39 +1,80 @@
 import base64
+import markdown
+import bleach
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
-from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST
 from django.db.models import Count
 from .models import Entry, Like
 from core.models import Author
+
+def render_safe_markdown(text_content):
+    """
+    Helper function to convert raw Markdown text to HTML and sanitize it to prevent XSS.
+    """
+    if not text_content:
+        return ""
+
+    # Convert Markdown to HTML
+    html_raw = markdown.markdown(text_content, extensions=["extra", "codehilite"])
+    
+    # Define safe tags and attributes
+    allowed_tags = [
+        "p", "br",
+        "strong", "em", "b", "i",
+        "ul", "ol", "li",
+        "blockquote",
+        "code", "pre", "hr",
+        "h1", "h2", "h3", "h4", "h5", "h6",
+        "a", "img",
+        "table", "thead", "tbody", "tr", "th", "td"
+    ]
+
+    allowed_attributes = {
+        "a": ["href", "title"],
+        "img": ["src", "alt", "title"],
+    }
+
+    # Sanitize and return the safe HTML
+    return bleach.clean(html_raw, tags=allowed_tags, attributes=allowed_attributes)
 
 def update_entry_from_request(request, entry):
     """
     Helper function to process form data, validate it, and update an Entry object.
     Returns: (is_success: bool, error_message: str or None)
     """
-    contentType = request.POST.get('contentType', '')
-    text_content = request.POST.get('content', '').strip()
-    image = request.FILES.get('image_file')
+    contentType = request.POST.get("contentType", "")
+    text_content = request.POST.get("content", "")
+    image = request.FILES.get("image_file")
 
     # Current logic: we prioritize uploaded image over text content
     # TODO: Modify this logic based on the frontend modifications later to improve UX
     if image:
         # Check the file type
-        if not image.content_type.startswith('image/'):
+        if not image.content_type.startswith("image/"):
             return False, "Only an image in .jpg/.png format is allowed."
         
         # Overwrite the data with the new image
         entry.contentType = f"{image.content_type};base64"
         entry.content = base64.b64encode(image.read()).decode("utf-8")
+        # No "raw" text for images
+        entry.content_raw = None
     else:
         # Check if text content is provided for text entries
         if "text" in contentType:
             if not text_content:
                 return False, "Text content is required for a text entry."
             
+            # Store the raw text
+            entry.content_raw = text_content
+
+            # Check for text type
+            if contentType == "text/markdown":
+                entry.content = render_safe_markdown(text_content)
+            else:
+                entry.content = text_content
+            
             entry.contentType = contentType
-            entry.content = text_content
 
     # Update universal fields
     entry.title = request.POST.get("title", entry.title)

@@ -3,18 +3,19 @@
 {% block title %}Edit Entry{% endblock %}
 
 {% block content %}
+<div class="page-container">
 {% if messages %}
-  <div class="messages" style="max-width:600px;margin:10px auto;">
+        <div class="messages-container" style="width: 100%; margin-bottom: 15px;">
     {% for message in messages %}
       {% if 'follow' not in message.tags %}
-        <div class="message {{ message.tags }}" style="padding:10px;border-radius:6px;margin-bottom:8px;background:#eef7ff;border-left:4px solid #1a73e8;">
+                    <div style="padding:12px; border-radius:6px; background:#eef7ff; border-left:4px solid var(--link-blue); color: var(--text-body);">
           {{ message }}
         </div>
       {% endif %}
     {% endfor %}
   </div>
 {% endif %}
-<div class="page-container">
+
     <div class="card">
         <h1>Edit Entry</h1>
         <form method="POST" enctype="multipart/form-data" class="form-container">
