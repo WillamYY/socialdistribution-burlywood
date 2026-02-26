@@ -1,8 +1,11 @@
-from django.test import TestCase
+from django.test import TestCase, Client
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 from .models import Author, Entry, Like
+from .serializers import LikeSerializer
+from .admin import AuthorAdmin
+from django.contrib.auth.models import User
 
 # Create your tests here.
 
@@ -101,7 +104,7 @@ class AuthorEntryLikeEndpointTest(APITestCase):
         author1.save()
         author2 = Author(username = "e",password = "f",name = "g",description = "h",host = "/api/",web = "/app/authors/2")
         author2.save()
-        # Creates the entry that will be like
+        # Creates the entry that will be liked
         entry1 = Entry(title = "A",author = author1)
         entry1.save()
         like1 = Like(entry = entry1,user = author2)
@@ -127,7 +130,7 @@ class EntryLikeEndpointTest(APITestCase):
         author1.save()
         author2 = Author(username = "e",password = "f",name = "g",description = "h",host = "/api/",web = "/app/authors/2")
         author2.save()
-        # Creates the entry that will be like
+        # Creates the entry that will be liked
         entry1 = Entry(title = "A",author = author1)
         entry1.save()
         like1 = Like(entry = entry1,user = author2)
@@ -142,4 +145,45 @@ class EntryLikeEndpointTest(APITestCase):
         self.assertEqual(like["object"].split("/")[-1],str(entry1.id))
         author = like["author"]
         self.assertEqual(author["displayName"],author2.name)
-        
+
+"""
+Allows the user to create a like
+"""
+class AddLikeEndpointTest(APITestCase):
+    """
+    Tests sending a like to a user
+    User Story # 58
+    """
+    def test_sending_like(self):
+        # Creates two users, one to make the entry and one to like it
+        author1 = Author(username = "a",password = "b",name = "c",description = "d",host = "/api/",web = "/app/authors/1")
+        author1.save()
+        author2 = Author(username = "e",password = "f",name = "g",description = "h",host = "/api/",web = "/app/authors/2")
+        author2.save()
+        # Creates the entry that will be liked
+        entry1 = Entry(title = "A",author = author1)
+        entry1.save()
+        like1 = LikeSerializer(Like(entry = entry1, user = author2),context = {"object": "/api/authors/" + str(author1.id) + "/commented/" + str(entry1.id)})
+        # Gets the info from the website
+        like_url = reverse("ApiSendLike",kwargs = {"author_id":author1.id})
+        post1 = self.client.post(like_url,like1.data,format = 'json')
+        # Ensures there is one like in the data base
+        self.assertEqual(Like.objects.count(),1)
+        # Ensures it matches with the like object information
+        self.assertEqual(Like.objects.get().user,author2)
+        self.assertEqual(Like.objects.get().entry,entry1)
+
+"""
+Tests admin using priviledges
+"""
+class AdminPanelAbilityTest(TestCase):
+    """
+    Tests create, update, and delete
+    User Story # 66
+    """
+    def test_admin_permissions(self):
+        adminLink = reverse("admin:api_author_add")
+        client = Client()
+        adminUser = User.objects.create_user({"username":"1","password":"2"})
+        client.force_authenticate(user=adminUser)
+        print(client.post(adminLink,{"username":"Doug","password":"1234R","name":"Doug","host":"/api/","web":"/app/authors/1"}))
