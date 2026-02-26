@@ -8,6 +8,10 @@ See [the web page](https://uofa-cmput404.github.io/general/project.html) for a d
 
 Make a distributed social network!
 
+## Stream API Documentation
+
+See `docs/stream_api.md` for the local Stream API used to satisfy user stories #25, #26, #27, #28, #29, and #31.
+
 ## License
 
 * MIT License

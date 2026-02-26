@@ -1,0 +1,20 @@
+{% extends 'entries/base.html' %}
+
+{% block title %}Create New Entry{% endblock %}
+
+{% block content %}
+<div class="page-container">
+    <div class="card">
+        <h1>Make a New Entry</h1>
+        <form method="POST" enctype="multipart/form-data" class="form-container">
+            {% include 'entries/entry_form.html' %}
+            <div class="form-footer">
+                <div class="footer-save-cancel-actions">
+                    <button type="submit" class="btn-save">Post Entry</button>
+                    <a href="{% url 'my_entries' %}" class="btn-cancel">Cancel</a>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

@@ -10,4 +10,9 @@ urlpatterns = [
     path("profile/", views.profile_view, name="ProfileView"),
     path("edit-profile/", views.edit_profile, name="EditProfileView"),
     path("user/<int:id>/", views.ProfileDisplay, name="ProfileDisplay"),
+    path("user/<int:author_id>/follow/", views.follow_author, name="FollowAuthor"),
+    path("user/<int:author_id>/unfollow/", views.unfollow_author, name="UnfollowAuthor"),
+    path('follow-requests/', views.view_follow_requests, name='view_follow_requests'),
+    path('follow-requests/approve/<int:req_id>/', views.approve_follow, name='ApproveFollow'),
+    path('follow-requests/deny/<int:req_id>/', views.deny_follow, name='DenyFollow'),
 ]

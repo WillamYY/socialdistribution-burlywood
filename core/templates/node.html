@@ -1,14 +1,103 @@
 <!DOCTYPE html>
-<!-- Temporary display inside of a node to show all the users-->
-<html>
-    <head>
-        <title>Node</title>
-    </head>
-    <body>
-        <ul>
-        {% for user in users %}
-        <li> {{user.username}} </li>
-        {% endfor %}
-        </ul>
-    </body>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Authors Directory</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #fafafa;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+    }
+    .container {
+      margin: 40px;
+      background: white;
+      padding: 30px;
+      border-radius: 10px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+      width: 650px;
+    }
+    h1 {
+      text-align: center;
+      color: #333;
+      margin-bottom: 25px;
+    }
+    .author-card {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      border-bottom: 1px solid #eee;
+      padding: 10px 0;
+    }
+    .profile-pic {
+      width: 60px;
+      height: 60px;
+      border-radius: 50%;
+      object-fit: cover;
+      flex-shrink: 0;
+    }
+    .author-info {
+      flex: 1;
+    }
+    .author-info h3 {
+      margin: 0;
+      font-size: 18px;
+      color: #333;
+    }
+    .author-info p {
+      margin: 2px 0;
+      font-size: 14px;
+      color: #777;
+    }
+    a.button {
+      background-color: #1a73e8;
+      color: white;
+      padding: 6px 12px;
+      border-radius: 5px;
+      text-decoration: none;
+      font-size: 14px;
+    }
+    a.button:hover {
+      background-color: #155ab6;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>All Authors on This Node</h1>
+    {% if request.session.author_id %}
+    <p style="text-align:center; margin-bottom: 20px;">
+      <a href="{% url 'stream' %}" class="button" style="background-color: #4caf50;">Go to Stream</a>
+    </p>
+    {% endif %}
+    <ul style="list-style:none; padding:0;">
+      {% for user in users %}
+        <li>
+          <div class="author-card">
+            {% load static %}
+            {% if user.picture and user.picture.name %}
+              <img src="{{ user.picture.url }}" class="profile-pic" alt="{{ user.username }}">
+            {% else %}
+              <img src="{% if user.picture %}{{ user.picture.url }}{% else %}{% static 'images/default_profile.jpg' %}{% endif %}" class="profile-pic" alt="Profile Picture">
+            {% endif %}
+            
+            <div class="author-info">
+              <h3>{{ user.username }}</h3>
+              {% if user.name %}
+                <p>{{ user.name }}</p>
+              {% endif %}
+            </div>
+
+            <a href="{% url 'ProfileDisplay' user.id %}" class="button">View Profile</a>
+          </div>
+        </li>
+      {% empty %}
+        <li>No authors found.</li>
+      {% endfor %}
+    </ul>
+  </div>
+</body>
 </html>
