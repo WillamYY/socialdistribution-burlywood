@@ -4,7 +4,7 @@ from django.urls import path
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from .models import Author, Entry, Like
-from .serializers import LikesSerializer, LikeSerializer
+from .serializers import LikesSerializer, LikeSerializer, EntrySerializer, EntriesSerializer
 
 # Create your views here.
 @api_view(['GET'])
@@ -137,3 +137,44 @@ def ApiSendLike(request,author_id):
         # If the entry is from a different author show an error code
         if entry.author.id != author_id:
             return Response(status = 400)
+
+# Returns a paginated list of entries for a specific author
+@api_view(['GET'])
+def ApiEntries(request, author_id):
+    # Ensure the author exists before trying to fetch their entries
+    author = get_object_or_404(Author, pk=author_id)
+    
+    # Get pagination parameters
+    page = int(request.query_params.get('page', 1))
+    size = int(request.query_params.get('size', 5))
+    
+    # Query the entries
+    # TODO: handle visibilities; currently only show PUBLIC posts.
+    entries = Entry.objects.filter(author=author, visibility="PUBLIC").order_by('-published')
+    
+    # Paginate the queryset
+    start = (page - 1) * size
+    end = start + size
+    paginated_entries = entries[start:end]
+    
+    # Package the data for EntriesSerializer
+    data = {
+        "page_number": page,
+        "size": size,
+        "count": entries.count(),
+        "src": paginated_entries
+    }
+    
+    # Serialize and return
+    serializer = EntriesSerializer(data, context={'request': request})
+    return Response(serializer.data)
+
+# Returns a single specific entry
+@api_view(['GET'])
+def ApiEntry(request, author_id, entry_id):
+    entry = get_object_or_404(Entry, pk=entry_id, author_id=author_id)
+    
+    # TODO: handle visibility; currently only show PUBLIC posts.
+    # Serialize and return
+    serializer = EntrySerializer(entry, context={'request': request})
+    return Response(serializer.data)

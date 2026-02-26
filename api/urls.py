@@ -8,5 +8,7 @@ urlpatterns = [
     path("authors/<int:id>/",views.ApiAuthor,name="ApiAuthor"),
     path("authors/<int:author_id>/entries/<uuid:entry_id>/likes",views.ApiAuthorAndEntryLikes,name="ApiAuthorAndEntryLikes"),
     path("entries/<uuid:entry_id>/likes",views.ApiEntryLikes),
-    path("authors/<int:author_id>/inbox",views.ApiSendLike)
+    path("authors/<int:author_id>/inbox",views.ApiSendLike),
+    path("authors/<int:author_id>/entries/<uuid:entry_id>/", views.ApiEntry, name="ApiEntry"),
+    path("authors/<int:author_id>/entries/", views.ApiEntries, name="ApiEntries"),
 ]
