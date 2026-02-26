@@ -1,0 +1,85 @@
+{% csrf_token %}
+
+{% if messages %}
+    <div class="messages-container" style="margin-bottom: 20px;">
+        {% for message in messages %}
+            <div style="background-color: #fee2e2; border: 1px solid #ef4444; color: #b91c1c; padding: 12px; border-radius: 6px; font-weight: 500;">
+                {{ message }}
+            </div>
+        {% endfor %}
+    </div>
+{% endif %}
+
+<div class="form-group">
+    <label>Title</label>
+    <input type="text" name="title" value="{{ entry.title|default:'' }}" class="form-control" required>
+</div>
+
+<div class="form-group">
+    <label>Description</label>
+    <input type="text" name="description" value="{{ entry.description|default:'' }}" class="form-control">
+</div>
+
+<div class="form-group">
+    <label>Content Type</label>
+    <select name="contentType" id="contentTypeSelect" class="form-control">
+        <option value="text/plain" {% if entry.contentType == 'text/plain' %}selected{% endif %}>Plain Text</option>
+        <option value="text/markdown" {% if entry.contentType == 'text/markdown' %}selected{% endif %}>Markdown</option>
+        <option value="IMAGE" {% if "image" in entry.contentType %}selected{% endif %}>Image (PNG/JPEG)</option>
+    </select>
+</div>
+
+<div class="form-group" id="textSection">
+    <label>Text Content</label>
+    <textarea name="content" rows="6" class="form-control">{% if 'text' in entry.contentType %}{% if entry.content_raw %}{{ entry.content_raw }}{% else %}{{ entry.content }}{% endif %}{% endif %}</textarea>
+</div>
+
+<div class="form-group" id="imageSection" style="display: none;">
+    <label>{% if entry %}Replace Image{% else %}Upload Image{% endif %}</label>
+    
+    {% if entry and "image" in entry.contentType %}
+        <div style="margin-bottom: 10px;">
+            <p style="font-size: 0.85rem; color: var(--text-muted);">Current Saved Image:</p>
+            <img src="data:{{ entry.contentType }},{{ entry.content }}" style="max-height: 150px; border-radius: 8px; border: 1px solid var(--border-main);">
+        </div>
+    {% endif %}
+
+    <input type="file" name="image_file" id="imageInput" accept="image/png, image/jpeg" class="form-control">
+</div>
+
+<div class="form-group">
+    <label>Visibility</label>
+    <select name="visibility" class="form-control">
+        <option value="PUBLIC" {% if entry.visibility == 'PUBLIC' %}selected{% endif %}>Public</option>
+        <option value="FRIENDS" {% if entry.visibility == 'FRIENDS' %}selected{% endif %}>Friends Only</option>
+        <option value="UNLISTED" {% if entry.visibility == 'UNLISTED' %}selected{% endif %}>Unlisted</option>
+    </select>
+</div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        const select = document.getElementById("contentTypeSelect");
+        const textSection = document.getElementById("textSection");
+        const imageSection = document.getElementById("imageSection");
+        const imageInput = document.getElementById("imageInput");
+
+        function toggleSections() {
+            const isImage = select.value === "IMAGE";
+            if (isImage) {
+                textSection.style.display = "none";
+                imageSection.style.display = "flex";
+            } else {
+                textSection.style.display = "flex";
+                imageSection.style.display = "none";
+                
+                // Empty the file input if switch to text
+                imageInput.value = ''; 
+            }
+        }
+
+        // Initialize state on page load
+        toggleSections();
+        // Run every time the dropdown changes
+        select.addEventListener("change", toggleSections);
+    });
+</script>

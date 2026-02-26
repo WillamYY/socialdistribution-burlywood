@@ -1,0 +1,308 @@
+/* Color Palette & Variables */
+:root {
+    /* Backgrounds */
+    --bg-page: #ffffff;
+    --bg-muted: #f9fafb;
+    --bg-code: #f3f4f6;
+    
+    /* Text Colors */
+    --text-main: #1a1a1a;
+    --text-body: #1f2937;
+    --text-muted: #6b7280;
+    --text-date: #9ca3af;
+    
+    /* Borders & Accents */
+    --border-light: #f3f4f6;
+    --border-main: #e5e7eb;
+    --border-card: #e1e4e8;
+    
+    /* Action Colors */
+    --link-blue: #2563eb;
+    --link-hover: #1d4ed8;
+    --btn-delete: #dc2626;
+    --btn-save: #FF9800;
+    --btn-save-hover: #e68900;
+    
+    /* Layout */
+    --card-radius: 12px;
+    --input-radius: 6px;
+    --max-width: 850px;
+}
+
+.page-container {
+    display: flex;
+    flex-direction: column; /* Stack the cards vertically */
+    align-items: center;    /* Center the cards horizontally */
+    gap: 20px;              /* Spacing between every card */
+    max-width: var(--max-width);
+    margin: 40px auto;
+    padding: 0 15px;
+
+    /* Set the default font for everything inside .page-container for any OS */
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+/* Navigation */
+.main-nav {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    padding: 20px 0;
+    background-color: var(--bg-page);
+    border-bottom: 1px solid var(--border-main);
+}
+
+.main-nav a {
+    text-decoration: none;
+    color: var(--text-body);
+    font-weight: 600;
+    padding: 8px 12px;
+    border-radius: var(--input-radius);
+    transition: background-color 0.2s ease;
+}
+
+.main-nav a:hover {
+    background-color: var(--border-main);
+}
+
+/* Cards */
+.card, .entry-card, .form-card {
+    width: 100%;
+    background: var(--bg-page);
+    border: 1px solid var(--border-card);
+    border-radius: var(--card-radius);
+    padding: 25px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+}
+
+.form-container {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    width: 100%;
+    align-items: stretch;
+}
+.entry-card { gap: 15px; }
+
+/* Entry Specifics */
+.entry-header, .entry-footer {
+    display: flex;
+    align-items: center;
+}
+
+.entry-header { 
+    justify-content: space-between; 
+    margin-bottom: 5px; 
+}
+
+.entry-footer {
+    justify-content: space-between;
+    border-top: 1px solid var(--border-light);
+    padding-top: 15px;
+    margin-top: 15px;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+.entry-title { 
+    margin: 0; 
+    font-size: 1.4rem; 
+    color: var(--text-main); 
+}
+
+.entry-date {
+    color: var(--text-date);
+}
+
+.badge-visibility {
+    background-color: var(--bg-code);
+    color: var(--text-muted);
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+.entry-content, .entry-plain-text, .entry-markdown, .entry-description {
+    overflow-wrap: break-word;
+    word-wrap: break-word;
+    word-break: break-word;
+    max-width: 100%;
+}
+
+.entry-description, .entry-plain-text, .entry-markdown {
+    border-radius: 8px;
+    padding: 12px;
+}
+
+.entry-plain-text, .entry-markdown {
+    background-color: var(--bg-muted);
+}
+
+.entry-description { 
+    font-style: italic; 
+    color: var(--text-muted); 
+    margin: 0; 
+}
+
+.entry-image, .entry-markdown img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 8px;
+    display: block; 
+    margin: 10px 0;
+}
+
+/* Markdown Specifics */
+.entry-markdown h1,  .entry-markdown h2, .entry-markdown h3 {
+    margin-top: 5px;
+    margin-bottom: 10px;
+    color: var(--text-main);
+    display: block;
+}
+
+.entry-markdown h1 {
+    font-size: 1.6rem;
+}
+
+.entry-markdown h2 {
+    font-size: 1.4rem;
+    border-bottom: 1px solid var(--border-main);
+    padding-bottom: 5px;
+}
+
+.entry-markdown p {
+    margin-bottom: 1rem;
+    line-height: 1.6;
+}
+
+.entry-markdown ul, .entry-markdown ol {
+    margin-bottom: 1rem;
+    padding-left: 20px;
+}
+
+.entry-markdown li {
+    margin-bottom: 5px;
+}
+
+/* Markdown Tables */
+.entry-markdown table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 15px 0;
+}
+
+.entry-markdown th, .entry-markdown td {
+    border: 1px solid var(--border-main);
+    padding: 10px;
+    text-align: left;
+}
+
+.entry-markdown th {
+    background-color: var(--bg-muted);
+    font-weight: 600;
+}
+
+/* Markdown Code Blocks */
+.entry-markdown pre {
+    background-color: var(--bg-code);
+    padding: 15px;
+    border-radius: 8px;
+    overflow-x: auto;
+    margin: 15px 0;
+}
+
+.entry-markdown code {
+    font-family: 'Courier New', Courier, monospace;
+    background-color: var(--bg-code);
+    padding: 2px 4px;
+    border-radius: 4px;
+    font-size: 0.9em;
+}
+
+/* Prevent inline-code styling inside <pre> */
+.entry-markdown pre code {
+    background-color: transparent;
+    padding: 0;
+}
+
+/* Form Specifics */
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.form-group label { 
+    font-weight: 600; 
+    color: var(--text-body); 
+}
+
+.form-control {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid var(--border-main);
+    border-radius: var(--input-radius);
+    font-size: 1rem;
+    box-sizing: border-box;
+}
+
+.form-footer {
+    display: flex;
+    justify-content: flex-start;
+}
+
+/* Action Buttons */
+.footer-save-cancel-actions {
+    display: flex;
+    gap: 20px;
+}
+
+.footer-edit-delete-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.edit-link {
+    color: var(--link-blue);
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.edit-link:hover {
+    text-decoration: underline;
+    color: var(--link-hover);
+}
+
+.btn-delete {
+    background: none;
+    border: none;
+    color: var(--btn-delete);
+    cursor: pointer;
+    font-weight: 500;
+    padding: 0;
+}
+
+.btn-delete:hover {
+    text-decoration: underline;
+}
+
+.btn-save {
+    background-color: var(--btn-save);
+    color: white;
+    padding: 10px 20px;
+    border: none;
+    border-radius: var(--input-radius);
+    cursor: pointer;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.btn-save:hover {
+    background-color: var(--btn-save-hover);
+}

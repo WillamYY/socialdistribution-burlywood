@@ -44,8 +44,10 @@
     {% if error %}
       <p class="error">{{ error }}</p>
     {% endif %}
-    <form method="POST" action="{% url 'Login' %}">
+    <form method="POST">
       {% csrf_token %}
+      <input type="hidden" name="next" value="{{ request.GET.next }}">
+      
       <label>Username</label>
       <input name="username" type="text" required>
 

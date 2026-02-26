@@ -1,4 +1,4 @@
-<html>
+<html></html>
   <head>
     <title>My Profile</title>
     <style>
@@ -10,6 +10,7 @@
         background-color: #fafafa;
         border-radius: 10px;
         box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        position: relative;
       }
       h2 {
         text-align: center;
@@ -41,19 +42,58 @@
         color: white;
         border-radius: 5px;
         text-decoration: none;
+        position: relative;
+        font-size: 16px;
       }
       .button:hover {
         background-color: #e68900;
+      }
+
+      /* Follow Requests icon style */
+      .follow-requests-btn {
+        font-size: 20px;
+        background-color: #FF9800;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        text-decoration: none;
+        position: absolute;
+        top: 15px;
+        right: 15px;
+        cursor: pointer;
+      }
+      .follow-requests-btn:hover {
+        background-color: #e68900;
+      }
+      .notification-count {
+        position: absolute;
+        top: -5px;
+        right: -5px;
+        background: #dc2626;
+        color: white;
+        font-size: 12px;
+        font-weight: bold;
+        border-radius: 50%;
+        width: 18px;
+        height: 18px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
       }
     </style>
   </head>
   <body>
     <h2>{{ author.name|default:author.username }}</h2>
 
+    {% load static %}
     {% if author.picture %}
       <img src="{{ author.picture.url }}" class="profile-pic" alt="Profile Picture">
     {% else %}
-      <img src="https://via.placeholder.com/120" class="profile-pic" alt="Default Profile Picture">
+      <img src="{% static 'images/default_profile.jpg' %}" class="profile-pic" alt="Profile Picture"> 
     {% endif %}
 
     <p><strong>Username:</strong> {{ author.username }}</p>
@@ -61,6 +101,8 @@
     <p><strong>GitHub:</strong> 
       {% if author.github %}
         <a href="{{ author.github }}" target="_blank">{{ author.github }}</a>
+        <p><strong>Followers:</strong> {{ followers_count }} |
+        <strong>Following:</strong> {{ following_count }}</p>
       {% else %}
         Not provided
       {% endif %}
@@ -69,6 +111,20 @@
     <div style="text-align:center;">
       <a href="/app/edit-profile" class="button">Edit Profile</a>
       <a href="/app/logout" class="button" style="background-color: #555;">Logout</a>
+      <div style="text-align:center; margin-top: 10px;">
+        <a href="{% url 'create_entry' %}" class="button" style="background-color: #4caf50;">Create Entry</a>
+        <a href="/app/" class="button" style="background-color: #1a73e8;">View All Authors</a>
+      </div>
     </div>
+
+    <!-- Follow Requests icon (👤+) in top-right -->
+    {% if request.session.author_id == author.id %}
+      <a href="{% url 'view_follow_requests' %}" class="follow-requests-btn" title="Follow Requests">
+        👤+
+        {% if pending_requests_count > 0 %}
+          <span class="notification-count">{{ pending_requests_count }}</span>
+        {% endif %}
+      </a>
+    {% endif %}
   </body>
 </html>
