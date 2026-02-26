@@ -246,7 +246,10 @@ def like_entry(request,author_id,entry_id):
         return redirect("view_entries",author_id)
     
 def get_entry(request, entry_id):
-    logged_in_id = request.session.get('author_id')
-    viewer = get_object_or_404(Author, id=logged_in_id)
     entry = get_object_or_404(Entry, id = entry_id)
-    return render(request, "entries/entry.html", {"entry": entry, "allowed": entry.visibility in ["PUBLIC", "UNLISTED"] or viewer in entry.author.friends()})
+    if ('author_id' in request.session):
+        logged_in_id = request.session.get('author_id')
+        viewer = get_object_or_404(Author, id=logged_in_id)
+        return render(request, "entries/entry.html", {"entry": entry, "allowed": entry.visibility in ["PUBLIC", "UNLISTED"] or viewer in entry.author.friends()})
+    else:
+        return render(request, "entries/entry.html", {"entry": entry, "allowed": entry.visibility in ["PUBLIC", "UNLISTED"]})
