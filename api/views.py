@@ -60,8 +60,8 @@ def ApiAuthor(request,id):
         # Replaces the object if it is put on top of
         if not Author.objects.filter(id = id).exists():
             # Ensures that the authors id matches the correct Id of where it is being placed and that the name is unique
-            if str(id) == request.data.get("id").split("/")[-1] and not Author.objects.filter(name = request.data.get("displayName")).exists():
-                author = Author(id = id,host = request.data.get("host"),name = request.data.get("displayName"),github = request.data.get("github"),picture = request.data.get("profileImage"),web = request.data.get("web"))
+            if str(id) == request.data.get("id").split("/")[-1] and not Author.objects.filter(username = request.data.get("displayName")).exists():
+                author = Author(id = id,host = request.data.get("host"),username = request.data.get("displayName"),name = request.data.get("displayName"),github = request.data.get("github"),picture = request.data.get("profileImage"),web = request.data.get("web"))
                 author.save()
                 authorID = author.host + "authors/" + str(author.id)
                 return Response({"type":"author","id": authorID,"host": author.host,"displayName": author.name, "github":author.github, "profileImage":author.picture,"web":author.web})
@@ -73,13 +73,14 @@ def ApiAuthor(request,id):
             # Ensures that the authors id matches the correct Id of where it is being placed
             if str(id) == request.data.get("id").split("/")[-1]:
                 # If an author already exists with the name that is not the current author return a error code of 400
-                if Author.objects.filter(name = request.data.get("displayName")).exists():
+                if Author.objects.filter(username = request.data.get("displayName")).exists():
                     if get_object_or_404(Author,name=request.data.get("displayName")).id != id:
                         return Response(status = 400)
                 author = get_object_or_404(Author,pk=id) # Gets the author
                 # Updates the authors info
                 author.id = id
                 author.host = request.data.get("host")
+                author.username = request.data.get("displayName")
                 author.name = request.data.get("displayName")
                 author.github = request.data.get("github")
                 author.picture = request.data.get("profileImage")
@@ -104,7 +105,7 @@ def ApiAuthorAndEntryLikes(request,author_id,entry_id):
         # Finds the link to the object that was liked
         entryURL = request.build_absolute_uri()
         # Serializes the data
-        likesSerializer = LikesSerializer({"page_number":1,"size":5,"count":likes.count(),"src":likes},context = {"link":entryURL})
+        likesSerializer = LikesSerializer({"page_number":1,"size":5,"count":likes.count(),"src":likes},context = {"link":entryURL,"object":entryURL[:-len("/likes")]})
         return Response(likesSerializer.data)
     else:
         # Returns 404 if the entry does not exist
@@ -120,7 +121,7 @@ def ApiEntryLikes(request,entry_id):
         # Finds the link to the object that was liked
         entryURL = request.build_absolute_uri()
         # Serializes the data
-        likesSerializer = LikesSerializer({"page_number":1,"size":5,"count":likes.count(),"src":likes},context = {"link":entryURL})
+        likesSerializer = LikesSerializer({"page_number":1,"size":5,"count":likes.count(),"src":likes},context = {"link":entryURL,"object":entryURL[:-len("/likes")]})
         return Response(likesSerializer.data)
     else:
         # Returns 404 if the entry does not exist
@@ -137,3 +138,16 @@ def ApiSendLike(request,author_id):
         # If the entry is from a different author show an error code
         if entry.author.id != author_id:
             return Response(status = 400)
+        else:
+            # Gets the id of the author from data
+            likeAuthor = request.data.get("author").get("id").split("/")[-1]
+            # If the author doing the liking does not exist return an error
+            if not Author.objects.filter(id = likeAuthor).exists():
+                return Response(status = 400)
+            likeAuthor = Author.objects.get(id = likeAuthor)
+            like = Like(entry = entry, user = likeAuthor)
+            like.save()
+            like_serializer = LikeSerializer({"user":like.user,"time":like.time},context = {"object":request.data.get("object")})
+            return Response(like_serializer.data)
+    else:
+        return Response(status = 404)
