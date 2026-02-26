@@ -9,6 +9,8 @@ This document covers the API implementation and expected behavior for the **Stre
 - **#29** Stream excludes deleted entries
 - **#31** Stream sorted with most recent entries first
 
+Note: This API and documentation were added specifically for the Stream user stories block.
+
 ## Endpoint
 
 `GET /api/authors/{AUTHOR_ID}/stream/`
