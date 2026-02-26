@@ -212,8 +212,11 @@ def view_entries(request, author_id):
         if logged_in_id:
             viewer = get_object_or_404(Author, id=logged_in_id)
             if viewer in author.friends():
-                # friend: show PUBLIC + FRIENDS
-                entries = entries.filter(visibility__in=['PUBLIC', 'FRIENDS'])
+                # friend: show PUBLIC + FRIENDS + UNLISTED
+                entries = entries.filter(visibility__in=['PUBLIC', 'FRIENDS', "UNLISTED"])
+            elif viewer in author.followers.all():
+                # follower: show PUBLIC + UNLISTED
+                entries = entries.filter(visibility__in=["PUBLIC", "UNLISTED"])
             else:
                 # non-friend: show only PUBLIC
                 entries = entries.filter(visibility='PUBLIC')
@@ -241,3 +244,9 @@ def like_entry(request,author_id,entry_id):
     # Returns a redirect immediately if there is no author signed in
     else:
         return redirect("view_entries",author_id)
+    
+def get_entry(request, entry_id):
+    logged_in_id = request.session.get('author_id')
+    viewer = get_object_or_404(Author, id=logged_in_id)
+    entry = get_object_or_404(Entry, id = entry_id)
+    return render(request, "entries/entry.html", {"entry": entry, "allowed": entry.visibility in ["PUBLIC", "UNLISTED"] or viewer in entry.author.friends()})
