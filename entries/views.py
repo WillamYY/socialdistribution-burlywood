@@ -8,7 +8,7 @@ from django.views.decorators.http import require_POST
 from django.db.models import Count
 from .models import Entry
 from django.db.models import Count, Q
-from .models import Entry, Like
+from .models import Entry
 from core.models import Author
 from interactions.models import Comment, Like
 
