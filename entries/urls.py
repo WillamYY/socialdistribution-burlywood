@@ -12,7 +12,8 @@ urlpatterns = [
 
     # Entry image endpoint
     path('authors/<int:author_id>/entries/<uuid:entry_id>/image/', views.get_entry_image, name='get_entry_image'),
+    path("entry/<uuid:entry_id>/", views.get_entry, name="get_entry"),
 
-    # Include interactions app
-    path("interactions/", include("interactions.urls")),
+    # Include interactions app logic
+    path("interactions/", include("interactions.urls", namespace="interactions")),
 ]
