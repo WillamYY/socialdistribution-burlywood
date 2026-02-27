@@ -68,6 +68,11 @@
 <body>
   <div class="container">
     <h1>All Authors on This Node</h1>
+    {% if request.session.author_id %}
+    <p style="text-align:center; margin-bottom: 20px;">
+      <a href="{% url 'stream' %}" class="button" style="background-color: #4caf50;">Go to Stream</a>
+    </p>
+    {% endif %}
     <ul style="list-style:none; padding:0;">
       {% for user in users %}
         <li>

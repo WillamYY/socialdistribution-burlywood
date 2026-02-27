@@ -3,6 +3,7 @@ from . import views
 
 urlpatterns = [
     # Entry CRUD
+    path('stream/', views.stream_view, name='stream'),
     path('create-entry/', views.create_entry, name='create_entry'),
     path('author/<int:author_id>/entries/', views.view_entries, name='view_entries'),
     path('my-entries/', views.my_entries, name='my_entries'),

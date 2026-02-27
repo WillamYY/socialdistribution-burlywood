@@ -2,11 +2,13 @@ import base64
 import markdown
 import bleach
 from django.shortcuts import render, redirect, get_object_or_404
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.contrib import messages
 from django.views.decorators.http import require_POST
 from django.db.models import Count
 from .models import Entry
+from django.db.models import Count, Q
+from .models import Entry, Like
 from core.models import Author
 from interactions.models import Comment, Like
 
@@ -186,6 +188,113 @@ def get_entry_image(request, author_id, entry_id):
     except Exception as e:
         # Failed to decode base64; internal server error
         return HttpResponse(f"Failed to decode image: {str(e)}", status=500)
+
+def stream_view(request):
+    """
+    Stream view: shows all entries the author should know about.
+    US#25: Stream shows all entries I should know about.
+    US#26: All public entries from the node (discoverability).
+    US#27: Unlisted and friends-only entries from authors I follow.
+    US#28: Most recent version (we fetch from DB - always current).
+    US#29: Deleted entries excluded (hard-deleted, so not in DB).
+    US#31: Sorted with most recent entries first.
+    """
+    if not request.session.get("author_id"):
+        return redirect("/app/login")
+
+    viewer = get_object_or_404(Author, id=request.session["author_id"])
+
+    # Authors I follow
+    following_ids = list(viewer.following.values_list("id", flat=True))
+    # Friends = mutual follow
+    friend_ids = list(viewer.friends().values_list("id", flat=True))
+
+    # US#26: All PUBLIC entries from any author on the node
+    # US#27: UNLISTED from following; FRIENDS from friends only
+    # US#29: No DELETED (hard-delete removes from DB)
+    entries = (
+        Entry.objects.filter(
+            Q(visibility="PUBLIC")
+            | Q(author_id__in=following_ids, visibility="UNLISTED")
+            | Q(author_id__in=friend_ids, visibility="FRIENDS")
+        )
+        .select_related("author")
+        .annotate(like_count=Count("like"))
+        .order_by("-published")
+    )
+
+    return render(
+        request,
+        "entries/stream.html",
+        {"entries": entries, "viewer": viewer},
+    )
+
+
+def stream_api(request, author_id):
+    """
+    Local API endpoint for the stream.
+    Returns entries the author should see:
+    - all PUBLIC entries on the node
+    - UNLISTED entries from followed authors
+    - FRIENDS entries from mutual friends
+    """
+    if request.method != "GET":
+        return JsonResponse({"detail": "Method not allowed."}, status=405)
+
+    session_author_id = request.session.get("author_id")
+    if not session_author_id:
+        return JsonResponse({"detail": "Authentication required."}, status=401)
+    if session_author_id != author_id:
+        return JsonResponse({"detail": "Forbidden."}, status=403)
+
+    viewer = get_object_or_404(Author, id=author_id)
+
+    following_ids = list(viewer.following.values_list("id", flat=True))
+    friend_ids = list(viewer.friends().values_list("id", flat=True))
+
+    entries = (
+        Entry.objects.filter(
+            Q(visibility="PUBLIC")
+            | Q(author_id__in=following_ids, visibility="UNLISTED")
+            | Q(author_id__in=friend_ids, visibility="FRIENDS")
+        )
+        .select_related("author")
+        .annotate(like_count=Count("like"))
+        .order_by("-published")
+    )
+
+    payload = []
+    for entry in entries:
+        payload.append(
+            {
+                "type": "entry",
+                "id": str(entry.id),
+                "title": entry.title,
+                "description": entry.description,
+                "contentType": entry.contentType,
+                "content": entry.content,
+                "author": {
+                    "type": "author",
+                    "id": entry.author.id,
+                    "displayName": entry.author.name or entry.author.username,
+                    "username": entry.author.username,
+                },
+                "published": entry.published.isoformat(),
+                "visibility": entry.visibility,
+                "likeCount": entry.like_count,
+            }
+        )
+
+    return JsonResponse(
+        {
+            "type": "entries",
+            "page_number": 1,
+            "size": len(payload),
+            "count": len(payload),
+            "src": payload,
+        }
+    )
+
 
 def my_entries(request):
     """
