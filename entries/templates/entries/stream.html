@@ -1,0 +1,55 @@
+{% extends 'entries/base.html' %}
+
+{% block title %}Stream{% endblock %}
+
+{% block content %}
+    <div class="page-container">
+        <h1>Your Stream</h1>
+        <p class="stream-description"></p>
+        <hr>
+
+        {% for entry in entries %}
+            <div class="entry-card">
+                <div class="entry-header">
+                    <h2 class="entry-title">{{ entry.title }}</h2>
+                    <span class="badge-visibility">{{ entry.visibility }}</span>
+                </div>
+
+                <p class="entry-by">
+                    by <a href="{% url 'ProfileDisplay' entry.author.id %}">{{ entry.author.name|default:entry.author.username }}</a>
+                </p>
+
+                <p class="entry-description">{{ entry.description }}</p>
+
+                <div class="entry-content">
+                    {% if "image" in entry.contentType %}
+                        <img class="entry-image" src="{% url 'get_entry_image' entry.author.id entry.id %}" alt="{{ entry.title }}">
+                    {% elif entry.contentType == "text/markdown" %}
+                        <div class="entry-markdown">
+                            {{ entry.content|safe }}
+                        </div>
+                    {% elif entry.contentType == "text/plain" %}
+                        <div class="entry-plain-text">
+                            {{ entry.content|linebreaks }}
+                        </div>
+                    {% endif %}
+                </div>
+
+                <div class="entry-footer">
+                    <span class="entry-date">Published: {{ entry.published|date:"M d, Y H:i" }}</span>
+                    <span class="entry-actions">
+                        <span class="like-count">Likes: {{ entry.like_count|default:0 }}</span>
+                        <form action="{% url 'like_entry' entry.author.id entry.id %}?next={{ request.path }}" method="POST" style="display:inline;">
+                            {% csrf_token %}
+                            <button type="submit" class="btn-like">Like</button>
+                        </form>
+                    </span>
+                </div>
+            </div>
+        {% empty %}
+            <div class="empty-state">
+                <p>No entries in your stream yet. Follow authors or wait for new public posts!</p>
+            </div>
+        {% endfor %}
+    </div>
+{% endblock %}

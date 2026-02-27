@@ -22,10 +22,10 @@ from core import views
 
 urlpatterns = [
     path("", views.NodeDisplay, name="Home"),
-    path('admin/', admin.site.urls),
-    path('app/',include("core.urls")),
-    path('app/', include('entries.urls')),
-    path('api/',include('api.urls'))
+    path("admin/", admin.site.urls),
+    path("app/", include("core.urls")),
+    path("app/", include("entries.urls")),
+    path("api/", include("entries.api_urls")),
 ]
 
 if settings.DEBUG:
