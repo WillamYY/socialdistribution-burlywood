@@ -2,10 +2,10 @@ import base64
 import markdown
 import bleach
 from django.shortcuts import render, redirect, get_object_or_404
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.contrib import messages
 from django.views.decorators.http import require_POST
-from django.db.models import Count
+from django.db.models import Count, Q
 from .models import Entry, Like
 from core.models import Author
 
@@ -186,6 +186,113 @@ def get_entry_image(request, author_id, entry_id):
         # Failed to decode base64; internal server error
         return HttpResponse(f"Failed to decode image: {str(e)}", status=500)
 
+def stream_view(request):
+    """
+    Stream view: shows all entries the author should know about.
+    US#25: Stream shows all entries I should know about.
+    US#26: All public entries from the node (discoverability).
+    US#27: Unlisted and friends-only entries from authors I follow.
+    US#28: Most recent version (we fetch from DB - always current).
+    US#29: Deleted entries excluded (hard-deleted, so not in DB).
+    US#31: Sorted with most recent entries first.
+    """
+    if not request.session.get("author_id"):
+        return redirect("/app/login")
+
+    viewer = get_object_or_404(Author, id=request.session["author_id"])
+
+    # Authors I follow
+    following_ids = list(viewer.following.values_list("id", flat=True))
+    # Friends = mutual follow
+    friend_ids = list(viewer.friends().values_list("id", flat=True))
+
+    # US#26: All PUBLIC entries from any author on the node
+    # US#27: UNLISTED from following; FRIENDS from friends only
+    # US#29: No DELETED (hard-delete removes from DB)
+    entries = (
+        Entry.objects.filter(
+            Q(visibility="PUBLIC")
+            | Q(author_id__in=following_ids, visibility="UNLISTED")
+            | Q(author_id__in=friend_ids, visibility="FRIENDS")
+        )
+        .select_related("author")
+        .annotate(like_count=Count("like"))
+        .order_by("-published")
+    )
+
+    return render(
+        request,
+        "entries/stream.html",
+        {"entries": entries, "viewer": viewer},
+    )
+
+
+def stream_api(request, author_id):
+    """
+    Local API endpoint for the stream.
+    Returns entries the author should see:
+    - all PUBLIC entries on the node
+    - UNLISTED entries from followed authors
+    - FRIENDS entries from mutual friends
+    """
+    if request.method != "GET":
+        return JsonResponse({"detail": "Method not allowed."}, status=405)
+
+    session_author_id = request.session.get("author_id")
+    if not session_author_id:
+        return JsonResponse({"detail": "Authentication required."}, status=401)
+    if session_author_id != author_id:
+        return JsonResponse({"detail": "Forbidden."}, status=403)
+
+    viewer = get_object_or_404(Author, id=author_id)
+
+    following_ids = list(viewer.following.values_list("id", flat=True))
+    friend_ids = list(viewer.friends().values_list("id", flat=True))
+
+    entries = (
+        Entry.objects.filter(
+            Q(visibility="PUBLIC")
+            | Q(author_id__in=following_ids, visibility="UNLISTED")
+            | Q(author_id__in=friend_ids, visibility="FRIENDS")
+        )
+        .select_related("author")
+        .annotate(like_count=Count("like"))
+        .order_by("-published")
+    )
+
+    payload = []
+    for entry in entries:
+        payload.append(
+            {
+                "type": "entry",
+                "id": str(entry.id),
+                "title": entry.title,
+                "description": entry.description,
+                "contentType": entry.contentType,
+                "content": entry.content,
+                "author": {
+                    "type": "author",
+                    "id": entry.author.id,
+                    "displayName": entry.author.name or entry.author.username,
+                    "username": entry.author.username,
+                },
+                "published": entry.published.isoformat(),
+                "visibility": entry.visibility,
+                "likeCount": entry.like_count,
+            }
+        )
+
+    return JsonResponse(
+        {
+            "type": "entries",
+            "page_number": 1,
+            "size": len(payload),
+            "count": len(payload),
+            "src": payload,
+        }
+    )
+
+
 def my_entries(request):
     """
     Displays a list of entries created by the currently logged-in author, 
@@ -205,8 +312,11 @@ def view_entries(request, author_id):
     logged_in_id = request.session.get('author_id')
     is_owner = logged_in_id == author.id
 
-    entries = Entry.objects.filter(author=author).order_by('-published')
-    entries = Entry.objects.annotate(likeCount = Count("like")) # Attaches a likeCount value to every entry
+    entries = (
+        Entry.objects.filter(author=author)
+        .annotate(likeCount=Count("like"))
+        .order_by("-published")
+    )
 
     if not is_owner:
         if logged_in_id:
@@ -228,28 +338,33 @@ def view_entries(request, author_id):
         'author': author,
         'entries': entries,
     })
-
-def like_entry(request,author_id,entry_id):
-    if request.session.get('author_id'):
-        entry = get_object_or_404(Entry,id = entry_id) # Gets the entry being liked
-        author = get_object_or_404(Author,id = request.session.get('author_id')) # Gets the author liking the entry
-        # Clicking like button when you have already liked it leads to removing the like
-        if Like.objects.filter(entry = entry, user = author).exists():
-            Like.objects.get(entry = entry, user = author).delete()
-        # Creates a like if it has not already been liked
+def like_entry(request, author_id, entry_id):
+    if request.session.get("author_id"):
+        entry = get_object_or_404(Entry, id=entry_id)
+        author = get_object_or_404(Author, id=request.session["author_id"])
+        if Like.objects.filter(entry=entry, user=author).exists():
+            Like.objects.filter(entry=entry, user=author).delete()
         else:
-            like = Like(entry = entry,user = author)
-            like.save()
-        return redirect("view_entries",author_id)
-    # Returns a redirect immediately if there is no author signed in
-    else:
-        return redirect("view_entries",author_id)
-    
+            Like.objects.create(entry=entry, user=author)
+        next_url = request.GET.get("next")
+        if next_url:
+            return redirect(next_url)
+        return redirect("view_entries", author_id=author_id)
+    return redirect("view_entries", author_id=author_id)
+
+
 def get_entry(request, entry_id):
-    entry = get_object_or_404(Entry, id = entry_id)
-    if ('author_id' in request.session):
-        logged_in_id = request.session.get('author_id')
+    entry = get_object_or_404(Entry, id=entry_id)
+    if "author_id" in request.session:
+        logged_in_id = request.session.get("author_id")
         viewer = get_object_or_404(Author, id=logged_in_id)
-        return render(request, "entries/entry.html", {"entry": entry, "allowed": entry.visibility in ["PUBLIC", "UNLISTED"] or viewer in entry.author.friends()})
-    else:
-        return render(request, "entries/entry.html", {"entry": entry, "allowed": entry.visibility in ["PUBLIC", "UNLISTED"]})
+        return render(
+            request,
+            "entries/entry.html",
+            {"entry": entry, "allowed": entry.visibility in ["PUBLIC", "UNLISTED"] or viewer in entry.author.friends()},
+        )
+    return render(
+        request,
+        "entries/entry.html",
+        {"entry": entry, "allowed": entry.visibility in ["PUBLIC", "UNLISTED"]},
+    )

@@ -117,6 +117,43 @@
     color: var(--text-date);
 }
 
+.stream-description {
+    color: var(--text-muted);
+    margin: 0 0 10px 0;
+}
+
+.entry-by {
+    margin: 0 0 10px 0;
+    font-size: 0.9rem;
+}
+
+.entry-by a {
+    color: var(--link-blue);
+    text-decoration: none;
+}
+
+.entry-by a:hover {
+    text-decoration: underline;
+}
+
+.like-count {
+    margin-right: 10px;
+}
+
+.btn-like {
+    background-color: var(--link-blue);
+    color: white;
+    border: none;
+    padding: 6px 14px;
+    border-radius: var(--input-radius);
+    cursor: pointer;
+    font-size: 0.9rem;
+}
+
+.btn-like:hover {
+    background-color: var(--link-hover);
+}
+
 .badge-visibility {
     background-color: var(--bg-code);
     color: var(--text-muted);
