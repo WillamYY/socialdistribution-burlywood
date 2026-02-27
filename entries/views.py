@@ -107,7 +107,7 @@ def create_entry(request):
         
         # If successful, commit it to the database
         new_entry.save()
-        return redirect("my_entries")
+        return redirect("view_my_entries")
 
     # Show the empty form for GET requests
     return render(request, "entries/create_entry.html")
@@ -134,14 +134,14 @@ def edit_entry(request, entry_id):
         
         # Commit the updates to the database
         entry.save()
-        return redirect("my_entries")
+        return redirect("view_my_entries")
     
     return render(request, "entries/edit_entry.html", {"entry": entry})
 
 @require_POST
 def delete_entry(request, entry_id):
     """
-    Handles the deletion of an entry. 
+    Handles the soft deletion of an entry. 
     Only the author of the entry can delete it.
     """
     if not request.session.get("author_id"):
@@ -152,10 +152,11 @@ def delete_entry(request, entry_id):
     # Fetch the entry by this author
     entry = get_object_or_404(Entry, id=entry_id, author=author)
     
-    # Remove it from the database
-    entry.delete()
-    
-    return redirect("my_entries")
+    # Soft delete by changing visibility to DELETED
+    entry.visibility = "DELETED"
+    entry.save()
+
+    return redirect("view_my_entries")
 
 def get_entry_image(request, author_id, entry_id):
     """
@@ -186,7 +187,7 @@ def get_entry_image(request, author_id, entry_id):
         # Failed to decode base64; internal server error
         return HttpResponse(f"Failed to decode image: {str(e)}", status=500)
 
-def my_entries(request):
+def view_my_entries(request):
     """
     Displays a list of entries created by the currently logged-in author, 
     ordered by publication date (newest first).
@@ -196,7 +197,7 @@ def my_entries(request):
     author = Author.objects.get(id=request.session["author_id"])
 
     # Get all entries by this author, ordered by newest first
-    entries = Entry.objects.filter(author=author).order_by("-published")
+    entries = Entry.objects.filter(author=author).exclude(visibility="DELETED").order_by("-published")
     
     return render(request, "entries/my_entries.html", {"entries": entries})
 
@@ -205,7 +206,7 @@ def view_entries(request, author_id):
     logged_in_id = request.session.get('author_id')
     is_owner = logged_in_id == author.id
 
-    entries = Entry.objects.filter(author=author).order_by('-published')
+    entries = Entry.objects.filter(author=author).exclude(visibility="DELETED").order_by('-published')
     entries = Entry.objects.annotate(likeCount = Count("like")) # Attaches a likeCount value to every entry
 
     if not is_owner:
