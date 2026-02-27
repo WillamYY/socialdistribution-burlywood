@@ -1,54 +1,99 @@
 {% extends 'entries/base.html' %}
+{% load entry_extras %}
 
 {% block title %}My Entries{% endblock %}
 
 {% block content %}
-    <div class="page-container">
-        <h1>My Shared Thoughts and Pictures</h1>
-        <hr>
+<div class="page-container">
+    <h1>My Shared Thoughts and Pictures</h1>
+    <hr>
 
-        {% for entry in entries %}
-            <div class="entry-card">
-                
-                <div class="entry-header">
-                    <h2 class="entry-title">{{ entry.title }}</h2>
-                    <span class="badge-visibility">{{ entry.visibility }}</span>
-                </div>
+    {% for entry in entries %}
+        <div class="entry-card">
+            <div class="entry-header">
+                <h2 class="entry-title">{{ entry.title }}</h2>
+                <span class="badge-visibility">{{ entry.visibility }}</span>
+            </div>
 
-                <p class="entry-description">{{ entry.description }}</p>
+            <p class="entry-description">{{ entry.description }}</p>
 
-                <div class="entry-content">
-                    {% if "image" in entry.contentType %}
-                        <img class="entry-image" src="data:{{ entry.contentType }},{{ entry.content }}" alt="{{ entry.title }}">
-                    {% elif entry.contentType == "text/markdown" %}
-                        <div class="entry-markdown">
-                            {{ entry.content|safe }}
-                        </div>
-                    {% elif entry.contentType == "text/plain" %}
-                        <div class="entry-plain-text">
-                            {{ entry.content|linebreaks }}
-                        </div>
-                    {% endif %}
-                </div>
-
-                <div class="entry-footer">
-                    <div class="footer-edit-delete-actions">
-                        <a href="{% url 'edit_entry' entry.id %}" class="edit-link">Edit</a>
-                        
-                        <form action="{% url 'delete_entry' entry.id %}" method="POST" style="display:inline;">
-                            {% csrf_token %}
-                            <button type="submit" class="btn-delete" onclick="return confirm('Are you sure you want to delete this thought?')">Delete</button>
-                        </form>
+            <div class="entry-content">
+                {% if "image" in entry.contentType %}
+                    <img class="entry-image" src="data:{{ entry.contentType }},{{ entry.content }}" alt="{{ entry.title }}">
+                {% elif entry.contentType == "text/markdown" %}
+                    <div class="entry-markdown">
+                        {{ entry.content|safe }}
                     </div>
-                    
-                    <span class="entry-date">Published: {{ entry.published|date:"M d, Y H:i" }}</span>
+                {% elif entry.contentType == "text/plain" %}
+                    <div class="entry-plain-text">
+                        {{ entry.content|linebreaks }}
+                    </div>
+                {% endif %}
+            </div>
+
+            <div class="entry-footer">
+                <div class="footer-edit-delete-actions">
+                    <a href="{% url 'edit_entry' entry.id %}" class="edit-link">Edit</a>
+                    <form action="{% url 'delete_entry' entry.id %}" method="POST" style="display:inline;">
+                        {% csrf_token %}
+                        <button type="submit" class="btn-delete" onclick="return confirm('Are you sure you want to delete this thought?')">Delete</button>
+                    </form>
                 </div>
                 
+                <span class="entry-date">Published: {{ entry.published|date:"M d, Y H:i" }}</span>
             </div>
-        {% empty %}
-            <div class="empty-state">
-                <p>You haven't posted anything yet! Time to share a thought.</p>
+
+            <p style="margin-top:10px; font-weight:bold;">Likes: {{ entry.like_count }}</p>
+            
+            <div class="comments-section">
+                <h4>Comments</h4>
+
+            {% for comment in entry.fetched_comments %}
+                <div class="comment">
+                    <div class="comment-meta">
+                        <strong>{{ comment.author }}</strong>
+                        <span>{{ comment.published|date:"M d, Y H:i" }}</span>
+                    </div>
+                    <div class="comment-body">{{ comment.comment|linebreaks }}</div>
+
+                    {% if request.session.author_id %}
+                    <form method="POST" action="{% url 'toggle_like_comment' comment.id %}">
+                        {% csrf_token %}
+                        <button type="submit" style="border:none;background:none;font-size:1.2em;cursor:pointer;">
+                            {% if comment.liked_by_user %}
+                                ❤️
+                            {% else %}
+                                🤍
+                            {% endif %}
+                        </button>
+                    </form>
+                    {% endif %}
+
+                    <span>{{ comment.like_count }} like{{ comment.like_count|pluralize }}</span>
+                </div>
+            {% empty %}
+                <p>No comments yet.</p>
+            {% endfor %}
             </div>
-        {% endfor %}
-    </div>
+
+            {% if request.session.author_id %}
+            <form class="comment-form" method="POST" action="{% url 'create_comment' entry.author.id entry.id %}">
+                {% csrf_token %}
+
+                <input type="hidden" name="entry" value="http://{{ request.get_host }}/api/authors/{{ entry.author.id }}/entries/{{ entry.id }}">
+
+                <textarea name="comment" rows="3" placeholder="Write a comment..." required></textarea>
+
+                <input type="hidden" name="contentType" value="text/plain">
+
+                <button type="submit">Comment</button>
+            </form>
+            {% endif %}
+        </div>
+    {% empty %}
+        <div class="empty-state">
+            <p>You haven't posted anything yet! Time to share a thought.</p>
+        </div>
+    {% endfor %}
+</div>
 {% endblock %}

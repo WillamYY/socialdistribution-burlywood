@@ -6,8 +6,9 @@ from django.http import HttpResponse
 from django.contrib import messages
 from django.views.decorators.http import require_POST
 from django.db.models import Count
-from .models import Entry, Like
+from .models import Entry
 from core.models import Author
+from interactions.models import Comment, Like
 
 def render_safe_markdown(text_content):
     """
@@ -194,19 +195,52 @@ def my_entries(request):
     if not request.session.get("author_id"): 
         return redirect("/app/login")
     author = Author.objects.get(id=request.session["author_id"])
+    logged_in_id = request.session.get("author_id")
 
     # Get all entries by this author, ordered by newest first
     entries = Entry.objects.filter(author=author).order_by("-published")
     
-    return render(request, "entries/my_entries.html", {"entries": entries})
+    host = request.get_host()
+    
+    logged_in_author_fqid = f"http://{host}/api/authors/{logged_in_id}" if logged_in_id else None
+
+    # Loop through each entry to manually fetch its comments and likes
+    for entry in entries:
+        entry_fqid = f"http://{host}/api/authors/{entry.author_id}/entries/{entry.id}"
+        
+        # 1. Attach Entry Likes
+        entry.like_count = Like.objects.filter(object=entry_fqid).count()
+        if logged_in_author_fqid:
+            entry.liked_by_user = Like.objects.filter(author=logged_in_author_fqid, object=entry_fqid).exists()
+        else:
+            entry.liked_by_user = False
+
+        # 2. Attach Comments
+        entry_comments = Comment.objects.filter(entry=entry_fqid).order_by('published')
+        
+        # 3. Attach Likes to those Comments
+        for comment in entry_comments:
+            comment.like_count = Like.objects.filter(object=comment.id).count()
+            if logged_in_author_fqid:
+                comment.liked_by_user = Like.objects.filter(author=logged_in_author_fqid, object=comment.id).exists()
+            else:
+                comment.liked_by_user = False
+                
+        # Save the comments list to the entry object so the template can use it
+        entry.fetched_comments = entry_comments
+
+    return render(request, "entries/my_entries.html", {
+        "entries": entries,
+        "logged_in_id": logged_in_id,
+    })
 
 def view_entries(request, author_id):
     author = get_object_or_404(Author, id=author_id)
     logged_in_id = request.session.get('author_id')
     is_owner = logged_in_id == author.id
 
+    # Notice we REMOVED the .annotate(likeCount=...) from this line!
     entries = Entry.objects.filter(author=author).order_by('-published')
-    entries = Entry.objects.annotate(likeCount = Count("like")) # Attaches a likeCount value to every entry
 
     if not is_owner:
         if logged_in_id:
@@ -220,24 +254,39 @@ def view_entries(request, author_id):
         else:
             # not logged in: show only PUBLIC
             entries = entries.filter(visibility='PUBLIC')
-    # owner sees all entries, including UNLISTED
-    return render(request, 'entries/view_entries.html', {
+    
+    # === NEW FQID LOGIC FOR LIKES AND COMMENTS ===
+    host = request.get_host()
+    
+    logged_in_author_fqid = f"http://{host}/api/authors/{logged_in_id}" if logged_in_id else None
+
+    # Loop through each entry to manually fetch its comments and likes
+    for entry in entries:
+        entry_fqid = f"http://{host}/api/authors/{entry.author_id}/entries/{entry.id}"
+        
+        # 1. Attach Entry Likes
+        entry.like_count = Like.objects.filter(object=entry_fqid).count()
+        if logged_in_author_fqid:
+            entry.liked_by_user = Like.objects.filter(author=logged_in_author_fqid, object=entry_fqid).exists()
+        else:
+            entry.liked_by_user = False
+
+        # 2. Attach Comments
+        entry_comments = Comment.objects.filter(entry=entry_fqid).order_by('published')
+        
+        # 3. Attach Likes to those Comments
+        for comment in entry_comments:
+            comment.like_count = Like.objects.filter(object=comment.id).count()
+            if logged_in_author_fqid:
+                comment.liked_by_user = Like.objects.filter(author=logged_in_author_fqid, object=comment.id).exists()
+            else:
+                comment.liked_by_user = False
+                
+        # Save the comments list to the entry object so the template can use it
+        entry.fetched_comments = entry_comments
+
+    return render(request, "entries/view_entries.html", {
         'author': author,
         'entries': entries,
+        'logged_in_id': logged_in_id,
     })
-
-def like_entry(request,author_id,entry_id):
-    if request.session.get('author_id'):
-        entry = get_object_or_404(Entry,id = entry_id) # Gets the entry being liked
-        author = get_object_or_404(Author,id = request.session.get('author_id')) # Gets the author liking the entry
-        # Clicking like button when you have already liked it leads to removing the like
-        if Like.objects.filter(entry = entry, user = author).exists():
-            Like.objects.get(entry = entry, user = author).delete()
-        # Creates a like if it has not already been liked
-        else:
-            like = Like(entry = entry,user = author)
-            like.save()
-        return redirect("view_entries",author_id)
-    # Returns a redirect immediately if there is no author signed in
-    else:
-        return redirect("view_entries",author_id)
