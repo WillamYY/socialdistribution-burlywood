@@ -127,8 +127,10 @@ def profile_view(request):
         return redirect("/app/login")
 
     author = Author.objects.get(id=request.session["author_id"])
-    followers_count = author.followers.count()
-    following_count = author.following.count()
+
+    followers_count = author.followers.exclude(id__in=author.following.values_list("id", flat=True)).count()
+    following_count = author.following.exclude(id__in=author.followers.values_list("id", flat=True)).count()
+    friends_count = author.friends().count()
 
     # Count pending follow requests for this author
     pending_requests_count = FollowRequest.objects.filter(target=author).count()
@@ -137,6 +139,7 @@ def profile_view(request):
         "author": author,
         "followers_count": followers_count,
         "following_count": following_count,
+        "friends_count": friends_count,
         "pending_requests_count": pending_requests_count
     })
 
@@ -238,3 +241,20 @@ def deny_follow(request, req_id):
     follow_request.delete()
     messages.info(request, "Request denied.", extra_tags='follow')
     return redirect('view_follow_requests')
+
+def connections(request):
+    author_id = request.session.get('author_id')
+    if not author_id:
+        return redirect('/app/login')
+    author = get_object_or_404(Author, id=author_id)
+
+    # From https://stackoverflow.com/questions/4523282/django-in-not-in-query by Harph
+    followers = author.followers.exclude(id__in=author.following.values_list("id", flat=True))
+    followings = author.following.exclude(id__in=author.followers.values_list("id", flat=True))
+    friends = author.friends()
+
+    return render(request, "connections.html", {
+        "followers": followers,
+        "followings": followings,
+        "friends": friends
+    })
