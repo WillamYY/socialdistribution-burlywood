@@ -3,7 +3,8 @@ from django.shortcuts import render,get_object_or_404
 from django.urls import path
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from .models import Author, Entry, Like
+from core.models import Author
+from entries.models import Entry, Like
 from .serializers import LikesSerializer, LikeSerializer, EntrySerializer, EntriesSerializer
 
 # Create your views here.
