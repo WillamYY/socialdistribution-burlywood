@@ -1,8 +1,11 @@
+{% extends 'base.html' %}
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <title>Follow Requests</title>
+    {% block style %}
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -38,8 +41,10 @@
         }
         .button:hover { background-color: #155ab6; }
     </style>
+    {% endblock %}
 </head>
 <body>
+    {% block content %}
     <div class="requests-card">
         <h1>Follow Requests</h1>
         {% if requests %}
@@ -54,5 +59,6 @@
             <p style="text-align:center;">No follow requests at the moment.</p>
         {% endif %}
     </div>
+    {% endblock %}
 </body>
 </html>
