@@ -6,6 +6,7 @@ from .models import Author, Entry, Like
 from .serializers import LikeSerializer
 from .admin import AuthorAdmin
 from django.contrib.auth.models import User
+from django.contrib.auth.hashers import make_password
 
 # Create your tests here.
 
@@ -175,15 +176,70 @@ class AddLikeEndpointTest(APITestCase):
 
 """
 Tests admin using priviledges
+User Story 66
 """
 class AdminPanelAbilityTest(TestCase):
     """
-    Tests create, update, and delete
-    User Story # 66
+    Tests adding a user
+    Part of User story 66
     """
-    def test_admin_permissions(self):
+    def test_add_user_admin(self):
+        # Gets the link to add a user
         adminLink = reverse("admin:api_author_add")
+        # Opens up the admin panel
         client = Client()
-        adminUser = User.objects.create_user({"username":"1","password":"2"})
-        client.force_authenticate(user=adminUser)
-        print(client.post(adminLink,{"username":"Doug","password":"1234R","name":"Doug","host":"/api/","web":"/app/authors/1"}))
+        adminUser = User.objects.create_superuser(username="1",password="2")
+        adminUser.save()
+        client.login(username =  "1", password = "2")
+        # Makes a hashed password for the post request
+        password = make_password("123")
+        # Posts the user
+        client.post(adminLink,{"username":"Doug","password":password,"name":"Doug","description": "This is a test","picture": "","github": "","followers":[],"host":"http://localhost:8000/api/","web":"http://localhost:8000/app/authors/1","_save":"Save"})
+        # Ensures there is an author created
+        self.assertEqual(Author.objects.count(),1)
+        # Checks that the authors information matches
+        self.assertEqual(Author.objects.get().username,"Doug")
+        self.assertEqual(Author.objects.get().description,"This is a test")
+    """
+    Tests updating a user
+    Part of User story 66
+    """
+    def test_edit_user_admin(self):
+        # Creates initial author
+        author = Author(username = "a",password = "b",name = "c",description = "d",host = "/api/",web = "/app/authors/1")
+        author.save()
+        # Gets the link to change an author
+        adminLink = reverse("admin:api_author_change",kwargs = {"object_id":author.id})
+        # Opens up the admin panel
+        client = Client()
+        adminUser = User.objects.create_superuser(username="1",password="2")
+        adminUser.save()
+        client.login(username =  "1", password = "2")
+        # Makes a hashed password for the post request
+        password = make_password("123")
+        # Posts the user
+        client.post(adminLink,{"username":"Doug","password":password,"name":"Doug","description": "This is a test","picture": "","github": "","followers":[],"host":"http://localhost:8000/api/","web":"http://localhost:8000/app/authors/1","_save":"Save"})
+        # Ensures there is an author created
+        self.assertEqual(Author.objects.count(),1)
+        # Checks that the authors information matches
+        self.assertEqual(Author.objects.get().username,"Doug")
+        self.assertEqual(Author.objects.get().description,"This is a test")
+    """
+    Tests deleting a user
+    Part of User story 66
+    """
+    def test_delete_user_admin(self):
+        # Creates initial author
+        author = Author(username = "a",password = "b",name = "c",description = "d",host = "/api/",web = "/app/authors/1")
+        author.save()
+        # Gets the link to change an author
+        adminLink = reverse("admin:api_author_delete",kwargs = {"object_id":author.id})
+        # Opens up the admin panel
+        client = Client()
+        adminUser = User.objects.create_superuser(username="1",password="2")
+        adminUser.save()
+        client.login(username =  "1", password = "2")
+        # Posts the delete
+        client.post(adminLink,{"_save": "Save"})
+        # Ensures there is no more author
+        self.assertEqual(Author.objects.count(),0)
