@@ -33,7 +33,7 @@ class Entry(models.Model):
     visibility = models.CharField(max_length=20, choices=VISIBILITY_CHOICES, default="PUBLIC")
     
 """
-Class for likes attachedto an entry
+Class for likes attached to an entry
 """
 class Like(models.Model):
     id = models.AutoField(primary_key = True)

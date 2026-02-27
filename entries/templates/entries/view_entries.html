@@ -35,6 +35,7 @@ button {
     {% csrf_token %}
     <button type="submit">Like</button>
   </form>
+  <a href="{% url 'get_entry' entry.id%}">View entry</a>
 </div>
 {% empty %}
 <p>No entries yet.</p>

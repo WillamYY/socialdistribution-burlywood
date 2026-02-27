@@ -1,0 +1,44 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body>
+    {% if allowed %}
+    <header>
+        <h1>{{ entry.title }}</h1>
+        <h2>By: {{entry.author}}</h2>
+        <h3>Published: {{entry.published}}</h3>
+        <h3>{{entry.description}}</h3>
+    </header>
+    <main>
+        <article>
+            {{entry.content}}
+        </article>
+        <form method="POST" action="button">
+            <!-- add like functionality here -->
+            <label class="offscreen" for=""></label>
+            <input type="submit" name="" id="">
+        </form>
+        <a href="{% url 'view_entries' entry.author.id %}">Back</a>
+        <section>
+            <h2>Comments:</h2>
+            {% for comment in entry.comments %}
+            <!-- add comments functionality here -->
+            {% endfor %}
+        </section>
+    </main>
+    {% else %}
+    <header>
+        <h1>Entry unavailable</h1>
+    </header>
+    <main>
+        <h2>This entry is only available to those who are friends with the author.</h2>
+        <a href="{% url 'view_entries' entry.author.id %}">Back</a>
+    </main>
+    {% endif %}
+</body>
+</html>
