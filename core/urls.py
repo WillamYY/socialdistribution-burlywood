@@ -1,7 +1,6 @@
 from django.urls import path
 from . import views
-from . import api_views
-
+ 
 urlpatterns = [
     path("", views.NodeDisplay, name="NodeDisplay"),
     path("signup/", views.SignUpView, name="SignUp"),
@@ -16,7 +15,4 @@ urlpatterns = [
     path('follow-requests/', views.view_follow_requests, name='view_follow_requests'),
     path('follow-requests/approve/<int:req_id>/', views.approve_follow, name='ApproveFollow'),
     path('follow-requests/deny/<int:req_id>/', views.deny_follow, name='DenyFollow'),
-
-
-    path('api/authors/<int:author_id>/', api_views.api_author_detail, name='api_author_detail'),
 ]
