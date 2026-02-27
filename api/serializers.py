@@ -5,7 +5,7 @@ from .models import Like, Author
 Serializes author objects
 """
 class AuthorSerializer(serializers.ModelSerializer):
-    type = serializers.CharField(default = "Author") # Sets the type to author in the response
+    type = serializers.CharField(default = "author") # Sets the type to author in the response
     displayName = serializers.CharField(source = "name") # Maps the displayName field to the name field in the database
     profileImage = serializers.URLField(source = "picture") # Maps the profileImage field to the picture field in the database
     id = serializers.SerializerMethodField() # Turns the interger id into a url
@@ -23,7 +23,7 @@ class AuthorSerializer(serializers.ModelSerializer):
 Serializes a singular like
 """
 class LikeSerializer(serializers.ModelSerializer):
-    type = serializers.CharField(default = "Like") # Sets the type of the serializer to like
+    type = serializers.CharField(default = "like") # Sets the type of the serializer to like
     author = AuthorSerializer(source = "user")
     published = serializers.DateTimeField(source = "time") # Attaches published to the time field
     object = serializers.SerializerMethodField() # Stores the object so that it can be displayed even though it does not go in the database

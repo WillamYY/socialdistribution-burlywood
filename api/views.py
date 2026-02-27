@@ -3,7 +3,7 @@ from django.shortcuts import render,get_object_or_404
 from django.urls import path
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from .models import Author, Entry, Like
+from .models import Author, Entry, Like, AuthorRequest
 from .serializers import LikesSerializer, LikeSerializer
 
 # Create your views here.
@@ -61,7 +61,8 @@ def ApiAuthor(request,id):
         if not Author.objects.filter(id = id).exists():
             # Ensures that the authors id matches the correct Id of where it is being placed and that the name is unique
             if str(id) == request.data.get("id").split("/")[-1] and not Author.objects.filter(username = request.data.get("displayName")).exists():
-                author = Author(id = id,host = request.data.get("host"),username = request.data.get("displayName"),name = request.data.get("displayName"),github = request.data.get("github"),picture = request.data.get("profileImage"),web = request.data.get("web"))
+                # Creates an author request with the information
+                author = AuthorRequest(id = id,username = request.data.get("displayName"),name = request.data.get("displayName"),github = request.data.get("github"),picture = request.data.get("profileImage"),web = request.data.get("web"),host = request.data.get("host") )
                 author.save()
                 authorID = author.host + "authors/" + str(author.id)
                 return Response({"type":"author","id": authorID,"host": author.host,"displayName": author.name, "github":author.github, "profileImage":author.picture,"web":author.web})
