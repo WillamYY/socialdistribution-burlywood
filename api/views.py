@@ -1,4 +1,6 @@
 # Create your views here.
+import base64
+from django.http import HttpResponse, HttpResponseForbidden
 from django.shortcuts import render,get_object_or_404
 from django.urls import path
 from rest_framework.decorators import api_view
@@ -226,3 +228,40 @@ def ApiEntry(request, author_id, entry_id):
         entry.save()
         
         return Response(status=204)
+
+@api_view(['GET'])
+def ApiEntryImage(request, author_id=None, entry_id=None):
+    """
+    Returns the raw image data for an entry.
+    Allows Markdown to link to images.
+    Supports both hierarchical and FQID style URLs.
+    """
+    # Get the entry
+    entry = get_object_or_404(Entry, id=entry_id)
+
+    # Check if base64 data, implying an image
+    if ";base64" not in entry.contentType:
+        return HttpResponse("This entry is not an image.", status=404)
+    
+    # Check if public entry or if user is authenticated
+    if entry.visibility != "PUBLIC" and not request.user.is_authenticated:
+        return HttpResponseForbidden("You do not have permission to view this image.")
+    
+    try:
+        # Strip the content string to get the actual base64 data 
+        content_str = entry.content
+        if "," in content_str:  # i.e. data:image/png;base64,... prefix
+            content_str = content_str.split(",")[1]
+        
+        # Decode image into raw binary data
+        image_binary = base64.b64decode(content_str.strip())
+        
+        # Extract the actual base64 string and the MIME type
+        # MIME == Multipurpose Internet Mail Extension: type of data being transmitted over internet 
+        mime_type = entry.contentType.split(';')[0]     # i.e. format like "image/png;base64"
+
+        # Return raw binary data with the correct MIME type
+        return HttpResponse(image_binary, content_type=mime_type)
+    except Exception as e:
+        # Failed to decode base64; internal server error
+        return HttpResponse(f"Failed to decode image: {str(e)}", status=500)
