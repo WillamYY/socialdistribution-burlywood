@@ -2,10 +2,6 @@ from django.db import models
 from django.utils import timezone
 
 class Comment(models.Model):
-    """
-    Spec-compliant Comment model.
-    Moved from entries to interactions.
-    """
     type = "comment"
 
     # Fully Qualified ID (global, unique URL)

@@ -355,11 +355,8 @@ def view_entries(request, author_id):
         if logged_in_id:
             viewer = get_object_or_404(Author, id=logged_in_id)
             if viewer in author.friends():
-                # friend: show PUBLIC + FRIENDS + UNLISTED
-                entries = entries.filter(visibility__in=['PUBLIC', 'FRIENDS', "UNLISTED"])
-            elif viewer in author.followers.all():
-                # follower: show PUBLIC + UNLISTED
-                entries = entries.filter(visibility__in=["PUBLIC", "UNLISTED"])
+                # friend: show PUBLIC + FRIENDS
+                entries = entries.filter(visibility__in=['PUBLIC', 'FRIENDS'])
             else:
                 # non-friend: show only PUBLIC
                 entries = entries.filter(visibility='PUBLIC')
