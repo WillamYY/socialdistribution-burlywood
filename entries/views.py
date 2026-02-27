@@ -219,9 +219,39 @@ def stream_view(request):
             | Q(author_id__in=friend_ids, visibility="FRIENDS")
         )
         .select_related("author")
-        .annotate(like_count=Count("like"))
         .order_by("-published")
     )
+
+    logged_in_id = request.session.get("author_id")
+
+    host = request.get_host()
+
+    logged_in_author_fqid = f"http://{host}/api/authors/{logged_in_id}" if logged_in_id else None
+
+    # Loop through each entry to manually fetch its comments and likes
+    for entry in entries:
+        entry_fqid = f"http://{host}/api/authors/{entry.author_id}/entries/{entry.id}"
+        
+        # 1. Attach Entry Likes
+        entry.like_count = Like.objects.filter(object=entry_fqid).count()
+        if logged_in_author_fqid:
+            entry.liked_by_user = Like.objects.filter(author=logged_in_author_fqid, object=entry_fqid).exists()
+        else:
+            entry.liked_by_user = False
+
+        # 2. Attach Comments
+        entry_comments = Comment.objects.filter(entry=entry_fqid).order_by('published')
+        
+        # 3. Attach Likes to those Comments
+        for comment in entry_comments:
+            comment.like_count = Like.objects.filter(object=comment.id).count()
+            if logged_in_author_fqid:
+                comment.liked_by_user = Like.objects.filter(author=logged_in_author_fqid, object=comment.id).exists()
+            else:
+                comment.liked_by_user = False
+                
+        # Save the comments list to the entry object so the template can use it
+        entry.fetched_comments = entry_comments
 
     return render(
         request,
@@ -399,3 +429,19 @@ def view_entries(request, author_id):
         'entries': entries,
         'logged_in_id': logged_in_id,
     })
+
+def get_entry(request, entry_id):
+    entry = get_object_or_404(Entry, id=entry_id)
+    if "author_id" in request.session:
+        logged_in_id = request.session.get("author_id")
+        viewer = get_object_or_404(Author, id=logged_in_id)
+        return render(
+            request,
+            "entries/entry.html",
+            {"entry": entry, "allowed": entry.visibility in ["PUBLIC", "UNLISTED"] or viewer in entry.author.friends()},
+        )
+    return render(
+        request,
+        "entries/entry.html",
+        {"entry": entry, "allowed": entry.visibility in ["PUBLIC", "UNLISTED"]},
+    )

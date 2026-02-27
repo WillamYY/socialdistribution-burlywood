@@ -15,5 +15,5 @@ urlpatterns = [
     path("entry/<uuid:entry_id>/", views.get_entry, name="get_entry"),
 
     # Include interactions app logic
-    path("interactions/", include("interactions.urls", namespace="interactions")),
+    path("interactions/", include("interactions.urls")),
 ]
