@@ -3,6 +3,7 @@
 <!DOCTYPE html>
 <html>
 <head>
+{% load entry_extras %}
 <title>{{ author.username }}'s Entries</title>
 {% block style %}
 <style>
@@ -35,12 +36,63 @@ button {
   {% elif "image" in entry.contentType %}
     <img src="data:{{ entry.contentType }},{{ entry.content }}" alt="Image Entry">
   {% endif %}
-  <p>Likes: {{entry.likeCount}}</p>
+  
+  <p>Likes: {{ entry.like_count }}</p>
   <form method = "POST" action="{% url 'like_entry' author.id entry.id %}">
     {% csrf_token %}
-    <button type="submit">Like</button>
+    <button type="submit">
+      {% if entry.liked_by_user %}
+        ❤️
+      {% else %}
+        Like
+      {% endif %}
+    </button>
   </form>
+<<<<<<< HEAD
   <a href="{% url 'get_entry' entry.id%}">View entry</a>
+=======
+
+  <div class="comments-section">
+    <h4>Comments</h4>
+
+    {% for comment in entry.fetched_comments %}
+      <div class="comment">
+        <div class="comment-meta">
+          <strong>{{ comment.author }}</strong>
+          <span>{{ comment.published|date:"M d, Y H:i" }}</span>
+        </div>
+        <div class="comment-body">{{ comment.comment|linebreaks }}</div>
+
+        {% if logged_in_id %}
+        <form method="POST" action="{% url 'toggle_like_comment' comment.id %}" style="display:inline;">
+          {% csrf_token %}
+          <button type="submit" class="heart-button">
+            {% if comment.liked_by_user %}
+              ❤️
+            {% else %}
+              🤍
+            {% endif %}
+          </button>
+        </form>
+        {% endif %}
+        <span>{{ comment.like_count }} like{{ comment.like_count|pluralize }}</span>
+      </div>
+    {% empty %}
+      <p>No comments yet.</p>
+    {% endfor %}
+
+    {% if logged_in_id %}
+    <form method="POST" action="{% url 'create_comment' entry.author.id entry.id %}">
+      {% csrf_token %}
+      <input type="hidden" name="entry" value="http://{{ request.get_host }}/api/authors/{{ entry.author.id }}/entries/{{ entry.id }}">
+      <textarea name="comment" rows="2" placeholder="Write a comment..." required style="width:100%;"></textarea>
+      <input type="hidden" name="contentType" value="text/plain">
+      <button type="submit">Comment</button>
+    </form>
+    {% endif %}
+  </div>
+
+>>>>>>> commentsLike
 </div>
 {% empty %}
 <p>No entries yet.</p>
