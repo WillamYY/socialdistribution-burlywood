@@ -1,6 +1,9 @@
-<html></html>
+{% extends 'base.html' %}
+
+<!-- <html></html>
   <head>
-    <title>My Profile</title>
+    <title>My Profile</title> -->
+    {% block style %}
     <style>
       body {
         font-family: Arial, sans-serif;
@@ -85,8 +88,10 @@
         justify-content: center;
       }
     </style>
-  </head>
-  <body>
+    {% endblock %}
+<!--   </head>
+  <body> -->
+    {% block content %}
     <h2>{{ author.name|default:author.username }}</h2>
 
     {% load static %}
@@ -127,5 +132,6 @@
         {% endif %}
       </a>
     {% endif %}
-  </body>
-</html>
+    {% endblock %}
+  <!-- </body> -->
+<!-- </html> -->

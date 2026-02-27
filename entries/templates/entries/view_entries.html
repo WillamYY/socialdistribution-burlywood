@@ -1,7 +1,10 @@
+{% extends 'base.html' %}
+
 <!DOCTYPE html>
 <html>
 <head>
 <title>{{ author.username }}'s Entries</title>
+{% block style %}
 <style>
 body { font-family: Arial; background-color: #fafafa; }
 .entry-card {
@@ -16,8 +19,10 @@ button {
   width: 40px
 }
 </style>
+{% endblock %}
 </head>
 <body>
+{% block content %}
 <h1>{{ author.username }}’s Entries</h1>
 
 {% for entry in entries %}
@@ -40,5 +45,6 @@ button {
 {% empty %}
 <p>No entries yet.</p>
 {% endfor %}
+{% endblock %}
 </body>
 </html>
