@@ -5,12 +5,10 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.http import HttpResponse, JsonResponse
 from django.contrib import messages
 from django.views.decorators.http import require_POST
-from django.db.models import Count
-from .models import Entry
 from django.db.models import Count, Q
 from .models import Entry
 from core.models import Author
-from interactions.models import Comment, Like
+from interactions.models import Like, Comment
 
 def render_safe_markdown(text_content):
     """
@@ -219,9 +217,20 @@ def stream_view(request):
             | Q(author_id__in=friend_ids, visibility="FRIENDS")
         )
         .select_related("author")
-        .annotate(like_count=Count("like"))
         .order_by("-published")
     )
+
+    # Build the current user's URL
+    user_fqid = f"{request.build_absolute_uri('/')[:-1]}/authors/{viewer.id}"
+
+    for entry in entries:
+        entry_url = f"{request.build_absolute_uri('/')[:-1]}/app/entry/{entry.id}/"
+
+        entry.like_count = Like.objects.filter(object=entry_url).count()
+        entry.fetched_comments = Comment.objects.filter(entry=entry_url).order_by('published')
+        
+        # Check if THIS user liked THIS entry
+        entry.liked_by_user = Like.objects.filter(object=entry_url, author=user_fqid).exists()
 
     return render(
         request,
@@ -259,12 +268,17 @@ def stream_api(request, author_id):
             | Q(author_id__in=friend_ids, visibility="FRIENDS")
         )
         .select_related("author")
-        .annotate(like_count=Count("like"))
         .order_by("-published")
     )
 
     payload = []
+    base = request.build_absolute_uri("/")[:-1]
     for entry in entries:
+        entry_url = f"{base}/app/entry/{entry.id}/"
+        like_count = Like.objects.filter(object=entry_url).count()
+        # optionally we could provide commentCount or the comments
+        # themselves; the frontend currently doesn't need them.
+
         payload.append(
             {
                 "type": "entry",
@@ -281,7 +295,7 @@ def stream_api(request, author_id):
                 },
                 "published": entry.published.isoformat(),
                 "visibility": entry.visibility,
-                "likeCount": entry.like_count,
+                "likeCount": like_count,
             }
         )
 
@@ -304,98 +318,81 @@ def my_entries(request):
     if not request.session.get("author_id"): 
         return redirect("/app/login")
     author = Author.objects.get(id=request.session["author_id"])
-    logged_in_id = request.session.get("author_id")
 
     # Get all entries by this author, ordered by newest first
     entries = Entry.objects.filter(author=author).order_by("-published")
-    
-    host = request.get_host()
-    
-    logged_in_author_fqid = f"http://{host}/api/authors/{logged_in_id}" if logged_in_id else None
+    user_fqid = f"{request.build_absolute_uri('/')[:-1]}/authors/{author.id}"
 
-    # Loop through each entry to manually fetch its comments and likes
+    # Manually attach Like/Comment data for interactions
     for entry in entries:
-        entry_fqid = f"http://{host}/api/authors/{entry.author_id}/entries/{entry.id}"
+        entry_url = f"{request.build_absolute_uri('/')[:-1]}/app/entry/{entry.id}/"
         
-        # 1. Attach Entry Likes
-        entry.like_count = Like.objects.filter(object=entry_fqid).count()
-        if logged_in_author_fqid:
-            entry.liked_by_user = Like.objects.filter(author=logged_in_author_fqid, object=entry_fqid).exists()
-        else:
-            entry.liked_by_user = False
+        entry.like_count = Like.objects.filter(object=entry_url).count()
+        entry.fetched_comments = Comment.objects.filter(entry=entry_url).order_by('published')
+        entry.liked_by_user = Like.objects.filter(object=entry_url, author=user_fqid).exists()
 
-        # 2. Attach Comments
-        entry_comments = Comment.objects.filter(entry=entry_fqid).order_by('published')
-        
-        # 3. Attach Likes to those Comments
-        for comment in entry_comments:
-            comment.like_count = Like.objects.filter(object=comment.id).count()
-            if logged_in_author_fqid:
-                comment.liked_by_user = Like.objects.filter(author=logged_in_author_fqid, object=comment.id).exists()
-            else:
-                comment.liked_by_user = False
-                
-        # Save the comments list to the entry object so the template can use it
-        entry.fetched_comments = entry_comments
-
-    return render(request, "entries/my_entries.html", {
-        "entries": entries,
-        "logged_in_id": logged_in_id,
-    })
+    return render(request, "entries/my_entries.html", {"entries": entries})
 
 def view_entries(request, author_id):
     author = get_object_or_404(Author, id=author_id)
     logged_in_id = request.session.get('author_id')
     is_owner = logged_in_id == author.id
 
-    # Notice we REMOVED the .annotate(likeCount=...) from this line!
-    entries = Entry.objects.filter(author=author).order_by('-published')
+    entries = (Entry.objects.filter(author=author).order_by("-published"))
 
     if not is_owner:
         if logged_in_id:
             viewer = get_object_or_404(Author, id=logged_in_id)
             if viewer in author.friends():
-                # friend: show PUBLIC + FRIENDS
-                entries = entries.filter(visibility__in=['PUBLIC', 'FRIENDS'])
+                # friend: show PUBLIC + FRIENDS + UNLISTED
+                entries = entries.filter(visibility__in=['PUBLIC', 'FRIENDS', "UNLISTED"])
+            elif viewer in author.followers.all():
+                # follower: show PUBLIC + UNLISTED
+                entries = entries.filter(visibility__in=["PUBLIC", "UNLISTED"])
             else:
                 # non-friend: show only PUBLIC
                 entries = entries.filter(visibility='PUBLIC')
         else:
             # not logged in: show only PUBLIC
             entries = entries.filter(visibility='PUBLIC')
-    
-    # === NEW FQID LOGIC FOR LIKES AND COMMENTS ===
-    host = request.get_host()
-    
-    logged_in_author_fqid = f"http://{host}/api/authors/{logged_in_id}" if logged_in_id else None
-
-    # Loop through each entry to manually fetch its comments and likes
-    for entry in entries:
-        entry_fqid = f"http://{host}/api/authors/{entry.author_id}/entries/{entry.id}"
         
-        # 1. Attach Entry Likes
-        entry.like_count = Like.objects.filter(object=entry_fqid).count()
-        if logged_in_author_fqid:
-            entry.liked_by_user = Like.objects.filter(author=logged_in_author_fqid, object=entry_fqid).exists()
+    entries_list = list(entries)
+
+    user_fqid = None
+    if logged_in_id:
+        user_fqid = f"{request.build_absolute_uri('/')[:-1]}/authors/{logged_in_id}"
+
+    # Manually attach Like/Comment data for the interactions
+    for entry in entries_list:
+        entry_url = f"{request.build_absolute_uri('/')[:-1]}/app/entry/{entry.id}/"
+        
+        entry.like_count = Like.objects.filter(object=entry_url).count()
+        entry.fetched_comments = Comment.objects.filter(entry=entry_url).order_by('published')
+        
+        # Only check for "Unlike" state
+        if user_fqid:
+            entry.liked_by_user = Like.objects.filter(object=entry_url, author=user_fqid).exists()
         else:
             entry.liked_by_user = False
 
-        # 2. Attach Comments
-        entry_comments = Comment.objects.filter(entry=entry_fqid).order_by('published')
-        
-        # 3. Attach Likes to those Comments
-        for comment in entry_comments:
-            comment.like_count = Like.objects.filter(object=comment.id).count()
-            if logged_in_author_fqid:
-                comment.liked_by_user = Like.objects.filter(author=logged_in_author_fqid, object=comment.id).exists()
-            else:
-                comment.liked_by_user = False
-                
-        # Save the comments list to the entry object so the template can use it
-        entry.fetched_comments = entry_comments
-
-    return render(request, "entries/view_entries.html", {
+    # owner sees all entries, including UNLISTED
+    return render(request, 'entries/view_entries.html', {
         'author': author,
-        'entries': entries,
-        'logged_in_id': logged_in_id,
+        'entries': entries_list,
     })
+
+def get_entry(request, entry_id):
+    entry = get_object_or_404(Entry, id=entry_id)
+    if "author_id" in request.session:
+        logged_in_id = request.session.get("author_id")
+        viewer = get_object_or_404(Author, id=logged_in_id)
+        return render(
+            request,
+            "entries/entry.html",
+            {"entry": entry, "allowed": entry.visibility in ["PUBLIC", "UNLISTED"] or viewer in entry.author.friends()},
+        )
+    return render(
+        request,
+        "entries/entry.html",
+        {"entry": entry, "allowed": entry.visibility in ["PUBLIC", "UNLISTED"]},
+    )
