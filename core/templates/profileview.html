@@ -1,9 +1,12 @@
+{% extends 'base.html' %}
+
 {% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <title>{{ author.username }}'s Profile</title>
+    {% block style %}
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -77,8 +80,10 @@
             color: #666;
         }
     </style>
+    {% endblock %}
 </head>
 <body>
+    {% block content %}
     <div class="profile-card">
         <!-- Profile Picture -->
         <img src="{% if author.picture %}{{ author.picture.url }}{% else %}{% static 'images/default_profile.jpg' %}{% endif %}" 
@@ -120,5 +125,6 @@
             <a href="{% url 'view_entries' author.id %}" class="follow-btn view-entries">View Entries</a>
         {% endif %}
     </div>
+    {% endblock %}
 </body>
 </html>

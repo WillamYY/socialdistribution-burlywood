@@ -1,6 +1,9 @@
-<html></html>
+{% extends 'base.html' %}
+
+<!-- <html></html>
   <head>
-    <title>My Profile</title>
+    <title>My Profile</title> -->
+    {% block style %}
     <style>
       body {
         font-family: Arial, sans-serif;
@@ -85,8 +88,11 @@
         justify-content: center;
       }
     </style>
-  </head>
-  <body>
+  {% endblock %}
+    
+<!--   </head>
+  <body> -->
+    {% block content %}
     <h2>{{ author.name|default:author.username }}</h2>
 
     {% load static %}
@@ -101,19 +107,23 @@
     <p><strong>GitHub:</strong> 
       {% if author.github %}
         <a href="{{ author.github }}" target="_blank">{{ author.github }}</a>
-        <p><strong>Followers:</strong> {{ followers_count }} |
-        <strong>Following:</strong> {{ following_count }}</p>
       {% else %}
         Not provided
       {% endif %}
     </p>
+    <ul>
+      <li><a href="{% url 'connections' %}#followers"><strong>Followers:</strong> {{ followers_count }}</a></li>
+      <li><a href="{% url 'connections' %}#following"><strong>Following:</strong> {{ following_count }}</a></li>
+      <li><a href="{% url 'connections' %}#friends"><strong>Friends:</strong> {{friends_count}}</a></li>
+    </ul>
 
     <div style="text-align:center;">
       <a href="/app/edit-profile" class="button">Edit Profile</a>
       <a href="/app/logout" class="button" style="background-color: #555;">Logout</a>
       <div style="text-align:center; margin-top: 10px;">
+        <a href="{% url 'stream' %}" class="button" style="background-color: #1a73e8;">Stream</a>
         <a href="{% url 'create_entry' %}" class="button" style="background-color: #4caf50;">Create Entry</a>
-        <a href="/app/" class="button" style="background-color: #1a73e8;">View All Authors</a>
+        <a href="/app/" class="button" style="background-color: #6b7280;">View All Authors</a>
       </div>
     </div>
 
@@ -126,5 +136,6 @@
         {% endif %}
       </a>
     {% endif %}
-  </body>
-</html>
+    {% endblock %}
+  <!-- </body> -->
+<!-- </html> -->

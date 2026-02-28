@@ -1,6 +1,7 @@
 from rest_framework import serializers
-from .models import Like, Author
-from entries.models import Entry, Like
+from core.models import Author
+from entries.models import Entry
+from interactions.models import Like
 
 """
 Serializes author objects

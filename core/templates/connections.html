@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<section id="followers">
+    <h2>Followers</h2>
+    <ul>
+        {% for follower in followers %}
+        <li>{{ follower.username }}</li>
+        {% endfor %}
+    </ul>
+</section>
+<section id="following">
+    <h2>Following</h2>
+    <ul>
+        {% for following in followings %}
+        <li>{{ following.username }}</li>
+        {% endfor %}
+    </ul>
+</section>
+<section id="friends">
+    <h2>Friends</h2>
+    <ul>
+        {% for friend in friends %}
+        <li>{{ friend.username }}</li>
+        {% endfor %}
+    </ul>
+</section>
+{% endblock %}

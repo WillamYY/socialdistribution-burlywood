@@ -6,7 +6,8 @@ from django.urls import path
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from core.models import Author
-from entries.models import Entry, Like
+from entries.models import Entry
+from interactions.models import Like
 from .serializers import LikesSerializer, LikeSerializer, EntrySerializer, EntriesSerializer
 
 # Create your views here.

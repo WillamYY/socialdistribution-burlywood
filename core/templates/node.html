@@ -1,8 +1,11 @@
+{% extends 'base.html' %}
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <title>Authors Directory</title>
+  {% block style %}
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -64,10 +67,17 @@
       background-color: #155ab6;
     }
   </style>
+  {% endblock %}
 </head>
 <body>
+  {% block content %}
   <div class="container">
     <h1>All Authors on This Node</h1>
+    {% if request.session.author_id %}
+    <p style="text-align:center; margin-bottom: 20px;">
+      <a href="{% url 'stream' %}" class="button" style="background-color: #4caf50;">Go to Stream</a>
+    </p>
+    {% endif %}
     <ul style="list-style:none; padding:0;">
       {% for user in users %}
         <li>
@@ -94,5 +104,6 @@
       {% endfor %}
     </ul>
   </div>
+  {% endblock %}
 </body>
 </html>
