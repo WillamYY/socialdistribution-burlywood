@@ -19,7 +19,7 @@
 
             <div class="entry-content">
                 {% if "image" in entry.contentType %}
-                    <img class="entry-image" src="{% url 'get_entry_image' entry.author.id entry.id %}" style="max-width:100%;">
+                    <img src="{% url 'api:ApiEntryImage' author_id=entry.author.id entry_id=entry.id %}" style="max-width:100%;">
                 {% elif entry.contentType == "text/markdown" %}
                     <div class="entry-markdown">{{ entry.content|safe }}</div>
                 {% else %}

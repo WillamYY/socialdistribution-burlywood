@@ -1,10 +1,14 @@
 # Create your views here.
+import base64
+from django.http import HttpResponse, HttpResponseForbidden
 from django.shortcuts import render,get_object_or_404
 from django.urls import path
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from .models import Author, Entry, Like
-from .serializers import LikesSerializer, LikeSerializer
+from core.models import Author
+from entries.models import Entry
+from interactions.models import Like
+from .serializers import LikesSerializer, LikeSerializer, EntrySerializer, EntriesSerializer
 
 # Create your views here.
 @api_view(['GET'])
@@ -137,3 +141,128 @@ def ApiSendLike(request,author_id):
         # If the entry is from a different author show an error code
         if entry.author.id != author_id:
             return Response(status = 400)
+
+# Returns a paginated list of entries for a specific author
+@api_view(['GET', 'POST'])
+def ApiEntries(request, author_id):
+    # Ensure the author exists before trying to fetch their entries
+    author = get_object_or_404(Author, pk=author_id)
+    
+    if request.method == 'GET':
+        # Get pagination parameters
+        page = int(request.query_params.get('page', 1))
+        size = int(request.query_params.get('size', 5))
+        
+        # Query the entries
+        # TODO: handle visibilities; currently only show PUBLIC posts and exclude DELETED posts.
+        entries = Entry.objects.filter(author=author).exclude(visibility="DELETED").filter(visibility="PUBLIC").order_by('-published')
+        
+        # Paginate the queryset
+        start = (page - 1) * size
+        end = start + size
+        paginated_entries = entries[start:end]
+        
+        # Package the data for EntriesSerializer
+        data = {
+            "page_number": page,
+            "size": size,
+            "count": entries.count(),
+            "src": paginated_entries
+        }
+        
+        # Serialize and return
+        serializer = EntriesSerializer(data, context={'request': request})
+        return Response(serializer.data)
+    
+    elif request.method == 'POST':
+        # Create a new entry from the incoming JSON object
+        new_entry = Entry.objects.create(
+            author=author,
+            title=request.data.get("title", ""),
+            description=request.data.get("description", ""),
+            contentType=request.data.get("contentType", "text/plain"),
+            content=request.data.get("content", ""),
+            visibility=request.data.get("visibility", "PUBLIC")
+        )
+        
+        # Return the newly created entry using your teammate's serializer
+        serializer = EntrySerializer(new_entry, context={'request': request})
+        return Response(serializer.data, status=201)
+
+# Returns a single specific entry
+@api_view(['GET', 'PUT', 'DELETE'])
+def ApiEntry(request, author_id, entry_id):
+    # Try to get the entry first
+    # None if not found; avoid 404 immediately due to PUT-create behavior
+    entry = Entry.objects.filter(pk=entry_id, author_id=author_id).first()
+
+    if request.method == 'GET':
+        # Cannot access deleted entries through the API
+        if not entry or entry.visibility == "DELETED":
+            return Response({"detail": "Not found."}, status=404)
+
+        # Serialize and return
+        serializer = EntrySerializer(entry, context={'request': request})
+        return Response(serializer.data)
+
+    elif request.method == 'PUT':
+        author = get_object_or_404(Author, pk=author_id)
+        # If entry DNE, create it with the provided entry id
+        if not entry:
+            entry = Entry(id=entry_id, author=author)
+        
+        # Update the entry with new data
+        entry.title = request.data.get("title", entry.title)
+        entry.description = request.data.get("description", entry.description)
+        entry.contentType = request.data.get("contentType", entry.contentType)
+        entry.content = request.data.get("content", entry.content)
+        entry.visibility = request.data.get("visibility", entry.visibility)
+        entry.save()
+        
+        # Serialize and return
+        serializer = EntrySerializer(entry, context={'request': request})
+        return Response(serializer.data, status=200)
+    
+    elif request.method == 'DELETE':
+        # Soft delete by changing visibility to DELETED
+        entry.visibility = "DELETED"
+        entry.save()
+        
+        return Response(status=204)
+
+@api_view(['GET'])
+def ApiEntryImage(request, author_id=None, entry_id=None):
+    """
+    Returns the raw image data for an entry.
+    Allows Markdown to link to images.
+    Supports both hierarchical and FQID style URLs.
+    """
+    # Get the entry
+    entry = get_object_or_404(Entry, id=entry_id)
+
+    # Check if base64 data, implying an image
+    if ";base64" not in entry.contentType:
+        return HttpResponse("This entry is not an image.", status=404)
+    
+    # Check if public entry or if user is authenticated
+    if entry.visibility != "PUBLIC" and not request.user.is_authenticated:
+        return HttpResponseForbidden("You do not have permission to view this image.")
+    
+    try:
+        # Strip the content string to get the actual base64 data 
+        content_str = entry.content
+        if "," in content_str:  # i.e. data:image/png;base64,... prefix
+            content_str = content_str.split(",")[1]
+        
+        # Decode image into raw binary data
+        image_binary = base64.b64decode(content_str.strip())
+        
+        # Extract the actual base64 string and the MIME type
+        # MIME == Multipurpose Internet Mail Extension: type of data being transmitted over internet 
+        mime_type = entry.contentType.split(';')[0]     # i.e. format like "image/png;base64"
+
+        # Return raw binary data with the correct MIME type
+        return HttpResponse(image_binary, content_type=mime_type)
+    except Exception as e:
+        # Failed to decode base64; internal server error
+        return HttpResponse(f"Failed to decode image: {str(e)}", status=500)
