@@ -152,3 +152,23 @@ def ApiSendLike(request,author_id):
             return Response(like_serializer.data)
     else:
         return Response(status = 404)
+    
+@api_view(["GET"])
+def ApiAuthorLiked(request, author_id):
+    pass
+
+@api_view(["GET"])
+def ApiSingleLikeRemoteLocal(request, author_id, like_url):
+    pass
+
+@api_view(["GET"])
+def ApiSingleLikeLocal(request, like_url):
+    like_id = like_url.split("/")[-1]
+    print(like_id)
+    like_object = get_object_or_404(Like, pk = int(like_id))
+    print(like_object)
+    #print(like_object)
+    print(like_object.entry)
+    like_data = LikeSerializer(like_object, context = {"object":None})
+    print(like_data.data)
+    return Response(status = 200)
