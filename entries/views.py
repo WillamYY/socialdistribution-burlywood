@@ -6,8 +6,9 @@ from django.http import HttpResponse, JsonResponse
 from django.contrib import messages
 from django.views.decorators.http import require_POST
 from django.db.models import Count, Q
-from .models import Entry, Like
+from .models import Entry
 from core.models import Author
+from interactions.models import Like, Comment
 
 def render_safe_markdown(text_content):
     """
@@ -107,7 +108,7 @@ def create_entry(request):
         
         # If successful, commit it to the database
         new_entry.save()
-        return redirect("my_entries")
+        return redirect("view_my_entries")
 
     # Show the empty form for GET requests
     return render(request, "entries/create_entry.html")
@@ -134,14 +135,14 @@ def edit_entry(request, entry_id):
         
         # Commit the updates to the database
         entry.save()
-        return redirect("my_entries")
+        return redirect("view_my_entries")
     
     return render(request, "entries/edit_entry.html", {"entry": entry})
 
 @require_POST
 def delete_entry(request, entry_id):
     """
-    Handles the deletion of an entry. 
+    Handles the soft deletion of an entry. 
     Only the author of the entry can delete it.
     """
     if not request.session.get("author_id"):
@@ -152,39 +153,11 @@ def delete_entry(request, entry_id):
     # Fetch the entry by this author
     entry = get_object_or_404(Entry, id=entry_id, author=author)
     
-    # Remove it from the database
-    entry.delete()
-    
-    return redirect("my_entries")
+    # Soft delete by changing visibility to DELETED
+    entry.visibility = "DELETED"
+    entry.save()
 
-def get_entry_image(request, author_id, entry_id):
-    """
-    Returns the raw image data for an entry.
-    Allows Markdown to link to images.
-    """
-    # Get the entry
-    entry = get_object_or_404(Entry, id=entry_id, author_id=author_id)
-
-    # Check if base64 data, implying an image
-    if ";base64" not in entry.contentType:
-        return HttpResponse("This entry is not an image.", status=404)
-
-    # Extract the actual base64 string and the MIME type
-    # MIME == Multipurpose Internet Mail Extension: type of data being transmitted over internet 
-    mime_type = entry.contentType.split(';')[0]     # i.e. format like "image/png;base64"
-
-    try:
-        # Strip the content string to get the actual base64 data 
-        content_str = entry.content
-        if "," in content_str:  # i.e. data:image/png;base64,... prefix
-            content_str = content_str.split(",")[1]
-            
-        image_binary = base64.b64decode(content_str.strip())
-        # Return raw binary data with the correct MIME type
-        return HttpResponse(image_binary, content_type=mime_type)
-    except Exception as e:
-        # Failed to decode base64; internal server error
-        return HttpResponse(f"Failed to decode image: {str(e)}", status=500)
+    return redirect("view_my_entries")
 
 def stream_view(request):
     """
@@ -216,9 +189,20 @@ def stream_view(request):
             | Q(author_id__in=friend_ids, visibility="FRIENDS")
         )
         .select_related("author")
-        .annotate(like_count=Count("like"))
         .order_by("-published")
     )
+
+    # Build the current user's URL
+    user_fqid = f"{request.build_absolute_uri('/')[:-1]}/authors/{viewer.id}"
+
+    for entry in entries:
+        entry_url = f"{request.build_absolute_uri('/')[:-1]}/app/entry/{entry.id}/"
+
+        entry.like_count = Like.objects.filter(object=entry_url).count()
+        entry.fetched_comments = Comment.objects.filter(entry=entry_url).order_by('published')
+        
+        # Check if THIS user liked THIS entry
+        entry.liked_by_user = Like.objects.filter(object=entry_url, author=user_fqid).exists()
 
     return render(
         request,
@@ -256,12 +240,17 @@ def stream_api(request, author_id):
             | Q(author_id__in=friend_ids, visibility="FRIENDS")
         )
         .select_related("author")
-        .annotate(like_count=Count("like"))
         .order_by("-published")
     )
 
     payload = []
+    base = request.build_absolute_uri("/")[:-1]
     for entry in entries:
+        entry_url = f"{base}/app/entry/{entry.id}/"
+        like_count = Like.objects.filter(object=entry_url).count()
+        # optionally we could provide commentCount or the comments
+        # themselves; the frontend currently doesn't need them.
+
         payload.append(
             {
                 "type": "entry",
@@ -278,7 +267,7 @@ def stream_api(request, author_id):
                 },
                 "published": entry.published.isoformat(),
                 "visibility": entry.visibility,
-                "likeCount": entry.like_count,
+                "likeCount": like_count,
             }
         )
 
@@ -293,7 +282,7 @@ def stream_api(request, author_id):
     )
 
 
-def my_entries(request):
+def view_my_entries(request):
     """
     Displays a list of entries created by the currently logged-in author, 
     ordered by publication date (newest first).
@@ -303,8 +292,17 @@ def my_entries(request):
     author = Author.objects.get(id=request.session["author_id"])
 
     # Get all entries by this author, ordered by newest first
-    entries = Entry.objects.filter(author=author).order_by("-published")
-    
+    entries = Entry.objects.filter(author=author).exclude(visibility="DELETED").order_by("-published")
+    user_fqid = f"{request.build_absolute_uri('/')[:-1]}/authors/{author.id}"
+
+    # Manually attach Like/Comment data for interactions
+    for entry in entries:
+        entry_url = f"{request.build_absolute_uri('/')[:-1]}/app/entry/{entry.id}/"
+        
+        entry.like_count = Like.objects.filter(object=entry_url).count()
+        entry.fetched_comments = Comment.objects.filter(entry=entry_url).order_by('published')
+        entry.liked_by_user = Like.objects.filter(object=entry_url, author=user_fqid).exists()
+
     return render(request, "entries/my_entries.html", {"entries": entries})
 
 def view_entries(request, author_id):
@@ -312,11 +310,7 @@ def view_entries(request, author_id):
     logged_in_id = request.session.get('author_id')
     is_owner = logged_in_id == author.id
 
-    entries = (
-        Entry.objects.filter(author=author)
-        .annotate(likeCount=Count("like"))
-        .order_by("-published")
-    )
+    entries = (Entry.objects.filter(author=author).exclude(visibility="DELETED").order_by("-published"))
 
     if not is_owner:
         if logged_in_id:
@@ -333,25 +327,31 @@ def view_entries(request, author_id):
         else:
             # not logged in: show only PUBLIC
             entries = entries.filter(visibility='PUBLIC')
+        
+    entries_list = list(entries)
+
+    user_fqid = None
+    if logged_in_id:
+        user_fqid = f"{request.build_absolute_uri('/')[:-1]}/authors/{logged_in_id}"
+
+    # Manually attach Like/Comment data for the interactions
+    for entry in entries_list:
+        entry_url = f"{request.build_absolute_uri('/')[:-1]}/app/entry/{entry.id}/"
+        
+        entry.like_count = Like.objects.filter(object=entry_url).count()
+        entry.fetched_comments = Comment.objects.filter(entry=entry_url).order_by('published')
+        
+        # Only check for "Unlike" state
+        if user_fqid:
+            entry.liked_by_user = Like.objects.filter(object=entry_url, author=user_fqid).exists()
+        else:
+            entry.liked_by_user = False
+
     # owner sees all entries, including UNLISTED
     return render(request, 'entries/view_entries.html', {
         'author': author,
-        'entries': entries,
+        'entries': entries_list,
     })
-def like_entry(request, author_id, entry_id):
-    if request.session.get("author_id"):
-        entry = get_object_or_404(Entry, id=entry_id)
-        author = get_object_or_404(Author, id=request.session["author_id"])
-        if Like.objects.filter(entry=entry, user=author).exists():
-            Like.objects.filter(entry=entry, user=author).delete()
-        else:
-            Like.objects.create(entry=entry, user=author)
-        next_url = request.GET.get("next")
-        if next_url:
-            return redirect(next_url)
-        return redirect("view_entries", author_id=author_id)
-    return redirect("view_entries", author_id=author_id)
-
 
 def get_entry(request, entry_id):
     entry = get_object_or_404(Entry, id=entry_id)

@@ -1,50 +1,66 @@
-{% extends 'base.html' %}
+{% extends 'entries/base.html' %}
+{% load entry_extras %}
 
-<!DOCTYPE html>
-<html>
-<head>
-<title>{{ author.username }}'s Entries</title>
-{% block style %}
-<style>
-body { font-family: Arial; background-color: #fafafa; }
-.entry-card {
-  background: white; border-radius: 10px; padding: 15px;
-  margin: 15px auto; max-width: 600px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-}
-h2 { color: #333; }
-img { max-width: 100%; border-radius: 8px; margin-top: 10px; }
-button {
-  background: #333; border-radius: 1px; padding: 1.5px;
-  color: white;
-  width: 40px
-}
-</style>
-{% endblock %}
-</head>
-<body>
+{% block title %}{{ author.username }}'s Entries{% endblock %}
+
 {% block content %}
-<h1>{{ author.username }}’s Entries</h1>
+<div class="page-container" style="max-width: 800px; margin: auto;">
+    <h1>{{ author.username }}’s Entries</h1>
 
-{% for entry in entries %}
-<div class="entry-card">
-  <h2>{{ entry.title }}</h2>
-  <p>{{ entry.description }}</p>
-  <p><em>Published: {{ entry.published }}</em></p>
-  {% if entry.contentType == "text/plain" or entry.contentType == "text/markdown" %}
-    <p>{{ entry.content }}</p>
-  {% elif "image" in entry.contentType %}
-    <img src="data:{{ entry.contentType }},{{ entry.content }}" alt="Image Entry">
-  {% endif %}
-  <p>Likes: {{entry.likeCount}}</p>
-  <form method = "POST" action="{% url 'like_entry' author.id entry.id %}">
-    {% csrf_token %}
-    <button type="submit">Like</button>
-  </form>
-  <a href="{% url 'get_entry' entry.id%}">View entry</a>
+    {% for entry in entries %}
+    <div class="entry-card" style="background: white; border-radius: 10px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
+        <h2>{{ entry.title }}</h2>
+        <p>{{ entry.description }}</p>
+        <p><em>Published: {{ entry.published|date:"M d, Y" }}</em></p>
+
+        <div class="entry-content">
+            {% if "image" in entry.contentType %}
+                <img src="{% url 'api:ApiEntryImage' author_id=entry.author.id entry_id=entry.id %}" style="max-width: 100%; border-radius: 8px;">
+            {% else %}
+                <p>{{ entry.content|linebreaks }}</p>
+            {% endif %}
+        </div>
+        
+        <div class="interaction-bar" style="margin-top: 15px; display: flex; align-items: center; gap: 10px;">
+            <strong>Likes: {{ entry.like_count|default:0 }}</strong>
+            {% if request.session.author_id %}
+            <form method="POST" action="{% url 'interactions:add_like' entry.id %}" style="display:inline;">
+                {% csrf_token %}
+                <button type="submit" class="btn-like" style="cursor: pointer;">
+                    {% if entry.liked_by_user %}
+                        ❤️ Unlike
+                    {% else %}
+                        🤍 Like
+                    {% endif %}
+                </button>
+            </form>
+            {% endif %}
+            <a href="{% url 'get_entry' entry.id %}" class="btn-view" style="margin-left: 10px;">View Single Entry</a>
+        </div>
+
+        <div class="comments-section" style="margin-top: 15px; border-top: 1px solid #eee; padding-top: 10px;">
+            <h4>Comments</h4>
+            
+            {% for comment in entry.fetched_comments %}
+                <div class="comment" style="margin-bottom: 8px;">
+                    <strong>{{ comment.author }}</strong> <small>({{ comment.published|date:"M d, Y" }})</small>
+                    <p style="margin: 2px 0;">{{ comment.comment }}</p>
+                </div>
+            {% empty %}
+                <p>No comments yet.</p>
+            {% endfor %}
+
+            {% if request.session.author_id %}
+            <form method="POST" action="{% url 'interactions:add_comment' entry.id %}" style="margin-top: 10px;">
+                {% csrf_token %}
+                <textarea name="comment" rows="2" placeholder="Write a comment..." required style="width: 100%;"></textarea>
+                <button type="submit" style="margin-top: 5px;">Post Comment</button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+    {% empty %}
+        <p>No entries found for this author.</p>
+    {% endfor %}
 </div>
-{% empty %}
-<p>No entries yet.</p>
-{% endfor %}
 {% endblock %}
-</body>
-</html>
