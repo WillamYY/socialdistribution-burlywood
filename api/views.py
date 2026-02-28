@@ -164,11 +164,7 @@ def ApiSingleLikeRemoteLocal(request, author_id, like_url):
 @api_view(["GET"])
 def ApiSingleLikeLocal(request, like_url):
     like_id = like_url.split("/")[-1]
-    print(like_id)
     like_object = get_object_or_404(Like, pk = int(like_id))
-    print(like_object)
-    #print(like_object)
-    print(like_object.entry)
-    like_data = LikeSerializer(like_object, context = {"object":None})
-    print(like_data.data)
-    return Response(status = 200)
+    like_json = LikeSerializer(like_object, context = {"object": f"{request.scheme}://{request.get_host()}/app/entry/{like_object.entry.id}"})
+    print(like_json.data)
+    return Response(like_json.data)
