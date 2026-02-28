@@ -24,7 +24,7 @@ class AuthorRequestAdmin(admin.ModelAdmin):
             # Gets the info from request
             authorInfo = AuthorRequest.objects.get(pk=authorrequest.id)
             # Creates the new author with it's username and password
-            newAuthor = Author(username = authorInfo.username)
+            newAuthor = Author(id = authorInfo.id,username = authorInfo.username,name = authorInfo.name,github = authorInfo.github, picture = authorInfo.picture,web = authorInfo.web,host = authorInfo.host)
             newAuthor.set_password(authorInfo.password)
             newAuthor.save()
             # Deletes the old author
