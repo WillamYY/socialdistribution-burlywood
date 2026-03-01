@@ -206,6 +206,15 @@ def ApiEntry(request, author_id, entry_id):
         return Response(serializer.data)
 
     elif request.method == 'PUT':
+        # Retrieve the logged-in author's ID from the session
+        session_author_id = request.session.get("author_id")
+
+        if str(session_author_id) != str(author_id):
+            return Response(
+                {"detail": "You do not have permission to modify this entry."}, 
+                status=403
+            )
+        
         author = get_object_or_404(Author, pk=author_id)
         # If entry DNE, create it with the provided entry id
         if not entry:
@@ -224,6 +233,10 @@ def ApiEntry(request, author_id, entry_id):
         return Response(serializer.data, status=200)
     
     elif request.method == 'DELETE':
+        # Security check for deletion
+        if str(request.session.get("author_id")) != str(author_id):
+            return Response({"detail": "Forbidden"}, status=403)
+
         # Soft delete by changing visibility to DELETED
         entry.visibility = "DELETED"
         entry.save()
