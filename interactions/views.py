@@ -51,3 +51,31 @@ def add_comment(request, entry_id):
             )
 
     return redirect(request.META.get('HTTP_REFERER', '/app/stream/'))
+
+def add_comment_like(request, comment_id):
+    """Toggle Like on a Comment object."""
+    if request.method == "POST":
+        author_id = request.session.get("author_id")
+        if not author_id:
+            return redirect('/app/login')
+
+        base = request.build_absolute_uri('/')[:-1]
+
+        # rebuild the stored comment ID
+        full_comment_id = f"{base}/comments/{comment_id}"
+
+        comment = get_object_or_404(Comment, id=full_comment_id)
+
+        comment_fqid = full_comment_id
+        author_fqid = f"{base}/authors/{author_id}"
+
+        like, created = Like.objects.get_or_create(
+            author=author_fqid,
+            object=comment_fqid,
+            defaults={'id': f"{base}/likes/{uuid.uuid4()}"}
+        )
+
+        if not created:
+            like.delete()
+
+    return redirect(request.META.get('HTTP_REFERER', '/app/stream/'))
