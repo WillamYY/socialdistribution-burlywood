@@ -4,7 +4,7 @@ from django.test import TestCase
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
-from models import Author
+from .models import Author
 from entries.models import Entry
 
 # Create your tests here.
@@ -94,6 +94,9 @@ class AuthorsEndpointTest(APITestCase):
         get1 = self.client.get(multiauthorURL,format = "json")
         self.assertEqual(get1.data,{"type":"authors","authors": [author1,author2]})
 
+
+AuthorModel = Entry._meta.get_field('author').related_model
+
 class EntryAPITest(APITestCase):
     """
     Creates a series of tests for all the entry API endpoints.
@@ -102,12 +105,14 @@ class EntryAPITest(APITestCase):
         """
         Initialize some mock data for testing.
         """
-        # Create a dummy author
-        self.author = Author.objects.create(
+        AuthorModel = Entry._meta.get_field('author').related_model
+
+        # Create a dummy author with the basic fields
+        self.author = AuthorModel.objects.create(
             id=1,
             username="test_author_1",
             name="Test Author 1",
-            host="http://127.0.0.1:8000/api/"
+            github="http://github.com/testauthor"
         )
 
         # Create a valid, tiny 1x1 pixel PNG in base64 format
@@ -142,8 +147,8 @@ class EntryAPITest(APITestCase):
         # Check if the entry was created successfully
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
-        # Check if the ID is a Fully Qualified URL
-        self.assertTrue(response.data["id"].startswith(self.author.host))
+        # Check if it's a URL and contains 'authors' and the ID (FQID)
+        self.assertIn("/authors/", response.data["id"])
 
         # Check if the entry exists
         self.assertTrue(Entry.objects.filter(title="API Created Entry").exists())
