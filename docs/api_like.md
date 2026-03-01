@@ -10,7 +10,7 @@ This document covers the API implementation and expected behavior for **Liking E
 **Note:** \* Denotes a required field for POST body
 ### Like Object
 * `type` → type of object
-* `author`\* →
+* `author`\* → author object defined by the following:
     * `type` → type of object
     * `id`\* → FQID of the person who liked the entry
     * `host` → host node of author
@@ -29,7 +29,7 @@ This document covers the API implementation and expected behavior for **Liking E
 * `page number` → current page number of likes 
 * `size` → size of each page
 * `count` → total number of likes on this query
-* `src` → list of Like objects, [Like\[\]](###Like-Object)
+* `src` → list of Like objects, [Like\[\]](#like-Object)
 
 ## Likes APIs
 
