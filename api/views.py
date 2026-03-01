@@ -6,9 +6,9 @@ from django.urls import path
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from .models import Author, Entry, Like, AuthorRequest
-from core.models import Author
-from entries.models import Entry
-from interactions.models import Like
+#from core.models import Author
+#from entries.models import Entry
+#from interactions.models import Like
 from .serializers import LikesSerializer, LikeSerializer, EntrySerializer, EntriesSerializer
 
 # Create your views here.
@@ -105,13 +105,24 @@ def ApiAuthor(request,id):
 @api_view(["GET"])
 def ApiAuthorAndEntryLikes(request,author_id,entry_id):
     # Ensures the entry exists before accessing it
-    if Entry.objects.filter(id = entry_id).exists():
-        entry = Entry.objects.get(id = entry_id)
-        likes = Like.objects.filter(entry = entry)
+    # Only getting entries that are PUBLIC or UNLISTED
+    if Entry.objects.filter(id = entry_id, visibility__in = ["PUBLIC", "UNLISTED"]).exists():
+        # getting the URL of the object requested
+        liked_obj = "/".join(request.build_absolute_uri().split("/")[:-1])
+
+        # getting all the likes whose object is the given liked object, ordered by publish date
+        likes = Like.objects.filter(object = liked_obj).order_by("published")
+
+        count = likes.count()
+        # should only get 5 likes per entry
+        src = likes
+        if count > 5:
+            src = likes[:5]
+
         # Finds the link to the object that was liked
         entryURL = request.build_absolute_uri()
         # Serializes the data
-        likesSerializer = LikesSerializer({"page_number":1,"size":5,"count":likes.count(),"src":likes},context = {"link":entryURL,"object":entryURL[:-len("/likes")]})
+        likesSerializer = LikesSerializer({"page_number":1,"size":5,"count":count,"src":src},context = {"link":entryURL,"object":entryURL[:-len("/likes")]})
         return Response(likesSerializer.data)
     else:
         # Returns 404 if the entry does not exist
@@ -119,15 +130,24 @@ def ApiAuthorAndEntryLikes(request,author_id,entry_id):
 
 # Returns who liked a specific entry with no author
 @api_view(["GET"])
-def ApiEntryLikes(request,entry_id):
+def ApiEntryLikes(request, entry_fqid):
     # Ensures the entry exists before accessing it
-    if Entry.objects.filter(id = entry_id).exists():
-        entry = Entry.objects.get(id = entry_id)
-        likes = Like.objects.filter(entry = entry)
+    # Only getting entries that are PUBLIC or UNLISTED
+    entry_id = entry_fqid.split("/")[-1]
+    if Entry.objects.filter(id = entry_id, visibility__in = ["PUBLIC", "UNLISTED"]).exists():
+        # getting local authors only, order by publish date
+        likes = Like.objects.filter(object = entry_fqid).order_by("published")
+
+        count = likes.count()
+        # should only get 5 likes per entry
+        src = likes
+        if count > 5:
+            src = likes[:5]
+
         # Finds the link to the object that was liked
         entryURL = request.build_absolute_uri()
         # Serializes the data
-        likesSerializer = LikesSerializer({"page_number":1,"size":5,"count":likes.count(),"src":likes},context = {"link":entryURL,"object":entryURL[:-len("/likes")]})
+        likesSerializer = LikesSerializer({"page_number":1,"size":5,"count":count,"src":src},context = {"link":entryURL,"object":entryURL[:-len("/likes")]})
         return Response(likesSerializer.data)
     else:
         # Returns 404 if the entry does not exist
@@ -151,28 +171,84 @@ def ApiSendLike(request,author_id):
             if not Author.objects.filter(id = likeAuthor).exists():
                 return Response(status = 400)
             likeAuthor = Author.objects.get(id = likeAuthor)
-            like = Like(entry = entry, user = likeAuthor)
+
+            if Like.objects.filter(author = request.data.get("author").get("id"), object = request.data.get("object")).exists():
+                return Response(status = 409)
+
+            like = Like(author = request.data.get("author").get("id"), object = request.data.get("object"))
+
             like.save()
-            like_serializer = LikeSerializer({"user":like.user,"time":like.time},context = {"object":request.data.get("object")})
-            return Response(like_serializer.data)
+            like_serializer = LikeSerializer(like)
+            return Response(status = 201, data = like_serializer.data)
     else:
         return Response(status = 404)
     
 @api_view(["GET"])
 def ApiAuthorLiked(request, author_id):
-    pass
+    author_fqid = "/".join(request.build_absolute_uri().split("/")[:-1])
+
+    likes_tmp = Like.objects.filter(author = author_fqid).order_by("published")
+    # the liked object's visibilities must either be PUBLIC or UNLISTED
+    # only deal with local for now
+    likes = []
+    for like in likes_tmp:
+        entry_id = like.object.split("/")[-1]
+        if Entry.objects.filter(id = entry_id, visibility__in = ["PUBLIC", "UNLISTED"]).exists():
+            likes.append(like)
+
+    count = len(likes)
+    # should only get 5 likes per entry
+    src = likes
+    if count > 5:
+        src = likes[:5]
+
+    # Finds the link to the object that was liked
+    entryURL = request.build_absolute_uri()
+    # Serializes the data
+    likesSerializer = LikesSerializer({"page_number":1,"size":5,"count":count,"src":src},context = {"link":entryURL,"object":entryURL[:-len("/likes")]})
+    return Response(likesSerializer.data)
 
 @api_view(["GET"])
-def ApiSingleLikeRemoteLocal(request, author_id, like_url):
-    pass
+def ApiSingleLikeRemoteLocal(request, author_id, like_id):
+    author_fqid = "/".join(request.build_absolute_uri().split("/")[:-2])
+    if Like.objects.filter(id = like_id, author = author_fqid).exists():
+        like = Like.objects.get(id = like_id, author = author_fqid)
+        like_json = LikeSerializer(like)
+        return Response(like_json.data)
+    return Response(status = 404)
+
+@api_view(["GET"])
+def ApiAuthorLikedLocal(request, author_fqid):
+    likes_tmp = Like.objects.filter(author = author_fqid)
+    likes = []
+    for like in likes_tmp:
+        entry_id = like.object.split("/")[-1]
+        if Entry.objects.filter(id = entry_id, visibility__in = ["PUBLIC", "UNLISTED"]).exists():
+            likes.append(like)
+
+    count = len(likes)
+    # should only get 5 likes per entry
+    src = likes
+    if count > 5:
+        src = likes[:5]
+
+    # Finds the link to the object that was liked
+    entryURL = request.build_absolute_uri()
+    # Serializes the data
+    likesSerializer = LikesSerializer({"page_number":1,"size":5,"count":count,"src":src},context = {"link":entryURL,"object":entryURL[:-len("/likes")]})
+    return Response(likesSerializer.data)
 
 @api_view(["GET"])
 def ApiSingleLikeLocal(request, like_url):
     like_id = like_url.split("/")[-1]
-    like_object = get_object_or_404(Like, pk = int(like_id))
-    like_json = LikeSerializer(like_object, context = {"object": f"{request.scheme}://{request.get_host()}/app/entry/{like_object.entry.id}"})
-    print(like_json.data)
-    return Response(like_json.data)
+    author_fqid = "/".join(like_url.split("/")[:6])
+    if Like.objects.filter(id = int(like_id), author = author_fqid):
+        like_object = Like.objects.get(id = int(like_id), author = author_fqid)
+
+        like_json = LikeSerializer(like_object)
+        return Response(like_json.data)
+    else:
+        return Response(status = 404)
 
 # Returns a paginated list of entries for a specific author
 @api_view(['GET', 'POST'])
