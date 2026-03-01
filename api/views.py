@@ -104,7 +104,7 @@ def ApiAuthorAndEntryLikes(request,author_id,entry_id):
     # Ensures the entry exists before accessing it
     if Entry.objects.filter(id = entry_id).exists():
         entry = Entry.objects.get(id = entry_id)
-        likes = Like.objects.filter(entry = entry)
+        likes = Like.objects.filter(object = entry)
         # Finds the link to the object that was liked
         entryURL = request.build_absolute_uri()
         # Serializes the data
@@ -120,7 +120,7 @@ def ApiEntryLikes(request,entry_id):
     # Ensures the entry exists before accessing it
     if Entry.objects.filter(id = entry_id).exists():
         entry = Entry.objects.get(id = entry_id)
-        likes = Like.objects.filter(entry = entry)
+        likes = Like.objects.filter(object = entry)
         # Finds the link to the object that was liked
         entryURL = request.build_absolute_uri()
         # Serializes the data

@@ -15,7 +15,7 @@
 
         <div class="entry-content">
             {% if "image" in entry.contentType %}
-                <img src="{% url 'api:ApiEntryImage' author_id=entry.author.id entry_id=entry.id %}" style="max-width: 100%; border-radius: 8px;">
+                <img src="{% url 'ApiEntryImage' author_id=entry.author.id entry_id=entry.id %}" style="max-width: 100%; border-radius: 8px;">
             {% else %}
                 <p>{{ entry.content|linebreaks }}</p>
             {% endif %}
