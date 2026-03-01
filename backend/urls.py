@@ -30,7 +30,8 @@ urlpatterns = [
     path('', include('core.urls')),      
     path('', include('core.api_urls')),  
     
-    path("api/", include("api.urls", namespace="api")), 
+    #path("api/", include("api.urls", namespace="api")), 
+    path("api/", include("api.urls")),
 ]
 
 if settings.DEBUG:

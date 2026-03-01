@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from core.models import Author
+from .models import Author
 from entries.models import Entry
 from interactions.models import Like
 
@@ -124,7 +124,7 @@ class EntrySerializer(serializers.ModelSerializer):
         likes_url = f"{base_url}likes" 
         
         # Query the database for likes on this entry
-        entry_likes = Like.objects.filter(entry=obj)
+        entry_likes = Like.objects.filter(object=base_url)
         
         # Package the data for LikesSerializer
         likes_data = {
