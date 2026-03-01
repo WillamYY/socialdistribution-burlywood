@@ -5,10 +5,10 @@ from django.shortcuts import render,get_object_or_404
 from django.urls import path
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from .models import Author, Entry, Like, AuthorRequest
-#from core.models import Author
-#from entries.models import Entry
-#from interactions.models import Like
+from .models import Author as APIAuthor, Entry as APIEntry, Like as APILike, AuthorRequest
+from core.models import Author
+from entries.models import Entry
+from interactions.models import Like
 from .serializers import LikesSerializer, LikeSerializer, EntrySerializer, EntriesSerializer
 
 # Create your views here.
@@ -27,7 +27,7 @@ def ApiAuthors(request):
             if query.split("=")[1].isdigit():
                 size = int(query.split("=")[1])
     # gets all the authors
-    allAuthors = Author.objects.all()
+    allAuthors = APIAuthor.objects.all()
     data = {"type":"authors"} 
     authors = []
     # Gets the relevant information from each author
@@ -56,16 +56,16 @@ def ApiAuthors(request):
 @api_view(['GET','PUT'])
 def ApiAuthor(request,id):
     if request.method == "GET":
-        author = get_object_or_404(Author,pk=id) # Gets the author
+        author = get_object_or_404(APIAuthor,pk=id) # Gets the author
         authorID = author.host + "authors/" + str(author.id)
         # Creates the information that will be returned
         authorInfo = {"type":"author","id": authorID,"host": author.host,"displayName": author.name, "github":author.github, "profileImage":author.picture,"web":author.web}
         return Response(authorInfo)
     elif request.method == "PUT":
         # Replaces the object if it is put on top of
-        if not Author.objects.filter(id = id).exists():
+        if not APIAuthor.objects.filter(id = id).exists():
             # Ensures that the authors id matches the correct Id of where it is being placed and that the name is unique
-            if str(id) == request.data.get("id").split("/")[-1] and not Author.objects.filter(username = request.data.get("displayName")).exists():
+            if str(id) == request.data.get("id").split("/")[-1] and not APIAuthor.objects.filter(username = request.data.get("displayName")).exists():
                 # Creates an author request with the information
                 author = AuthorRequest(id = id,username = request.data.get("displayName"),name = request.data.get("displayName"),github = request.data.get("github"),picture = request.data.get("profileImage"),web = request.data.get("web"),host = request.data.get("host") )
                 author.save()
@@ -79,10 +79,10 @@ def ApiAuthor(request,id):
             # Ensures that the authors id matches the correct Id of where it is being placed
             if str(id) == request.data.get("id").split("/")[-1]:
                 # If an author already exists with the name that is not the current author return a error code of 400
-                if Author.objects.filter(username = request.data.get("displayName")).exists():
-                    if get_object_or_404(Author,name=request.data.get("displayName")).id != id:
+                if APIAuthor.objects.filter(username = request.data.get("displayName")).exists():
+                    if get_object_or_404(APIAuthor,name=request.data.get("displayName")).id != id:
                         return Response(status = 400)
-                author = get_object_or_404(Author,pk=id) # Gets the author
+                author = get_object_or_404(APIAuthor,pk=id) # Gets the author
                 # Updates the authors info
                 author.id = id
                 author.host = request.data.get("host")
@@ -106,12 +106,12 @@ def ApiAuthor(request,id):
 def ApiAuthorAndEntryLikes(request,author_id,entry_id):
     # Ensures the entry exists before accessing it
     # Only getting entries that are PUBLIC or UNLISTED
-    if Entry.objects.filter(id = entry_id, visibility__in = ["PUBLIC", "UNLISTED"]).exists():
+    if APIEntry.objects.filter(id = entry_id, visibility__in = ["PUBLIC", "UNLISTED"]).exists():
         # getting the URL of the object requested
         liked_obj = "/".join(request.build_absolute_uri().split("/")[:-1])
 
         # getting all the likes whose object is the given liked object, ordered by publish date
-        likes = Like.objects.filter(object = liked_obj).order_by("published")
+        likes = APILike.objects.filter(object = liked_obj).order_by("published")
 
         count = likes.count()
         # should only get 5 likes per entry
@@ -134,9 +134,9 @@ def ApiEntryLikes(request, entry_fqid):
     # Ensures the entry exists before accessing it
     # Only getting entries that are PUBLIC or UNLISTED
     entry_id = entry_fqid.split("/")[-1]
-    if Entry.objects.filter(id = entry_id, visibility__in = ["PUBLIC", "UNLISTED"]).exists():
+    if APIEntry.objects.filter(id = entry_id, visibility__in = ["PUBLIC", "UNLISTED"]).exists():
         # getting local authors only, order by publish date
-        likes = Like.objects.filter(object = entry_fqid).order_by("published")
+        likes = APILike.objects.filter(object = entry_fqid).order_by("published")
 
         count = likes.count()
         # should only get 5 likes per entry
@@ -159,8 +159,8 @@ def ApiSendLike(request,author_id):
     # Gets the id of the liked entry from the url
     entry_id = request.data.get("object").split("/")[-1]
     # Ensures the entry exists before accessing it
-    if Entry.objects.filter(id = entry_id).exists():
-        entry = Entry.objects.get(id = entry_id)
+    if APIEntry.objects.filter(id = entry_id).exists():
+        entry = APIEntry.objects.get(id = entry_id)
         # If the entry is from a different author show an error code
         if entry.author.id != author_id:
             return Response(status = 400)
@@ -168,14 +168,14 @@ def ApiSendLike(request,author_id):
             # Gets the id of the author from data
             likeAuthor = request.data.get("author").get("id").split("/")[-1]
             # If the author doing the liking does not exist return an error
-            if not Author.objects.filter(id = likeAuthor).exists():
+            if not APIAuthor.objects.filter(id = likeAuthor).exists():
                 return Response(status = 400)
-            likeAuthor = Author.objects.get(id = likeAuthor)
+            likeAuthor = APIAuthor.objects.get(id = likeAuthor)
 
-            if Like.objects.filter(author = request.data.get("author").get("id"), object = request.data.get("object")).exists():
+            if APILike.objects.filter(author = request.data.get("author").get("id"), object = request.data.get("object")).exists():
                 return Response(status = 409)
 
-            like = Like(author = request.data.get("author").get("id"), object = request.data.get("object"))
+            like = APILike(author = request.data.get("author").get("id"), object = request.data.get("object"))
 
             like.save()
             like_serializer = LikeSerializer(like)
@@ -187,13 +187,13 @@ def ApiSendLike(request,author_id):
 def ApiAuthorLiked(request, author_id):
     author_fqid = "/".join(request.build_absolute_uri().split("/")[:-1])
 
-    likes_tmp = Like.objects.filter(author = author_fqid).order_by("published")
+    likes_tmp = APILike.objects.filter(author = author_fqid).order_by("published")
     # the liked object's visibilities must either be PUBLIC or UNLISTED
     # only deal with local for now
     likes = []
     for like in likes_tmp:
         entry_id = like.object.split("/")[-1]
-        if Entry.objects.filter(id = entry_id, visibility__in = ["PUBLIC", "UNLISTED"]).exists():
+        if APIEntry.objects.filter(id = entry_id, visibility__in = ["PUBLIC", "UNLISTED"]).exists():
             likes.append(like)
 
     count = len(likes)
@@ -211,19 +211,19 @@ def ApiAuthorLiked(request, author_id):
 @api_view(["GET"])
 def ApiSingleLikeRemoteLocal(request, author_id, like_id):
     author_fqid = "/".join(request.build_absolute_uri().split("/")[:-2])
-    if Like.objects.filter(id = like_id, author = author_fqid).exists():
-        like = Like.objects.get(id = like_id, author = author_fqid)
+    if APILike.objects.filter(id = like_id, author = author_fqid).exists():
+        like = APILike.objects.get(id = like_id, author = author_fqid)
         like_json = LikeSerializer(like)
         return Response(like_json.data)
     return Response(status = 404)
 
 @api_view(["GET"])
 def ApiAuthorLikedLocal(request, author_fqid):
-    likes_tmp = Like.objects.filter(author = author_fqid)
+    likes_tmp = APILike.objects.filter(author = author_fqid)
     likes = []
     for like in likes_tmp:
         entry_id = like.object.split("/")[-1]
-        if Entry.objects.filter(id = entry_id, visibility__in = ["PUBLIC", "UNLISTED"]).exists():
+        if APIEntry.objects.filter(id = entry_id, visibility__in = ["PUBLIC", "UNLISTED"]).exists():
             likes.append(like)
 
     count = len(likes)
@@ -242,8 +242,8 @@ def ApiAuthorLikedLocal(request, author_fqid):
 def ApiSingleLikeLocal(request, like_url):
     like_id = like_url.split("/")[-1]
     author_fqid = "/".join(like_url.split("/")[:6])
-    if Like.objects.filter(id = int(like_id), author = author_fqid):
-        like_object = Like.objects.get(id = int(like_id), author = author_fqid)
+    if APILike.objects.filter(id = int(like_id), author = author_fqid):
+        like_object = APILike.objects.get(id = int(like_id), author = author_fqid)
 
         like_json = LikeSerializer(like_object)
         return Response(like_json.data)
