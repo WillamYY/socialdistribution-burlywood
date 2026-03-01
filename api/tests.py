@@ -182,6 +182,11 @@ class EntryAPITest(APITestCase):
             visibility="PUBLIC",
         )
         url = reverse("ApiEntry", kwargs={"author_id": self.author.id, "entry_id": entry.id})
+
+        # Log in as the author
+        session = self.client.session
+        session['author_id'] = self.author.id
+        session.save()
         
         update_data = {"title": "New Title", "content": "Updated content"}
         response = self.client.put(url, update_data, format="json")
@@ -204,6 +209,12 @@ class EntryAPITest(APITestCase):
         """
         entry = Entry.objects.create(author=self.author, title="Delete Me", visibility="PUBLIC")
         url = reverse("ApiEntry", kwargs={"author_id": self.author.id, "entry_id": entry.id})
+
+        # Log in as the author
+        session = self.client.session
+        session['author_id'] = self.author.id
+        session.save()
+
         response = self.client.delete(url)
 
         # Check if the delete request was successful
