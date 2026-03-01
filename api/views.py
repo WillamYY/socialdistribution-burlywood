@@ -1,5 +1,6 @@
 # Create your views here.
 import base64
+import uuid
 from django.http import HttpResponse, HttpResponseForbidden
 from django.shortcuts import render,get_object_or_404
 from django.urls import path
@@ -7,8 +8,8 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from core.models import Author
 from entries.models import Entry
-from interactions.models import Like
-from .serializers import LikesSerializer, LikeSerializer, EntrySerializer, EntriesSerializer
+from interactions.models import Like, Comment
+from .serializers import LikesSerializer, LikeSerializer, EntrySerializer, EntriesSerializer, CommentSerializer
 
 # Create your views here.
 @api_view(['GET'])
@@ -279,3 +280,59 @@ def ApiEntryImage(request, author_id=None, entry_id=None):
     except Exception as e:
         # Failed to decode base64; internal server error
         return HttpResponse(f"Failed to decode image: {str(e)}", status=500)
+    
+@api_view(["GET"])
+def ApiEntryComments(request, author_id, entry_id):
+    """
+    Returns comments for an entry
+    GET /api/authors/{author_id}/entries/{entry_id}/comments/
+    """
+
+    entry = get_object_or_404(Entry, id=entry_id, author_id=author_id)
+
+    # Build FQID of the entry like your site uses
+    base = request.build_absolute_uri('/')[:-1]
+    entry_fqid = f"{base}/app/entry/{entry.id}/"
+
+    comments = Comment.objects.filter(entry=entry_fqid).order_by("-published")
+
+    serializer = CommentSerializer(comments, many=True)
+
+    return Response({
+        "type": "comments",
+        "id": request.build_absolute_uri(),
+        "page": 1,
+        "size": comments.count(),
+        "count": comments.count(),
+        "src": serializer.data
+    })
+
+@api_view(["POST"])
+def ApiAddComment(request, author_id, entry_id):
+    """
+    Create a comment on an entry
+    POST /api/authors/{author_id}/entries/{entry_id}/comments/
+    """
+
+    entry = get_object_or_404(Entry, id=entry_id, author_id=author_id)
+
+    author_url = request.data.get("author")
+    comment_text = request.data.get("comment")
+
+    if not author_url or not comment_text:
+        return Response({"error": "Missing fields"}, status=400)
+
+    base = request.build_absolute_uri('/')[:-1]
+    entry_fqid = f"{base}/app/entry/{entry.id}/"
+
+    new_comment = Comment.objects.create(
+        id=f"{base}/comments/{uuid.uuid4()}",
+        author=author_url,
+        entry=entry_fqid,
+        comment=comment_text,
+        contentType=request.data.get("contentType", "text/plain"),
+    )
+
+    serializer = CommentSerializer(new_comment)
+
+    return Response(serializer.data, status=201)

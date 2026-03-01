@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from .models import Author
 from entries.models import Entry
-from interactions.models import Like
+from interactions.models import Like, Comment
 
 """
 Serializes author objects
@@ -149,3 +149,17 @@ class EntriesSerializer(serializers.Serializer):
     size = serializers.IntegerField()
     count = serializers.IntegerField()
     src = EntrySerializer(many=True)
+
+class CommentSerializer(serializers.ModelSerializer):
+    type = serializers.CharField(default="comment", read_only=True)
+
+    class Meta:
+        model = Comment
+        fields = [
+            "type",
+            "id",
+            "author",
+            "comment",
+            "contentType",
+            "published",
+        ]

@@ -4,8 +4,9 @@ from django.test import TestCase
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
-from .models import Author
+from core.models import Author
 from entries.models import Entry
+from interactions.models import Comment
 
 # Create your tests here.
 
@@ -302,3 +303,93 @@ class EntryAPITest(APITestCase):
 
         self.assertIn("src", response.data)
         self.assertEqual(len(response.data["src"]), 3)
+
+class CommentApiTest(TestCase):
+    """
+    Tests for all comment-related API endpoints.
+    """
+    def setUp(self):
+        self.author = Author.objects.create(name="Tester")
+
+        self.entry = Entry.objects.create(
+            author=self.author,
+            title="Test Entry",
+            content="Hello world",
+            visibility="PUBLIC"
+        )
+
+        self.entry_url = f"http://testserver/app/entry/{self.entry.id}/"
+
+    """
+    As an author, I want to comment on entries that I can access,
+    so I can make a witty reply.
+    """
+    def test_author_can_post_comment(self):
+        response = self.client.post(
+            f"/api/authors/{self.author.id}/entries/{self.entry.id}/comments/add/",
+            data={
+                "author": f"http://testserver/authors/{self.author.id}",
+                "comment": "Nice post!"
+            },
+            content_type="application/json"
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(Comment.objects.count(), 1)
+
+    """
+    As an author, when someone sends me an entry,
+    I want to see the comments so I can read feedback.
+    """
+    def test_get_comments_on_entry(self):
+        Comment.objects.create(
+            id="http://testserver/comments/1",
+            author="http://testserver/authors/1",
+            entry=self.entry_url,
+            comment="Hello"
+        )
+
+        response = self.client.get(
+            f"/api/authors/{self.author.id}/entries/{self.entry.id}/comments/"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["count"], 1)
+
+    """
+    As an author, comments should follow the spec format
+    so that other nodes can understand them.
+    """
+    def test_comment_serializer_fields(self):
+        Comment.objects.create(
+            id="http://testserver/comments/2",
+            author="http://testserver/authors/1",
+            entry=self.entry_url,
+            comment="Check fields"
+        )
+
+        response = self.client.get(
+            f"/api/authors/{self.author.id}/entries/{self.entry.id}/comments/"
+        )
+
+        comment_data = response.data["src"][0]
+
+        self.assertIn("type", comment_data)
+        self.assertIn("author", comment_data)
+        self.assertIn("comment", comment_data)
+        self.assertIn("published", comment_data)
+
+    """
+    As an author, I should not be able to comment on entries that do not exist.
+    """
+    def test_comment_on_missing_entry_fails(self):
+        response = self.client.post(
+            f"/api/authors/{self.author.id}/entries/99999999-9999-9999-9999-999999999999/comments/add/",
+            data={
+                "author": f"http://testserver/authors/{self.author.id}",
+                "comment": "Invalid"
+            },
+            content_type="application/json"
+        )
+
+        self.assertEqual(response.status_code, 404)
