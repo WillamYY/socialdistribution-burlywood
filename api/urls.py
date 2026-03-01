@@ -8,15 +8,14 @@ app_name = "api"
 urlpatterns = [
     path("authors/",views.ApiAuthors,name="ApiAuthors"),
     path("authors/<int:id>/",views.ApiAuthor,name="ApiAuthor"),
+    path("authors/<int:author_id>/inbox",views.ApiSendLike, name="ApiSendLike"),
     path("authors/<int:author_id>/entries/<uuid:entry_id>/likes",views.ApiAuthorAndEntryLikes,name="ApiAuthorAndEntryLikes"),
-    path("entries/<uuid:entry_id>/likes",views.ApiEntryLikes),
-    path("authors/<int:author_id>/inbox",views.ApiSendLike, name = "ApiSendLike"),
+    path("entries/<path:entry_fqid>/likes",views.ApiEntryLikes, name="ApiEntryLikes"),
 
-    path("authors/<int:author_id>/liked", views.ApiAuthorLiked),
-    path("authors/<int:author_id>/liked/<path:like_url>", views.ApiSingleLikeRemoteLocal),
+    path("authors/<int:author_id>/liked", views.ApiAuthorLiked, name="ApiAuthorLiked"),
+    path("authors/<int:author_id>/liked/<int:like_id>", views.ApiSingleLikeRemoteLocal, name="ApiSingleLikeRemoteLocal"),
+    path("authors/<path:author_fqid>/liked", views.ApiAuthorLikedLocal, name="ApiAuthorLikedLocal"),
     path("liked/<path:like_url>", views.ApiSingleLikeLocal, name="ApiSingleLikeLocal"),
-    
-    
     
     path("authors/<int:author_id>/entries/<uuid:entry_id>/", views.ApiEntry, name="ApiEntry"),
     path("authors/<int:author_id>/entries/", views.ApiEntries, name="ApiEntries"),
