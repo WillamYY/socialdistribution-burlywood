@@ -226,11 +226,30 @@ def stream_view(request):
     for entry in entries:
         entry_url = f"{request.build_absolute_uri('/')[:-1]}/app/entry/{entry.id}/"
 
+        # entry likes
         entry.like_count = Like.objects.filter(object=entry_url).count()
-        entry.fetched_comments = Comment.objects.filter(entry=entry_url).order_by('published')
-        
-        # Check if THIS user liked THIS entry
         entry.liked_by_user = Like.objects.filter(object=entry_url, author=user_fqid).exists()
+
+        # fetch comments
+        entry.fetched_comments = Comment.objects.filter(entry=entry_url).order_by("published")
+
+        # all objects liked by current user
+        liked_objects = Like.objects.filter(author=user_fqid).values_list("object", flat=True)
+
+        # extract UUIDs from liked objects
+        liked_uuids = {
+            obj.rstrip("/").split("/")[-1]
+            for obj in liked_objects
+        }
+
+        for comment in entry.fetched_comments:
+            comment_uuid = comment.id.rstrip("/").split("/")[-1]
+
+            comment.like_count = Like.objects.filter(
+                object__endswith=comment_uuid
+            ).count()
+
+            comment.liked_by_user = comment_uuid in liked_uuids
 
     return render(
         request,
@@ -327,9 +346,30 @@ def my_entries(request):
     for entry in entries:
         entry_url = f"{request.build_absolute_uri('/')[:-1]}/app/entry/{entry.id}/"
         
+        # entry likes
         entry.like_count = Like.objects.filter(object=entry_url).count()
-        entry.fetched_comments = Comment.objects.filter(entry=entry_url).order_by('published')
         entry.liked_by_user = Like.objects.filter(object=entry_url, author=user_fqid).exists()
+
+        # fetch comments
+        entry.fetched_comments = Comment.objects.filter(entry=entry_url).order_by('published')
+
+        # all objects liked by current user
+        liked_objects = Like.objects.filter(author=user_fqid).values_list("object", flat=True)
+        
+        # extract UUIDs from liked objects
+        liked_uuids = {
+            obj.rstrip("/").split("/")[-1]
+            for obj in liked_objects
+        }
+
+        for comment in entry.fetched_comments:
+            comment_uuid = comment.id.rstrip("/").split("/")[-1]
+
+            comment.like_count = Like.objects.filter(
+                object__endswith=comment_uuid
+            ).count()
+
+            comment.liked_by_user = comment_uuid in liked_uuids
 
     return render(request, "entries/my_entries.html", {"entries": entries})
 

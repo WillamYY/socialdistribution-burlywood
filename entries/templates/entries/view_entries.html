@@ -42,13 +42,31 @@
             <h4>Comments</h4>
             
             {% for comment in entry.fetched_comments %}
-                <div class="comment" style="margin-bottom: 8px;">
-                    <strong>{{ comment.author }}</strong> <small>({{ comment.published|date:"M d, Y" }})</small>
-                    <p style="margin: 2px 0;">{{ comment.comment }}</p>
-                </div>
-            {% empty %}
-                <p>No comments yet.</p>
-            {% endfor %}
+              <div class="comment" style="margin-bottom: 8px;">
+                  <strong>{{ comment.author }}</strong>
+                  <small>({{ comment.published|date:"M d, Y" }})</small>
+                  <p style="margin: 2px 0;">{{ comment.comment }}</p>
+
+                  <span>👍 {{ comment.like_count }}</span>
+
+                  {% if request.session.author_id %}
+                  <form method="POST"
+                        action="{% url 'interactions:add_comment_like' comment.id|extract_uuid %}"
+                        style="display:inline;">
+                      {% csrf_token %}
+                      <button type="submit">
+                          {% if comment.liked_by_user %}
+                              ❤️ Unlike
+                          {% else %}
+                              🤍 Like
+                          {% endif %}
+                      </button>
+                  </form>
+                  {% endif %}
+              </div>
+          {% empty %}
+              <p>No comments yet.</p>
+          {% endfor %}
 
             {% if request.session.author_id %}
             <form method="POST" action="{% url 'interactions:add_comment' entry.id %}" style="margin-top: 10px;">

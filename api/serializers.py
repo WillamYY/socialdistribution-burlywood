@@ -17,19 +17,12 @@ class AuthorSerializer(serializers.ModelSerializer):
 """
 Serializes a singular like
 """
-class LikeSerializer(serializers.ModelSerializer):
-    type = serializers.CharField(default = "Like") # Sets the type of the serializer to like
-    author = AuthorSerializer(source = "user")
-    published = serializers.DateTimeField(source = "time") # Attaches published to the time field
-    object = serializers.SerializerMethodField() # Stores the object so that it can be displayed even though it does not go in the database
-
-    class Meta():
-        model = Like
-        fields = ["type","author","published","id","object"]
-    
-    # Returns the url of the object that was liked
-    def get_object(self,obj):
-        return self.context["link"]
+class LikeSerializer(serializers.Serializer):
+    type = serializers.CharField(default="Like")
+    id = serializers.URLField()
+    author = serializers.URLField()
+    object = serializers.URLField()
+    published = serializers.DateTimeField()
 
 """
 Creates the serializer for multiple likes
