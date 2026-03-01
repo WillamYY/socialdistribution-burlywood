@@ -1,9 +1,10 @@
 from datetime import datetime, timedelta
-from django.test import TestCase
+from django.test import TestCase, Client
 from django.urls import reverse
 from django.utils import timezone
 from core.models import Author
 from entries.models import Entry
+from entries.views import render_safe_markdown
 
 
 class StreamApiTests(TestCase):
@@ -127,3 +128,75 @@ class StreamApiTests(TestCase):
         # Latest version (edited content)
         edited_entry = next(e for e in entries if e["id"] == str(self.entry_public_outsider.id))
         self.assertEqual(edited_entry["content"], "updated content")
+
+class EntryWebUITests(TestCase):
+    """
+    Creates a series of tests for the web
+    """
+    def setUp(self):
+        self.AuthorModel = Entry._meta.get_field('author').related_model
+        self.client = Client()
+        
+        # Create a test author
+        self.author = self.AuthorModel.objects.create(
+            username="web_user",
+            name="Web User"
+        )
+        
+        # Create a public entry and a deleted entry
+        self.public_entry = Entry.objects.create(
+            author=self.author,
+            title="Visible Post",
+            content="Hello World",
+            visibility="PUBLIC"
+        )
+        self.deleted_entry = Entry.objects.create(
+            author=self.author,
+            title="Invisible Post",
+            content="Should not be seen ~",
+            visibility="DELETED"
+        )
+
+    def test_my_entries_loads_for_author(self):
+        """
+        Verify the page loads correctly when the author_id is in the session.
+        """
+        session = self.client.session
+        session['author_id'] = self.author.id
+        session.save()
+        
+        url = reverse('view_my_entries')
+        response = self.client.get(url)
+
+        # Check if it handles the request successfully
+        self.assertEqual(response.status_code, 200)
+
+        # Check if it handles the proper visibility
+        self.assertContains(response, "Visible Post")
+        self.assertNotContains(response, "Invisible Post")
+
+    def test_markdown_renders_in_html(self):
+        """
+        User Story #15: As an author, entries I make can be in CommonMark.
+        """
+        raw_content = "**Bold**"
+        rendered_content = render_safe_markdown(raw_content)
+
+        # entry.content stores the rendered HTML for text posts or base64 data for images.
+        md_entry = Entry.objects.create(
+            author=self.author,
+            title="MD Test",
+            contentType="text/markdown",
+            content=rendered_content,
+            visibility="PUBLIC"
+        )
+        
+        url = reverse('get_entry', kwargs={'entry_id': md_entry.id})
+        
+        session = self.client.session
+        session['author_id'] = self.author.id
+        session.save()
+
+        # Check if the markdown is rendered correctly in the HTML response
+        response = self.client.get(url)
+        self.assertContains(response, "<strong>Bold</strong>")

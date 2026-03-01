@@ -11,7 +11,17 @@
             <h2>{{ entry.title }}</h2>
             <p>by {{ entry.author.username }} ({{ entry.visibility }})</p>
             
-            <div class="content">{{ entry.content|safe }}</div>
+            <div class="content">
+                {% if "image" in entry.contentType %}
+                    <img src="{% url 'ApiEntryImage' author_id=entry.author.id entry_id=entry.id %}" 
+                        style="max-width: 100%; border-radius: 8px;" 
+                        alt="{{ entry.title }}">
+                {% elif entry.contentType == "text/markdown" %}
+                    <div class="entry-markdown">{{ entry.content|safe }}</div>
+                {% else %}
+                    <div class="entry-plain-text">{{ entry.content|linebreaks }}</div>
+                {% endif %}
+            </div>
 
             <div class="interaction-bar" style="margin-top: 15px; display: flex; align-items: center; gap: 10px;">
                 <strong>Likes: {{ entry.like_count|default:0 }}</strong>
