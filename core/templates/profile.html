@@ -1,24 +1,9 @@
-{% extends 'base.html' %}
-
-<!-- <html></html>
+{% load static %}
+<html></html>
   <head>
-    <title>My Profile</title> -->
-    {% block style %}
+    <title>My Profile</title>
+    <link rel="stylesheet" href="{% static 'core/styles.css' %}">
     <style>
-      body {
-        font-family: Arial, sans-serif;
-        max-width: 600px;
-        margin: 40px auto;
-        padding: 20px;
-        background-color: #fafafa;
-        border-radius: 10px;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        position: relative;
-      }
-      h2 {
-        text-align: center;
-        color: #333;
-      }
       .profile-pic {
         display: block;
         margin: 10px auto;
@@ -27,35 +12,9 @@
         border-radius: 50%;
         object-fit: cover;
       }
-      p { color: #444; line-height: 1.5; }
-      a {
-        display: inline-block;
-        margin-top: 15px;
-        text-decoration: none;
-        color: #FF9800;
-        font-weight: bold;
-      }
-      a:hover {
-        text-decoration: underline;
-      }
-      .button {
-        display: inline-block;
-        padding: 8px 12px;
-        background-color: #FF9800;
-        color: white;
-        border-radius: 5px;
-        text-decoration: none;
-        position: relative;
-        font-size: 16px;
-      }
-      .button:hover {
-        background-color: #e68900;
-      }
-
-      /* Follow Requests icon style */
       .follow-requests-btn {
         font-size: 20px;
-        background-color: #FF9800;
+        background-color: var(--primary);
         width: 40px;
         height: 40px;
         border-radius: 50%;
@@ -70,13 +29,13 @@
         cursor: pointer;
       }
       .follow-requests-btn:hover {
-        background-color: #e68900;
+        background-color: var(--primary-hover);
       }
       .notification-count {
         position: absolute;
         top: -5px;
         right: -5px;
-        background: #dc2626;
+        background: var(--danger);
         color: white;
         font-size: 12px;
         font-weight: bold;
@@ -87,55 +46,70 @@
         align-items: center;
         justify-content: center;
       }
+      .profile-card {
+        position: relative;
+      }
+      .action-row {
+        display: flex;
+        justify-content: center;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
     </style>
-  {% endblock %}
-    
-<!--   </head>
-  <body> -->
-    {% block content %}
-    <h2>{{ author.name|default:author.username }}</h2>
+  </head>
+  <body>
+    <nav class="top-nav">
+      <a href="/">Home</a>
+      <a href="/app/stream/">Stream</a>
+      <a href="/app/my-entries/">My Entries</a>
+      <a href="/app/create-entry/">Create Entry</a>
+      <a href="/app/profile/">My Profile</a>
+      <a href="/app/follow-requests/">Follow Requests</a>
+      <a href="/app/logout/">Logout</a>
+    </nav>
+    <div class="page">
+      <div class="card profile-card">
+        <h2>{{ author.name|default:author.username }}</h2>
 
-    {% load static %}
-    {% if author.picture %}
-      <img src="{{ author.picture.url }}" class="profile-pic" alt="Profile Picture">
-    {% else %}
-      <img src="{% static 'images/default_profile.jpg' %}" class="profile-pic" alt="Profile Picture"> 
-    {% endif %}
+        {% if author.picture %}
+          <img src="{{ author.picture.url }}" class="profile-pic" alt="Profile Picture">
+        {% else %}
+          <img src="{% static 'images/default_profile.jpg' %}" class="profile-pic" alt="Profile Picture"> 
+        {% endif %}
 
-    <p><strong>Username:</strong> {{ author.username }}</p>
-    <p><strong>Description:</strong> {{ author.description|default:"No description yet." }}</p>
-    <p><strong>GitHub:</strong> 
-      {% if author.github %}
-        <a href="{{ author.github }}" target="_blank">{{ author.github }}</a>
-      {% else %}
-        Not provided
-      {% endif %}
-    </p>
-    <ul>
-      <li><a href="{% url 'connections' %}#followers"><strong>Followers:</strong> {{ followers_count }}</a></li>
-      <li><a href="{% url 'connections' %}#following"><strong>Following:</strong> {{ following_count }}</a></li>
-      <li><a href="{% url 'connections' %}#friends"><strong>Friends:</strong> {{friends_count}}</a></li>
-    </ul>
+        <p><strong>Username:</strong> {{ author.username }}</p>
+        <p><strong>Description:</strong> {{ author.description|default:"No description yet." }}</p>
+        <p><strong>GitHub:</strong> 
+          {% if author.github %}
+            <a href="{{ author.github }}" target="_blank">{{ author.github }}</a>
+          {% else %}
+            Not provided
+          {% endif %}
+        </p>
 
-    <div style="text-align:center;">
-      <a href="/app/edit-profile" class="button">Edit Profile</a>
-      <a href="/app/logout" class="button" style="background-color: #555;">Logout</a>
-      <div style="text-align:center; margin-top: 10px;">
-        <a href="{% url 'stream' %}" class="button" style="background-color: #1a73e8;">Stream</a>
-        <a href="{% url 'create_entry' %}" class="button" style="background-color: #4caf50;">Create Entry</a>
-        <a href="/app/" class="button" style="background-color: #6b7280;">View All Authors</a>
+        <ul>
+          <li><a href="{% url 'connections' %}#followers"><strong>Followers:</strong> {{ followers_count }}</a></li>
+          <li><a href="{% url 'connections' %}#following"><strong>Following:</strong> {{ following_count }}</a></li>
+          <li><a href="{% url 'connections' %}#friends"><strong>Friends:</strong> {{ friends_count }}</a></li>
+        </ul>
+
+        <div class="action-row">
+          <a href="/app/edit-profile" class="button">Edit Profile</a>
+          <a href="/app/logout" class="button secondary">Logout</a>
+          <a href="{% url 'stream' %}" class="button">Stream</a>
+          <a href="{% url 'create_entry' %}" class="button success">Create Entry</a>
+          <a href="/app/" class="button secondary">View All Authors</a>
+        </div>
+
+        {% if request.session.author_id == author.id %}
+          <a href="{% url 'view_follow_requests' %}" class="follow-requests-btn" title="Follow Requests">
+            👤+
+            {% if pending_requests_count > 0 %}
+              <span class="notification-count">{{ pending_requests_count }}</span>
+            {% endif %}
+          </a>
+        {% endif %}
       </div>
     </div>
-
-    <!-- Follow Requests icon (👤+) in top-right -->
-    {% if request.session.author_id == author.id %}
-      <a href="{% url 'view_follow_requests' %}" class="follow-requests-btn" title="Follow Requests">
-        👤+
-        {% if pending_requests_count > 0 %}
-          <span class="notification-count">{{ pending_requests_count }}</span>
-        {% endif %}
-      </a>
-    {% endif %}
-    {% endblock %}
-  <!-- </body> -->
-<!-- </html> -->
+  </body>
+</html>

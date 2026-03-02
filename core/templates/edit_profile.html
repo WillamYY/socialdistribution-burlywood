@@ -1,104 +1,95 @@
+{% load static %}
 <html>
 <head>
     <title>Edit Your Profile</title>
+    <link rel="stylesheet" href="{% static 'core/styles.css' %}">
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 600px;
-            margin: 50px auto;
-            padding: 20px;
-            background-color: #fefefe;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-        h2 {
-            text-align: center;
-            color: #333;
-        }
         form {
             display: flex;
             flex-direction: column;
         }
         label {
             margin: 10px 0 5px;
-            font-weight: bold;
+            font-weight: 600;
         }
-        input[type="text"], input[type="url"], input[type="password"], textarea, input[type="file"] {
-            padding: 8px;
-            border-radius: 5px;
-            border: 1px solid #ccc;
+        input[type="text"], input[type="url"], textarea, input[type="file"] {
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid #d1d5db;
         }
         textarea {
             resize: vertical;
-            min-height: 60px;
+            min-height: 70px;
         }
         input[type="submit"] {
             margin-top: 20px;
             padding: 10px;
-            background-color: #FF9800;
+            background-color: var(--primary);
             color: white;
-            font-weight: bold;
+            font-weight: 600;
             border: none;
-            border-radius: 5px;
+            border-radius: 8px;
             cursor: pointer;
         }
         input[type="submit"]:hover {
-            background-color: #e68a00;
-        }
-        a {
-            text-align: center;
-            margin-top: 15px;
-            display: block;
-            color: #FF9800;
-            text-decoration: none;
-        }
-        a:hover {
-            text-decoration: underline;
+            background-color: var(--primary-hover);
         }
         .message {
             text-align: center;
             margin: 10px 0;
-            color: green;
+            color: var(--success);
         }
         .error {
             text-align: center;
             margin: 10px 0;
-            color: red;
+            color: var(--danger);
         }
     </style>
 </head>
 <body>
-    <h2>Edit Your Profile</h2>
+    <nav class="top-nav">
+        <a href="/">Home</a>
+        <a href="/app/stream/">Stream</a>
+        <a href="/app/my-entries/">My Entries</a>
+        <a href="/app/create-entry/">Create Entry</a>
+        <a href="/app/profile/">My Profile</a>
+        <a href="/app/logout/">Logout</a>
+    </nav>
+    <div class="page">
+        <div class="card" style="max-width: 640px; margin: 0 auto;">
+            <h2>Edit Your Profile</h2>
 
-    {% if success %}
-        <div class="message">{{ success }}</div>
-    {% endif %}
-    {% if error %}
-        <div class="error">{{ error }}</div>
-    {% endif %}
+            {% if success %}
+                <div class="message">{{ success }}</div>
+            {% endif %}
+            {% if error %}
+                <div class="error">{{ error }}</div>
+            {% endif %}
 
-    <form method="POST" enctype="multipart/form-data">
-        {% csrf_token %}
-        <label>Username</label>
-        <input name="username" value="{{ author.username }}" placeholder="Enter username">
+            <form method="POST" enctype="multipart/form-data">
+                {% csrf_token %}
+                <label>Username</label>
+                <input name="username" value="{{ author.username }}" placeholder="Enter username">
 
-        <label>Name</label>
-        <input name="name" value="{{ author.name }}" placeholder="Enter your full name">
+                <label>Name</label>
+                <input name="name" value="{{ author.name }}" placeholder="Enter your full name">
 
-        <label>Description</label>
-        <textarea name="description" placeholder="Write something about yourself">{{ author.description }}</textarea>
+                <label>Description</label>
+                <textarea name="description" placeholder="Write something about yourself">{{ author.description }}</textarea>
 
-        <label>Profile Picture</label>
-        <input type="file" name="picture">
+                <label>Profile Picture</label>
+                <input type="file" name="picture">
 
-        <label>GitHub URL</label>
-        <input name="github" value="{{ author.github }}" type="url" placeholder="https://github.com/username">
+                <label>GitHub URL</label>
+                <input name="github" value="{{ author.github }}" type="url" placeholder="https://github.com/username">
 
-        <input type="submit" value="Save Changes">
-    </form>
+                <input type="submit" value="Save Changes">
+            </form>
 
-    <a href="/app/profile">View My Profile</a>
-
-    <a href="/app/logout">Logout</a>
+            <p style="text-align:center;">
+                <a href="/app/profile">View My Profile</a>
+            </p>
+        </div>
+    </div>
 </body>
 </html>

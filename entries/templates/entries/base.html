@@ -27,21 +27,18 @@
         </h1>
         <nav class="main-nav">
             <ul>
-                <li>
-                    <a href="{% url 'NodeDisplay' %}">Home</a>
-                </li>
-                <li>
-                    <a href="{% url 'stream' %}">Stream</a>
-                </li>
-                <li>
-                    <a href="{% url 'view_my_entries' %}">My Entries</a>
-                </li>
-                <li>
-                    <a href="{% url 'create_entry' %}">Create Entry</a>
-                </li>
-                <li>
-                    <a href="{% url 'ProfileView' %}">Profile</a>
-                </li>
+                <li><a href="{% url 'NodeDisplay' %}">Home</a></li>
+                <li><a href="{% url 'stream' %}">Stream</a></li>
+                <li><a href="{% url 'my_entries' %}">My Entries</a></li>
+                <li><a href="{% url 'create_entry' %}">Create Entry</a></li>
+                {% if request.session.author_id %}
+                    <li><a href="/app/profile/">My Profile</a></li>
+                    <li><a href="/app/follow-requests/">Follow Requests</a></li>
+                    <li><a href="/app/logout/">Logout</a></li>
+                {% else %}
+                    <li><a href="/app/login/">Login</a></li>
+                    <li><a href="/app/signup/">Sign Up</a></li>
+                {% endif %}
             </ul>
         </nav>
     </header>

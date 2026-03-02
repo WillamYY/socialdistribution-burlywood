@@ -1,61 +1,56 @@
+{% load static %}
 <html>
   <head>
     <title>Login</title>
+    <link rel="stylesheet" href="{% static 'core/styles.css' %}">
     <style>
-      body {
-        font-family: Arial, sans-serif;
-        max-width: 400px;
-        margin: 80px auto;
-        padding: 20px;
-        background-color: #fafafa;
-        border-radius: 10px;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-      }
-      h2 { text-align: center; color: #333; }
-      label { display: block; margin-top: 10px; font-weight: bold; }
+      label { display: block; margin-top: 10px; font-weight: 600; }
       input {
         width: 100%;
-        padding: 8px;
-        margin-top: 5px;
-        border-radius: 5px;
-        border: 1px solid #ccc;
+        padding: 10px;
+        margin-top: 6px;
+        border-radius: 8px;
+        border: 1px solid #d1d5db;
       }
       input[type="submit"] {
-        background-color: #FF9800;
+        background-color: var(--primary);
         color: white;
-        font-weight: bold;
+        font-weight: 600;
         cursor: pointer;
         margin-top: 15px;
       }
-      input[type="submit"]:hover { background-color: #e68900; }
-      a {
-        display: block;
-        text-align: center;
-        margin-top: 15px;
-        color: #FF9800;
-        text-decoration: none;
-      }
-      a:hover { text-decoration: underline; }
-      .error { color: red; text-align: center; }
+      input[type="submit"]:hover { background-color: var(--primary-hover); }
+      .error { color: var(--danger); text-align: center; }
     </style>
   </head>
   <body>
-    <h2>Login</h2>
-    {% if error %}
-      <p class="error">{{ error }}</p>
-    {% endif %}
-    <form method="POST">
-      {% csrf_token %}
-      <input type="hidden" name="next" value="{{ request.GET.next }}">
-      
-      <label>Username</label>
-      <input name="username" type="text" required>
+    <nav class="top-nav">
+      <a href="/">Home</a>
+      <a href="/app/stream/">Stream</a>
+      <a href="/app/signup/">Sign Up</a>
+    </nav>
+    <div class="page">
+      <div class="card" style="max-width: 420px; margin: 0 auto;">
+        <h2>Login</h2>
+        {% if error %}
+          <p class="error">{{ error }}</p>
+        {% endif %}
+        <form method="POST">
+          {% csrf_token %}
+          <input type="hidden" name="next" value="{{ request.GET.next }}">
+          
+          <label>Username</label>
+          <input name="username" type="text" required>
 
-      <label>Password</label>
-      <input name="password" type="password" required>
+          <label>Password</label>
+          <input name="password" type="password" required>
 
-      <input type="submit" value="Login">
-    </form>
-    <a href="/app/signup">Don’t have an account? Sign up here.</a>
+          <input type="submit" value="Login">
+        </form>
+        <p class="muted" style="text-align:center;">
+          <a href="/app/signup">Don’t have an account? Sign up here.</a>
+        </p>
+      </div>
+    </div>
   </body>
 </html>
