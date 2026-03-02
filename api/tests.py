@@ -1,9 +1,15 @@
-import base64
-import uuid
-from django.test import TestCase
+from django.test import TestCase, Client, RequestFactory
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
+from .models import Author as APIAuthor, Entry as APIEntry, Like as APILike, AuthorRequest
+from .serializers import LikeSerializer, AuthorSerializer
+from .admin import AuthorAdmin, AuthorRequestAdmin
+from django.contrib.auth.models import User
+from django.contrib.auth.hashers import make_password
+from django.contrib.admin.sites import AdminSite
+import base64
+import uuid
 from core.models import Author
 from entries.models import Entry
 from interactions.models import Comment
@@ -19,11 +25,11 @@ class AuthorEndpointTest(APITestCase):
     User story #2
     """
     def test_consistent_ids(self):
-        firstauthorURL = reverse("ApiAuthor",kwargs = {"id": 1})
-        author1 = {"type":"author","id":firstauthorURL[:-1],"host":"http://localhost:8000/api/","displayName":"Dalton","github": "http://github.com/dalton","profileImage": "https://www.bigfootdigital.co.uk/wp-content/uploads/2020/07/image-optimisation-scaled.jpg","web": "http://localhost:8000/app/authors/1" }
-        put1 = self.client.put(firstauthorURL,author1,format = "json")
-        self.assertEqual(put1.status_code,status.HTTP_200_OK)
-        secondauthorURL = reverse("ApiAuthor",kwargs = {"id":2})
+        firstauthorURL = reverse("api:ApiAuthor",kwargs = {"id": 1})
+        # Creates an author outright to avoid having to accept a request
+        author1 = APIAuthor(id = 1,host="http://localhost:8000/api/",name="Dalton",username = "Dalton",github= "http://github.com/dalton",picture= "https://www.bigfootdigital.co.uk/wp-content/uploads/20")
+        author1.save()
+        secondauthorURL = reverse("api:ApiAuthor",kwargs = {"id":2})
         # Attempts to create an author with the wrong ID for it's location
         author2 = {"type":"author","id":firstauthorURL[:-1],"host":"http://localhost:8000/api/","displayName":"Daltonssda","github": "http://g.com","profileImage": "https://scaled.jpg","web": "http://localhost:8000/app/authors/2" }
         put2 = self.client.put(secondauthorURL,author2,format = "json")
@@ -32,11 +38,11 @@ class AuthorEndpointTest(APITestCase):
         author3 = {"type":"author","id":firstauthorURL[:-1],"host":"http://localhost:8000/api/","displayName":"Author3","github": "http://3.com","profileImage": "https://scaleded.jpg","web": "http://localhost:8000/app/authors/1" }
         put3 = self.client.put(firstauthorURL,author3,format = "json") # Should replace author 1 ensuring that there is no repeated ID's
         self.assertEqual(put3.status_code,status.HTTP_200_OK) # Ensures that it worked
-        self.assertEqual(Author.objects.count(),1) # Ensures there is only one author still there
-        author = Author.objects.get(id = 1)
+        self.assertEqual(APIAuthor.objects.count(),1) # Ensures there is only one author still there
         # Ensures all the values match that of author 3 instead of author 1
+        author = APIAuthor.objects.get()
         self.assertEqual(author.id,1)
-        self.assertEqual(author.username,"Author3")
+        self.assertEqual(author.name,"Author3")
         self.assertEqual(author.github, "http://3.com")
         self.assertEqual(author.picture,"https://scaleded.jpg")
     
@@ -46,21 +52,47 @@ class AuthorEndpointTest(APITestCase):
     """
     def test_multiple_authors(self):
         # Adds the first author
-        firstauthorURL = reverse("ApiAuthor",kwargs = {"id": 1})
+        firstauthorURL = reverse("api:ApiAuthor",kwargs = {"id": 1})
         author1 = {"type":"author","id":firstauthorURL[:-1],"host":"http://localhost:8000/api/","displayName":"Dalton","github": "http://github.com/dalton","profileImage": "https://www.bigfootdigital.co.uk/wp-content/uploads/2020/07/image-optimisation-scaled.jpg","web": "http://localhost:8000/app/authors/1" }
         put1 = self.client.put(firstauthorURL,author1,format = "json")
         self.assertEqual(put1.status_code,status.HTTP_200_OK) # Ensures the first author was added successfully
         # Adds the second author
-        secondauthorURL = reverse("ApiAuthor",kwargs = {"id": 2})
+        secondauthorURL = reverse("api:ApiAuthor",kwargs = {"id": 2})
         author2 = {"type":"author","id":secondauthorURL[:-1],"host":"http://localhost:8000/api/","displayName":"Low","github": "http://github.com/daltons","profileImage": "https://image-optimisation-scaled.jpg","web": "http://localhost:8000/app/authors/2" }
         put2 = self.client.put(secondauthorURL,author2,format = "json")
         self.assertEqual(put2.status_code,status.HTTP_200_OK) # Ensures the first author was added successfully
-        self.assertEqual(Author.objects.count(),2) # Ensures that both are in the database
-        author1 = Author.objects.get(id = 1)
-        author2 = Author.objects.get(id = 2)
+        self.assertEqual(AuthorRequest.objects.count(),2) # Ensures that both are in the database
+        # Checks that the two author requests were created
+        author1 = AuthorRequest.objects.get(id = 1)
+        author2 = AuthorRequest.objects.get(id = 2)
         # Checks both display names to see that the values have been properly added
-        self.assertEqual(author1.username,"Dalton")
-        self.assertEqual(author2.username,"Low")
+        self.assertEqual(author1.name,"Dalton")
+        self.assertEqual(author2.name,"Low")
+
+    """
+    Tests confirming a author request
+    User Story 67
+    """
+    def test_confirm_author_request(self):
+        # Adds an author
+        firstauthorURL = reverse("api:ApiAuthor",kwargs = {"id": 1})
+        author1 = {"type":"author","id":firstauthorURL[:-1],"host":"http://localhost:8000/api/","displayName":"Dalton","github": "http://github.com/dalton","profileImage": "https://www.bigfootdigital.co.uk/wp-content/uploads/2020/07/image-optimisation-scaled.jpg","web": "http://localhost:8000/app/authors/1" }
+        put1 = self.client.put(firstauthorURL,author1,format = "json")
+        self.assertEqual(put1.status_code,status.HTTP_200_OK) # Ensures the first author was added successfully
+        self.assertEqual(AuthorRequest.objects.count(),1) # Checks that it made an author request object
+        # Creates an instance of the AuthorRequestAdmin
+        admin = AuthorRequestAdmin(AuthorRequest, AdminSite())
+        # Gets the author requests
+        authorRequests = AuthorRequest.objects.all()
+        # Passes an empty request along with the list of author requests (Should be just the one created earlier)
+        admin.approve(RequestFactory(), authorRequests)
+        self.assertEqual(AuthorRequest.objects.count(),0) # Checks that the author request is gone
+        self.assertEqual(APIAuthor.objects.count(),1) # Checks that it made an author object
+        author = APIAuthor.objects.get()
+        # Checks to ensure the newly created APIAuthor has matching values to our request
+        self.assertEqual(author.id,1)
+        self.assertEqual(author.name,"Dalton")
+        self.assertEqual(author.host,"http://localhost:8000/api/")
 
     """
     Tests getting the authors profile page
@@ -68,33 +100,298 @@ class AuthorEndpointTest(APITestCase):
     """
     def test_author_page(self):
         # Adds an author whos page we will get
-        firstauthorURL = reverse("ApiAuthor",kwargs = {"id": 1})
-        author1 = {"type":"author","id":firstauthorURL[:-1],"host":"/api/","displayName":"Dalton","github": "http://github.com/dalton","profileImage": "https://www.bigfootdigital.co.uk/wp-content/uploads/2020/07/image-optimisation-scaled.jpg","web": "app/authors/1" }
-        put1 = self.client.put(firstauthorURL,author1,format = "json")
-        self.assertEqual(put1.status_code,status.HTTP_200_OK) # Ensures the first author was added successfully
+        firstauthorURL = reverse("api:ApiAuthor",kwargs = {"id": 1})
+        # Creates an author outright to avoid having to accept a request
+        author1 = APIAuthor(id = 1,host="http://localhost:8000/api/",name="Dalton",username = "Dalton",github= "http://github.com/dalton",picture= "https://www.bigfootdigital.co.uk/wp-content/uploads/20")
+        author1.save()
+        # Runs the get to get the page
         get1 = self.client.get(firstauthorURL,format = "json")
-        self.assertEqual(get1.data,author1) # Ensures that the data from the author matches what we get from their page
+        self.assertEqual(get1.data,AuthorSerializer(author1).data) # Ensures that the data from the author matches what we get from their page
 
 """
 Creates a test for the authors endpoint
 """
 class AuthorsEndpointTest(APITestCase):
     def test_get_multiple_authors(self):
-        # Adds the first author
-        firstauthorURL = reverse("ApiAuthor",kwargs = {"id": 1})
-        author1 = {"type":"author","id":firstauthorURL[:-1],"host":"/api/","displayName":"Dalton","github": "http://github.com/dalton","profileImage": "https://www.bigfootdigital.co.uk/wp-content/uploads/2020/07/image-optimisation-scaled.jpg","web": "http://localhost:8000/app/authors/1" }
-        put1 = self.client.put(firstauthorURL,author1,format = "json")
-        self.assertEqual(put1.status_code,status.HTTP_200_OK) # Ensures the first author was added successfully
-        # Adds the second author
-        secondauthorURL = reverse("ApiAuthor",kwargs = {"id": 2})
-        author2 = {"type":"author","id":secondauthorURL[:-1],"host":"/api/","displayName":"Low","github": "http://github.com/daltons","profileImage": "https://image-optimisation-scaled.jpg","web": "http://localhost:8000/app/authors/2" }
-        put2 = self.client.put(secondauthorURL,author2,format = "json")
-        self.assertEqual(put2.status_code,status.HTTP_200_OK) # Ensures the first author was added successfully
+        # Creates the first author outright to avoid having to accept a request
+        author1 = APIAuthor(id = 1,host="http://localhost:8000/api/",name="Dalton",username = "Dalton",github= "http://github.com/dalton",picture= "https://www.bigfootdigital.co.uk/wp-content/uploads/20")
+        author1.save()
+        # Creates the second author outright to avoid having to accept a request
+        author2 = APIAuthor(id = 2,host="http://localhost:8000/api/",name="DaltonSS",username = "DaltonU",github= "http://github.com/dalton",picture= "https://www.bigfootdigital.co.uk/wp-content/uploads/20")
+        author2.save()
         # Checks that the authors page properly retrives them
-        multiauthorURL = reverse("ApiAuthors")
+        multiauthorURL = reverse("api:ApiAuthors")
         get1 = self.client.get(multiauthorURL,format = "json")
-        self.assertEqual(get1.data,{"type":"authors","authors": [author1,author2]})
+        self.assertEqual(get1.data,{"type":"authors","authors": [AuthorSerializer(author1).data,AuthorSerializer(author2).data]})
 
+"""
+Creates a test for the author and entry likes endpoint
+"""
+class AuthorEntryLikeEndpointTest(APITestCase):
+    def test_author_entry_get_likes(self):
+        # Creates two users, one to make the entry and one to like it
+        author1 = APIAuthor(username = "a",password = "b",name = "c",description = "d",host = "http://testserver/api/",web = "/app/authors/1")
+        author1.save()
+        author2 = APIAuthor(username = "e",password = "f",name = "g",description = "h",host = "http://testserver/api/" ,web = "/app/authors/2")
+        author2.save()
+        # Creates the entry that will be liked
+        entry1 = APIEntry(title = "A",author = author1)
+        entry1.save()
+
+        object_fqid = f"{author1.host}authors/{author1.id}/entries/{entry1.id}"
+        author_fqid = f"{author2.host}authors/{author2.id}"
+        like1 = APILike(object = object_fqid, author = author_fqid)
+        like1.save()
+        # Gets the info from the website
+        like_url = reverse("api:ApiAuthorAndEntryLikes",kwargs = {"author_id":author1.id,"entry_id":entry1.id})
+
+        get1 = self.client.get(like_url,format="json")
+        # Ensures there is exactly one like
+        self.assertEqual(get1.data["count"],1)
+        like = get1.data["src"][0]
+        # Ensure the like has the correct entry
+        self.assertEqual(like["object"].split("/")[-1],str(entry1.id))
+        author = like["author"]
+        self.assertEqual(author["displayName"],author2.name)
+
+"""
+Creates a test for the entry ikes endpoint
+"""
+class EntryLikeEndpointTest(APITestCase):
+    def test_entry_get_likes(self):
+        # Creates two users, one to make the entry and one to like it
+        author1 = APIAuthor(username = "a",password = "b",name = "c",description = "d",host = "http://testserver/api/",web = "/app/authors/1")
+        author1.save()
+        author2 = APIAuthor(username = "e",password = "f",name = "g",description = "h",host = "http://testserver/api/",web = "/app/authors/2")
+        author2.save()
+        # Creates the entry that will be liked
+        entry1 = APIEntry(title = "A",author = author1)
+        entry1.save()
+
+        object_fqid = f"{author1.host}authors/{author1.id}/entries/{entry1.id}"
+        author_fqid = f"{author2.host}authors/{author2.id}"
+        like1 = APILike(object = object_fqid, author = author_fqid)
+        like1.save()
+        # Gets the info from the website
+        like_url = reverse("api:ApiEntryLikes",kwargs = {"entry_fqid":object_fqid})
+        get1 = self.client.get(like_url,format="json")
+        # Ensures there is exactly one like
+        self.assertEqual(get1.data["count"],1)
+        like = get1.data["src"][0]
+        # Ensure the like has the correct entry
+        self.assertEqual(like["object"].split("/")[-1],str(entry1.id))
+        author = like["author"]
+        self.assertEqual(author["displayName"],author2.name)
+
+"""
+Allows the user to create a like
+"""
+class AddLikeEndpointTest(APITestCase):
+    """
+    Tests sending a like to a user
+    User Story # 58
+    """
+    def test_sending_like(self):
+        # Creates two users, one to make the entry and one to like it
+        author1 = APIAuthor(username = "a",password = "b",name = "c",description = "d",host = "http://testserver/api/",web = "/app/authors/1")
+        author1.save()
+        author2 = APIAuthor(username = "e",password = "f",name = "g",description = "h",host = "http://testserver/api/",web = "/app/authors/2")
+        author2.save()
+        # Creates the entry that will be liked
+        entry1 = APIEntry(title = "A",author = author1)
+        entry1.save()
+
+        object_fqid = f"{author1.host}authors/{author1.id}/entries/{entry1.id}"
+        author_fqid = f"{author2.host}authors/{author2.id}"
+        like1 = APILike(object = object_fqid, author = author_fqid)
+
+        like1 = LikeSerializer(like1)
+
+        # Gets the info from the website
+        like_url = reverse("api:ApiSendLike",kwargs = {"author_id":author1.id})
+        post1 = self.client.post(like_url,like1.data,format = 'json')
+        # Ensures there is one like in the data base
+        self.assertEqual(APILike.objects.count(),1)
+        # Ensures it matches with the like object information
+        self.assertEqual(APILike.objects.get().author,author_fqid)
+        self.assertEqual(APILike.objects.get().object,object_fqid)
+
+class ApiAuthorLikedTest(APITestCase):
+    def test_get_author_like(self):
+        # Creates two users, one to make the entry and one to like it
+        author1 = APIAuthor(username = "a",password = "b",name = "c",description = "d",host = "http://testserver/api/",web = "/app/authors/1")
+        author1.save()
+        author2 = APIAuthor(username = "e",password = "f",name = "g",description = "h",host = "http://testserver/api/",web = "/app/authors/2")
+        author2.save()
+        # Creates the entry that will be liked
+        entry1 = APIEntry(title = "A",author = author1)
+        entry1.save()
+
+        object_fqid = f"{author1.host}authors/{author1.id}/entries/{entry1.id}"
+        author_fqid = f"{author2.host}authors/{author2.id}"
+        like1 = APILike(object = object_fqid, author = author_fqid)
+        like1.save()
+
+        like_id = f"{author_fqid}/liked/{like1.id}"
+
+        # Gets the info from the website
+        like_url = reverse("api:ApiAuthorLiked",kwargs = {"author_id":author2.id})
+        get1 = self.client.get(like_url,format="json")
+        # Ensures there is one like in the data base
+        self.assertEqual(APILike.objects.count(),1)
+        # Ensures it matches with the like object information
+        self.assertEqual(get1.data["type"], "likes")
+        self.assertEqual(get1.data["id"], f"http://testserver{like_url}")
+        self.assertEqual(get1.data["src"][0]["type"], "like")
+        self.assertEqual(get1.data["src"][0]["author"]["id"], author_fqid)
+        self.assertEqual(get1.data["src"][0]["id"], like_id)
+        self.assertEqual(get1.data["src"][0]["object"], object_fqid)
+        
+class ApiSingleLikeRemoteLocalTest(APITestCase):
+    def test_get_single_like_remote_local(self):
+         # Creates two users, one to make the entry and one to like it
+        author1 = APIAuthor(username = "a",password = "b",name = "c",description = "d",host = "http://testserver/api/",web = "/app/authors/1")
+        author1.save()
+        author2 = APIAuthor(username = "e",password = "f",name = "g",description = "h",host = "http://testserver/api/",web = "/app/authors/2")
+        author2.save()
+        # Creates the entry that will be liked
+        entry1 = APIEntry(title = "A",author = author1)
+        entry1.save()
+
+        object_fqid = f"{author1.host}authors/{author1.id}/entries/{entry1.id}"
+        author_fqid = f"{author2.host}authors/{author2.id}"
+        like1 = APILike(object = object_fqid, author = author_fqid)
+        like1.save()
+
+        author_fqid = f"{author2.host}authors/{author2.id}"
+        like_url = reverse("api:ApiSingleLikeRemoteLocal",kwargs = {"author_id":author2.id, "like_id": like1.id})
+        get1 = self.client.get(like_url,format="json")
+        self.assertEqual(get1.data["type"], "like")
+        self.assertEqual(get1.data["author"]["id"], author_fqid)
+        self.assertEqual(get1.data["id"], f"http://testserver{like_url}")
+        self.assertEqual(get1.data["object"], object_fqid)
+
+class ApiAuthorLikedLocalTest(APITestCase):
+    def get_author_liked_local(self):
+        # Creates two users, one to make the entry and one to like it
+        author1 = APIAuthor(username = "a",password = "b",name = "c",description = "d",host = "http://testserver/api/",web = "/app/authors/1")
+        author1.save()
+        author2 = APIAuthor(username = "e",password = "f",name = "g",description = "h",host = "http://testserver/api/",web = "/app/authors/2")
+        author2.save()
+        # Creates the entry that will be liked
+        entry1 = APIEntry(title = "A",author = author1)
+        entry1.save()
+
+        object_fqid = f"{author1.host}authors/{author1.id}/entries/{entry1.id}"
+        author_fqid = f"{author2.host}authors/{author2.id}"
+        like1 = APILike(object = object_fqid, author = author_fqid)
+        like1.save()
+
+        like_id = f"{author_fqid}/liked/{like1.id}"
+
+        like_url = reverse("api:ApiAuthorLikedLocal",kwargs = {"author_fqid":author_fqid})
+        get1 = self.client.get(like_url,format="json")
+        self.assertEqual(get1.data["type"], "likes")
+        self.assertEqual(get1.data["id"], f"http://testserver{like_url}")
+        self.assertEqual(get1.data["src"][0]["type"], "like")
+        self.assertEqual(get1.data["src"][0]["author"]["id"], author_fqid)
+        self.assertEqual(get1.data["src"][0]["id"], like_id)
+        self.assertEqual(get1.data["src"][0]["object"], object_fqid)
+
+class ApiSingleLikeLocalTest(APITestCase):
+    def get_single_like(self):
+        # Creates two users, one to make the entry and one to like it
+        author1 = APIAuthor(username = "a",password = "b",name = "c",description = "d",host = "http://testserver/api/",web = "/app/authors/1")
+        author1.save()
+        author2 = APIAuthor(username = "e",password = "f",name = "g",description = "h",host = "http://testserver/api/",web = "/app/authors/2")
+        author2.save()
+        # Creates the entry that will be liked
+        entry1 = APIEntry(title = "A",author = author1)
+        entry1.save()
+
+        object_fqid = f"{author1.host}authors/{author1.id}/entries/{entry1.id}"
+        author_fqid = f"{author2.host}authors/{author2.id}"
+        like1 = APILike(object = object_fqid, author = author_fqid)
+        like1.save()
+
+        like_id = f"{author_fqid}/liked/{like1.id}"
+
+        like_url = reverse("api:ApiSingleLikeLocal",kwargs = {"like_url":like_id})
+        get1 = self.client.get(like_url,format="json")
+        self.assertEqual(get1.data["type"], "like")
+        self.assertEqual(get1.data["author"]["id"], author_fqid)
+        self.assertEqual(get1.data["id"], like_id)
+        self.assertEqual(get1.data["object"], object_fqid)
+
+"""
+Tests admin using priviledges
+User Story 66
+"""
+class AdminPanelAbilityTest(TestCase):
+    """
+    Tests adding a user
+    Part of User story 66
+    """
+    def test_add_user_admin(self):
+        # Gets the link to add a user
+        adminLink = reverse("admin:api_author_add")
+        # Opens up the admin panel
+        client = Client()
+        adminUser = User.objects.create_superuser(username="1",password="2")
+        adminUser.save()
+        client.login(username =  "1", password = "2")
+        # Makes a hashed password for the post request
+        password = make_password("123")
+        # Posts the user
+        client.post(adminLink,{"username":"Doug","password":password,"name":"Doug","description": "This is a test","picture": "","github": "","followers":[],"host":"http://localhost:8000/api/","web":"http://localhost:8000/app/authors/1","_save":"Save"})
+        # Ensures there is an author created
+        self.assertEqual(APIAuthor.objects.count(),1)
+        # Checks that the authors information matches
+        self.assertEqual(APIAuthor.objects.get().username,"Doug")
+        self.assertEqual(APIAuthor.objects.get().description,"This is a test")
+    """
+    Tests updating a user
+    Part of User story 66
+    """
+    def test_edit_user_admin(self):
+        # Creates initial author
+        author = APIAuthor(username = "a",password = "b",name = "c",description = "d",host = "/api/",web = "/app/authors/1")
+        author.save()
+        # Gets the link to change an author
+        adminLink = reverse("admin:api_author_change",kwargs = {"object_id":author.id})
+        # Opens up the admin panel
+        client = Client()
+        adminUser = User.objects.create_superuser(username="1",password="2")
+        adminUser.save()
+        client.login(username =  "1", password = "2")
+        # Makes a hashed password for the post request
+        password = make_password("123")
+        # Posts the user
+        client.post(adminLink,{"username":"Doug","password":password,"name":"Doug","description": "This is a test","picture": "","github": "","followers":[],"host":"http://localhost:8000/api/","web":"http://localhost:8000/app/authors/1","_save":"Save"})
+        # Ensures there is an author created
+        self.assertEqual(APIAuthor.objects.count(),1)
+        # Checks that the authors information matches
+        self.assertEqual(APIAuthor.objects.get().username,"Doug")
+        self.assertEqual(APIAuthor.objects.get().description,"This is a test")
+    """
+    Tests deleting a user
+    Part of User story 66
+    """
+    def test_delete_user_admin(self):
+        # Creates initial author
+        author = APIAuthor(username = "a",password = "b",name = "c",description = "d",host = "/api/",web = "/app/authors/1")
+        author.save()
+        # Gets the link to change an author
+        adminLink = reverse("admin:api_author_delete",kwargs = {"object_id":author.id})
+        # Opens up the admin panel
+        client = Client()
+        adminUser = User.objects.create_superuser(username="1",password="2")
+        adminUser.save()
+        client.login(username =  "1", password = "2")
+        # Posts the delete
+        client.post(adminLink,{"_save": "Save"})
+        # Ensures there is no more author
+        self.assertEqual(APIAuthor.objects.count(),0)
 
 AuthorModel = Entry._meta.get_field('author').related_model
 
@@ -135,7 +432,7 @@ class EntryAPITest(APITestCase):
 
         Verifie POST to /authors/{id}/entries/ creates a record and returns an FQID.
         """
-        url = reverse("ApiEntries", kwargs={"author_id": self.author.id})
+        url = reverse("api:ApiEntries", kwargs={"author_id": self.author.id})
         data = {
             "title": "API Created Entry",
             "description": "Testing",
@@ -159,7 +456,7 @@ class EntryAPITest(APITestCase):
         Verify GET to /authors/{id}/entries/{eid}/ returns correct structure.
         """
         entry = Entry.objects.create(author=self.author, title="Fetch Me", visibility="PUBLIC")
-        url = reverse("ApiEntry", kwargs={"author_id": self.author.id, "entry_id": entry.id})
+        url = reverse("api:ApiEntry", kwargs={"author_id": self.author.id, "entry_id": entry.id})
         
         response = self.client.get(url)
         
@@ -182,7 +479,7 @@ class EntryAPITest(APITestCase):
             content="Original content",
             visibility="PUBLIC",
         )
-        url = reverse("ApiEntry", kwargs={"author_id": self.author.id, "entry_id": entry.id})
+        url = reverse("api:ApiEntry", kwargs={"author_id": self.author.id, "entry_id": entry.id})
 
         # Log in as the author
         session = self.client.session
@@ -209,7 +506,7 @@ class EntryAPITest(APITestCase):
         Verify DELETE sets visibility to DELETED and makes it 404 in API.
         """
         entry = Entry.objects.create(author=self.author, title="Delete Me", visibility="PUBLIC")
-        url = reverse("ApiEntry", kwargs={"author_id": self.author.id, "entry_id": entry.id})
+        url = reverse("api:ApiEntry", kwargs={"author_id": self.author.id, "entry_id": entry.id})
 
         # Log in as the author
         session = self.client.session
@@ -243,7 +540,7 @@ class EntryAPITest(APITestCase):
         URL: ://service/api/authors/{AUTHOR_SERIAL}/entries/{ENTRY_SERIAL}/image
              ://service/api/entries/{ENTRY_FQID}/image
         """
-        url = reverse("ApiEntryImage", kwargs={
+        url = reverse("api:ApiEntryImage", kwargs={
             "author_id": self.author.id,
             "entry_id": self.image_entry.id
         })
@@ -267,7 +564,7 @@ class EntryAPITest(APITestCase):
             content="Just words.",
             visibility="PUBLIC",
         )
-        text_image_url = reverse("ApiEntryImage", kwargs={
+        text_image_url = reverse("api:ApiEntryImage", kwargs={
             "author_id": self.author.id,
             "entry_id": text_entry.id
         })
@@ -275,7 +572,7 @@ class EntryAPITest(APITestCase):
         self.assertEqual(text_response.status_code, status.HTTP_404_NOT_FOUND)
 
         # Global image endpoint
-        global_url = reverse("ApiEntryImageGlobal", kwargs={"entry_id": self.image_entry.id})
+        global_url = reverse("api:ApiEntryImageGlobal", kwargs={"entry_id": self.image_entry.id})
         global_response = self.client.get(global_url)
 
         # Check the response and MIME type
@@ -290,7 +587,7 @@ class EntryAPITest(APITestCase):
         for i in range(10):
             Entry.objects.create(author=self.author, title=f"Post {i}", visibility="PUBLIC")
             
-        url = reverse("ApiEntries", kwargs={"author_id": self.author.id})
+        url = reverse("api:ApiEntries", kwargs={"author_id": self.author.id})
         
         # Request page 2 with size 3
         response = self.client.get(url, {"page": 2, "size": 3})

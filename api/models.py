@@ -1,5 +1,7 @@
 from django.db import models
 import uuid
+from django.contrib.auth.hashers import make_password, check_password
+from django.utils import timezone
 
 # Create your models here.
 """
@@ -45,6 +47,12 @@ class AuthorRequest(models.Model):
     id = models.AutoField(primary_key = True) # Makes each request unique
     username = models.CharField(max_length=40, unique=True)  # Login ID
     password = models.CharField(max_length=40)           # Hashed password
+    name = models.CharField(max_length = 40,default = "user") # Display name
+    github = models.URLField(blank=True)
+    picture = models.URLField(blank=True, null=True)
+    host = models.URLField(blank=True)
+    web = models.URLField(blank=True)
+    
 
 class Entry(models.Model):
     type = "entry"
@@ -77,10 +85,19 @@ class Entry(models.Model):
     visibility = models.CharField(max_length=20, choices=VISIBILITY_CHOICES, default="PUBLIC")
     
 """
-Class for likes attachedto an entry
+Class for likes attached to an entry
 """
 class Like(models.Model):
-    id = models.AutoField(primary_key = True)
-    entry = models.ForeignKey("Entry", on_delete=models.CASCADE)
-    user = models.ForeignKey("Author", on_delete=models.CASCADE)
-    time = models.DateTimeField(auto_now_add = True)
+    type = "like"
+
+    id = models.AutoField(primary_key=True)
+    author = models.URLField(max_length=500)  # liker
+    object = models.URLField(max_length=500)  # object liked
+    published = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        unique_together = ("author", "object")
+        ordering = ["-published"]
+
+    def __str__(self):
+        return f"Like by {self.author} on {self.object}"

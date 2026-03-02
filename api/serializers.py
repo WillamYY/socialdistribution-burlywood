@@ -2,29 +2,53 @@ from rest_framework import serializers
 from .models import Author
 from entries.models import Entry
 from interactions.models import Like, Comment
+from .models import Author as APIAuthor
 
 """
 Serializes author objects
 """
 class AuthorSerializer(serializers.ModelSerializer):
-    type = serializers.CharField(default = "Author") # Sets the type to author in the response
+    type = serializers.CharField(default = "author") # Sets the type to author in the response
     displayName = serializers.CharField(source = "name") # Maps the displayName field to the name field in the database
     profileImage = serializers.URLField(source = "picture") # Maps the profileImage field to the picture field in the database
+    id = serializers.SerializerMethodField() # Turns the interger id into a url
+
+    host = serializers.URLField()
+    web = serializers.URLField()
 
     class Meta():
         # Maps to the model object in the database
         model = Author
         fields = ["type","id","host","displayName","github","profileImage","web"] # Sets all of the fields
 
+    # Defines how to create the id
+    def get_id(self,obj):
+        return f"{obj.host}authors/{obj.id}"
+
 """
 Serializes a singular like
 """
-class LikeSerializer(serializers.Serializer):
-    type = serializers.CharField(default="Like")
-    id = serializers.URLField()
-    author = serializers.URLField()
-    object = serializers.URLField()
-    published = serializers.DateTimeField()
+class LikeSerializer(serializers.ModelSerializer):
+    type = serializers.CharField(default = "like") # Sets the type of the serializer to like
+    id = serializers.SerializerMethodField()
+    author = serializers.SerializerMethodField()
+    published = serializers.DateTimeField() # Attaches published to the time field
+    object = serializers.URLField() # Stores the object so that it can be displayed even though it does not go in the database
+
+    class Meta():
+        model = Like
+        fields = ["type","author","published","id","object"]
+
+    # Turns ID into URL
+    def get_id(self, obj):
+        author = self.get_author(obj)
+        return f"{author["id"]}/liked/{obj.id}"
+    
+    # Serializes the author
+    def get_author(self, obj):
+        author_id = obj.author.split("/")[-1]
+        author_obj = APIAuthor.objects.get(id = int(author_id))
+        return AuthorSerializer(author_obj).data
 
 """
 Creates the serializer for multiple likes
