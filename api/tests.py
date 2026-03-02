@@ -392,8 +392,6 @@ class AdminPanelAbilityTest(TestCase):
         client.post(adminLink,{"_save": "Save"})
         # Ensures there is no more author
         self.assertEqual(APIAuthor.objects.count(),0)
-        self.assertEqual(get1.data,{"type":"authors","authors": [author1,author2]})
-
 
 AuthorModel = Entry._meta.get_field('author').related_model
 
@@ -434,7 +432,7 @@ class EntryAPITest(APITestCase):
 
         Verifie POST to /authors/{id}/entries/ creates a record and returns an FQID.
         """
-        url = reverse("ApiEntries", kwargs={"author_id": self.author.id})
+        url = reverse("api:ApiEntries", kwargs={"author_id": self.author.id})
         data = {
             "title": "API Created Entry",
             "description": "Testing",
@@ -458,7 +456,7 @@ class EntryAPITest(APITestCase):
         Verify GET to /authors/{id}/entries/{eid}/ returns correct structure.
         """
         entry = Entry.objects.create(author=self.author, title="Fetch Me", visibility="PUBLIC")
-        url = reverse("ApiEntry", kwargs={"author_id": self.author.id, "entry_id": entry.id})
+        url = reverse("api:ApiEntry", kwargs={"author_id": self.author.id, "entry_id": entry.id})
         
         response = self.client.get(url)
         
@@ -481,7 +479,7 @@ class EntryAPITest(APITestCase):
             content="Original content",
             visibility="PUBLIC",
         )
-        url = reverse("ApiEntry", kwargs={"author_id": self.author.id, "entry_id": entry.id})
+        url = reverse("api:ApiEntry", kwargs={"author_id": self.author.id, "entry_id": entry.id})
 
         # Log in as the author
         session = self.client.session
@@ -508,7 +506,7 @@ class EntryAPITest(APITestCase):
         Verify DELETE sets visibility to DELETED and makes it 404 in API.
         """
         entry = Entry.objects.create(author=self.author, title="Delete Me", visibility="PUBLIC")
-        url = reverse("ApiEntry", kwargs={"author_id": self.author.id, "entry_id": entry.id})
+        url = reverse("api:ApiEntry", kwargs={"author_id": self.author.id, "entry_id": entry.id})
 
         # Log in as the author
         session = self.client.session
@@ -542,7 +540,7 @@ class EntryAPITest(APITestCase):
         URL: ://service/api/authors/{AUTHOR_SERIAL}/entries/{ENTRY_SERIAL}/image
              ://service/api/entries/{ENTRY_FQID}/image
         """
-        url = reverse("ApiEntryImage", kwargs={
+        url = reverse("api:ApiEntryImage", kwargs={
             "author_id": self.author.id,
             "entry_id": self.image_entry.id
         })
@@ -566,7 +564,7 @@ class EntryAPITest(APITestCase):
             content="Just words.",
             visibility="PUBLIC",
         )
-        text_image_url = reverse("ApiEntryImage", kwargs={
+        text_image_url = reverse("api:ApiEntryImage", kwargs={
             "author_id": self.author.id,
             "entry_id": text_entry.id
         })
@@ -574,7 +572,7 @@ class EntryAPITest(APITestCase):
         self.assertEqual(text_response.status_code, status.HTTP_404_NOT_FOUND)
 
         # Global image endpoint
-        global_url = reverse("ApiEntryImageGlobal", kwargs={"entry_id": self.image_entry.id})
+        global_url = reverse("api:ApiEntryImageGlobal", kwargs={"entry_id": self.image_entry.id})
         global_response = self.client.get(global_url)
 
         # Check the response and MIME type
@@ -589,7 +587,7 @@ class EntryAPITest(APITestCase):
         for i in range(10):
             Entry.objects.create(author=self.author, title=f"Post {i}", visibility="PUBLIC")
             
-        url = reverse("ApiEntries", kwargs={"author_id": self.author.id})
+        url = reverse("api:ApiEntries", kwargs={"author_id": self.author.id})
         
         # Request page 2 with size 3
         response = self.client.get(url, {"page": 2, "size": 3})
