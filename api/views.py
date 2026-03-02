@@ -107,6 +107,21 @@ def ApiAuthor(request,id):
 def ApiAuthorAndEntryLikes(request,author_id,entry_id):
     # Ensures the entry exists before accessing it
     # Only getting entries that are PUBLIC or UNLISTED
+    if request.GET.get("page_number") and request.GET.get("page_number").isnumeric():
+        if int(request.GET.get("page_number")) > 0:
+            page_number = int(request.GET.get("page_number"))
+        else:
+            page_number = 1
+    else:
+        page_number = 1
+    if request.GET.get("size") and request.GET.get("size").isnumeric():
+        if int(request.GET.get("size")) > 0:
+            size = int(request.GET.get("size"))
+        else:
+            size = 5
+    else:
+        size = 5
+
     if APIEntry.objects.filter(id = entry_id, visibility__in = ["PUBLIC", "UNLISTED"]).exists():
         # getting the URL of the object requested
         liked_obj = "/".join(request.build_absolute_uri().split("/")[:-1])
@@ -116,9 +131,9 @@ def ApiAuthorAndEntryLikes(request,author_id,entry_id):
 
         count = likes.count()
         # should only get 5 likes per entry
-        src = likes
-        if count > 5:
-            src = likes[:5]
+        start = (page_number - 1) * size
+        end = start + size
+        src = likes[start:end]
 
         # Finds the link to the object that was liked
         entryURL = request.build_absolute_uri()
@@ -134,6 +149,20 @@ def ApiAuthorAndEntryLikes(request,author_id,entry_id):
 def ApiEntryLikes(request, entry_fqid):
     # Ensures the entry exists before accessing it
     # Only getting entries that are PUBLIC or UNLISTED
+    if request.GET.get("page_number") and request.GET.get("page_number").isnumeric():
+        if int(request.GET.get("page_number")) > 0:
+            page_number = int(request.GET.get("page_number"))
+        else:
+            page_number = 1
+    else:
+        page_number = 1
+    if request.GET.get("size") and request.GET.get("size").isnumeric():
+        if int(request.GET.get("size")) > 0:
+            size = int(request.GET.get("size"))
+        else:
+            size = 5
+    else:
+        size = 5
     entry_id = entry_fqid.split("/")[-1]
     if APIEntry.objects.filter(id = entry_id, visibility__in = ["PUBLIC", "UNLISTED"]).exists():
         # getting local authors only, order by publish date
@@ -141,9 +170,9 @@ def ApiEntryLikes(request, entry_fqid):
 
         count = likes.count()
         # should only get 5 likes per entry
-        src = likes
-        if count > 5:
-            src = likes[:5]
+        start = (page_number - 1) * size
+        end = start + size
+        src = likes[start:end]
 
         # Finds the link to the object that was liked
         entryURL = request.build_absolute_uri()
@@ -186,6 +215,20 @@ def ApiSendLike(request,author_id):
     
 @api_view(["GET"])
 def ApiAuthorLiked(request, author_id):
+    if request.GET.get("page_number") and request.GET.get("page_number").isnumeric():
+        if int(request.GET.get("page_number")) > 0:
+            page_number = int(request.GET.get("page_number"))
+        else:
+            page_number = 1
+    else:
+        page_number = 1
+    if request.GET.get("size") and request.GET.get("size").isnumeric():
+        if int(request.GET.get("size")) > 0:
+            size = int(request.GET.get("size"))
+        else:
+            size = 5
+    else:
+        size = 5
     author_fqid = "/".join(request.build_absolute_uri().split("/")[:-1])
 
     likes_tmp = APILike.objects.filter(author = author_fqid).order_by("published")
@@ -199,9 +242,9 @@ def ApiAuthorLiked(request, author_id):
 
     count = len(likes)
     # should only get 5 likes per entry
-    src = likes
-    if count > 5:
-        src = likes[:5]
+    start = (page_number - 1) * size
+    end = start + size
+    src = likes[start:end]
 
     # Finds the link to the object that was liked
     entryURL = request.build_absolute_uri()
@@ -220,6 +263,21 @@ def ApiSingleLikeRemoteLocal(request, author_id, like_id):
 
 @api_view(["GET"])
 def ApiAuthorLikedLocal(request, author_fqid):
+    if request.GET.get("page_number") and request.GET.get("page_number").isnumeric():
+        if int(request.GET.get("page_number")) > 0:
+            page_number = int(request.GET.get("page_number"))
+        else:
+            page_number = 1
+    else:
+        page_number = 1
+    if request.GET.get("size") and request.GET.get("size").isnumeric():
+        if int(request.GET.get("size")) > 0:
+            size = int(request.GET.get("size"))
+        else:
+            size = 5
+    else:
+        size = 5
+        
     likes_tmp = APILike.objects.filter(author = author_fqid)
     likes = []
     for like in likes_tmp:
@@ -229,9 +287,9 @@ def ApiAuthorLikedLocal(request, author_fqid):
 
     count = len(likes)
     # should only get 5 likes per entry
-    src = likes
-    if count > 5:
-        src = likes[:5]
+    start = (page_number - 1) * size
+    end = start + size
+    src = likes[start:end]
 
     # Finds the link to the object that was liked
     entryURL = request.build_absolute_uri()
