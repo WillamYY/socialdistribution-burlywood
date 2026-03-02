@@ -168,25 +168,7 @@ class EntryWebUITests(TestCase):
             content=f"data:image/png;base64,{self.tiny_png_b64}",
             visibility="PUBLIC"
         )
-
-    #def test_my_entries_loads_for_author(self):
-        """
-        Verify the page loads correctly when the author_id is in the session.
-        """
-        """ session = self.client.session
-        session['author_id'] = self.author.id
-        session.save()
-        
-        url = reverse('view_my_entries')
-        response = self.client.get(url)
-
-        # Check if it handles the request successfully
-        self.assertEqual(response.status_code, 200)
-
-        # Check if it handles the proper visibility
-        self.assertContains(response, "Visible Post")
-        self.assertNotContains(response, "Invisible Post")
-        """
+    
     def test_markdown_renders_in_html(self):
         """
         User Story #15: As an author, entries I make can be in CommonMark.

@@ -4,47 +4,25 @@
 <head>
     <meta charset="utf-8">
     <title>{% block title %}Social Distribution Node{% endblock %}</title>
+    <link rel="stylesheet" href="{% static 'core/styles.css' %}">
     <link rel="stylesheet" href="{% static 'entries/styles.css' %}">
-    {% block style %}
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        header.header h1 {
-            position: sticky;
-            top: 0;
-        }
-    </style>
-    {% endblock %}
+    {% block style %}{% endblock %}
 </head>
 <body>
-    <header class="header">
-        <h1>
-            Social Distribution Project
-        </h1>
-        <nav class="main-nav">
-            <ul>
-                <li>
-                    <a href="{% url 'NodeDisplay' %}">Home</a>
-                </li>
-                <li>
-                    <a href="{% url 'stream' %}">Stream</a>
-                </li>
-                <li>
-                    <a href="{% url 'view_my_entries' %}">My Entries</a>
-                </li>
-                <li>
-                    <a href="{% url 'create_entry' %}">Create Entry</a>
-                </li>
-                <li>
-                    <a href="{% url 'ProfileView' %}">Profile</a>
-                </li>
-            </ul>
-        </nav>
-    </header>
+    <nav class="top-nav">
+        <a href="{% url 'NodeDisplay' %}">Home</a>
+        <a href="{% url 'stream' %}">Stream</a>
+        <a href="{% url 'view_my_entries' %}">My Entries</a>
+        <a href="{% url 'create_entry' %}">Create Entry</a>
+        {% if request.session.author_id %}
+            <a href="/app/profile/">My Profile</a>
+            <a href="/app/follow-requests/">Follow Requests</a>
+            <a href="/app/logout/">Logout</a>
+        {% else %}
+            <a href="/app/login/">Login</a>
+            <a href="/app/signup/">Sign Up</a>
+        {% endif %}
+    </nav>
 
     <main class="content-container">
         {% block content %}

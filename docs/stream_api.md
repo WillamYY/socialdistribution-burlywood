@@ -100,3 +100,6 @@ Status: `403`
 { "detail": "Method not allowed." }
 ```
 Status: `405`
+
+### Citations
+- Use of Cursor and Chatgpt (Gen AI tools) for debugging help during issues and for test cases.

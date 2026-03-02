@@ -1,33 +1,14 @@
-{% extends 'base.html' %}
-
 {% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <title>{{ author.username }}'s Profile</title>
-    {% block style %}
+    <link rel="stylesheet" href="{% static 'core/styles.css' %}">
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #f2f2f2;
-            margin: 0;
-            padding: 0;
-            display: flex;
-            justify-content: center;
-        }
-
         .profile-card {
-            background-color: #fff;
-            margin: 50px 20px;
-            padding: 25px;
-            border-radius: 10px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            max-width: 400px;
-            width: 100%;
             text-align: center;
         }
-
         .profile-picture {
             width: 120px;
             height: 120px;
@@ -35,96 +16,82 @@
             object-fit: cover;
             margin-bottom: 15px;
         }
-
-        h1 {
-            margin: 10px 0;
-            font-size: 22px;
-            color: #333;
-        }
-
         .profile-info p {
             margin: 5px 0;
             font-size: 16px;
-            color: #555;
+            color: #4b5563;
         }
-
-        .profile-info a {
-            color: #1a73e8;
-            text-decoration: none;
-        }
-
-        .profile-info a:hover {
-            text-decoration: underline;
-        }
-
         .follow-btn {
             display: inline-block;
             margin-top: 15px;
-            padding: 8px 18px;
-            border: none;
-            border-radius: 5px;
+            padding: 8px 16px;
+            border-radius: 8px;
             font-size: 15px;
             cursor: pointer;
             text-decoration: none;
             color: white;
         }
-
-        .follow { background-color: #1a73e8; }
-        .unfollow { background-color: #dc3545; }
-        .request-sent { background-color: #999; cursor: default; }
-        .view-entries { background-color: #4caf50; }
-        
+        .follow { background-color: var(--primary); }
+        .unfollow { background-color: var(--danger); }
+        .request-sent { background-color: #9ca3af; cursor: default; }
+        .view-entries { background-color: var(--success); }
         .stats {
             margin-top: 15px;
             font-size: 14px;
-            color: #666;
+            color: #6b7280;
         }
     </style>
-    {% endblock %}
 </head>
 <body>
-    {% block content %}
-    <div class="profile-card">
-        <!-- Profile Picture -->
-        <img src="{% if author.picture %}{{ author.picture.url }}{% else %}{% static 'images/default_profile.jpg' %}{% endif %}" 
-             alt="Profile Picture" 
-             class="profile-picture">
-
-        <!-- Username -->
-        <h1>{{ author.username }}</h1>
-
-        <!-- Author Info -->
-        <div class="profile-info">
-            {% if author.name %}
-                <p><strong>Name:</strong> {{ author.name }}</p>
-            {% endif %}
-            {% if author.description %}
-                <p><strong>Description:</strong> {{ author.description }}</p>
-            {% endif %}
-            {% if author.github %}
-                <p><strong>GitHub:</strong> <a href="{{ author.github }}" target="_blank">{{ author.github }}</a></p>
-            {% endif %}
-        </div>
-
-        <!-- Followers / Following -->
-        <div class="stats">
-            <p><strong>Followers:</strong> {{ followers_count }} | <strong>Following:</strong> {{ following_count }}</p>
-        </div>
-
-        <!-- Follow / Unfollow / Request Buttons -->
-        {% if logged_in_id and logged_in_id != author.id %}
-            {% if is_following %}
-                <a href="{% url 'UnfollowAuthor' author.id %}" class="follow-btn unfollow">Unfollow</a>
-            {% elif request_sent %}
-                <button class="follow-btn request-sent" disabled>Request Sent</button>
-            {% else %}
-                <a href="{% url 'FollowAuthor' author.id %}" class="follow-btn follow">Follow</a>
-            {% endif %}
-    
-            <!-- View Entries button always visible (except on own profile) -->
-            <a href="{% url 'view_entries' author.id %}" class="follow-btn view-entries">View Entries</a>
+    <nav class="top-nav">
+        <a href="/">Home</a>
+        <a href="/app/stream/">Stream</a>
+        <a href="/app/my-entries/">My Entries</a>
+        <a href="/app/create-entry/">Create Entry</a>
+        {% if request.session.author_id %}
+            <a href="/app/profile/">My Profile</a>
+            <a href="/app/follow-requests/">Follow Requests</a>
+            <a href="/app/logout/">Logout</a>
+        {% else %}
+            <a href="/app/login/">Login</a>
+            <a href="/app/signup/">Sign Up</a>
         {% endif %}
+    </nav>
+    <div class="page">
+        <div class="card profile-card">
+            <img src="{% if author.picture %}{{ author.picture.url }}{% else %}{% static 'images/default_profile.jpg' %}{% endif %}" 
+                 alt="Profile Picture" 
+                 class="profile-picture">
+
+            <h1>{{ author.username }}</h1>
+
+            <div class="profile-info">
+                {% if author.name %}
+                    <p><strong>Name:</strong> {{ author.name }}</p>
+                {% endif %}
+                {% if author.description %}
+                    <p><strong>Description:</strong> {{ author.description }}</p>
+                {% endif %}
+                {% if author.github %}
+                    <p><strong>GitHub:</strong> <a href="{{ author.github }}" target="_blank">{{ author.github }}</a></p>
+                {% endif %}
+            </div>
+
+            <div class="stats">
+                <p><strong>Followers:</strong> {{ followers_count }} | <strong>Following:</strong> {{ following_count }}</p>
+            </div>
+
+            {% if logged_in_id and logged_in_id != author.id %}
+                {% if is_following %}
+                    <a href="{% url 'UnfollowAuthor' author.id %}" class="follow-btn unfollow">Unfollow</a>
+                {% elif request_sent %}
+                    <button class="follow-btn request-sent" disabled>Request Sent</button>
+                {% else %}
+                    <a href="{% url 'FollowAuthor' author.id %}" class="follow-btn follow">Follow</a>
+                {% endif %}
+                <a href="{% url 'view_entries' author.id %}" class="follow-btn view-entries">View Entries</a>
+            {% endif %}
+        </div>
     </div>
-    {% endblock %}
 </body>
 </html>
