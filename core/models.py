@@ -19,6 +19,9 @@ class Author(models.Model):
         blank=True
     )
 
+    host = models.URLField(blank=True)
+    web = models.URLField(blank=True)
+
     def __str__(self):
         return self.username
 
