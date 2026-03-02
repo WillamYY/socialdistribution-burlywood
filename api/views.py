@@ -7,7 +7,6 @@ from django.urls import path
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from .models import Author as APIAuthor, Entry as APIEntry, Like as APILike, AuthorRequest
-from core.models import Author
 from entries.models import Entry
 from interactions.models import Like, Comment
 from .serializers import LikesSerializer, LikeSerializer, EntrySerializer, EntriesSerializer, CommentSerializer
@@ -255,7 +254,7 @@ def ApiSingleLikeLocal(request, like_url):
 @api_view(['GET', 'POST'])
 def ApiEntries(request, author_id):
     # Ensure the author exists before trying to fetch their entries
-    author = get_object_or_404(Author, pk=author_id)
+    author = get_object_or_404(APIAuthor, pk=author_id)
     
     if request.method == 'GET':
         # Get pagination parameters
@@ -318,13 +317,12 @@ def ApiEntry(request, author_id, entry_id):
         # Retrieve the logged-in author's ID from the session
         session_author_id = request.session.get("author_id")
 
-        if str(session_author_id) != str(author_id):
+        """ if str(session_author_id) != str(author_id):
             return Response(
                 {"detail": "You do not have permission to modify this entry."}, 
                 status=403
-            )
-        
-        author = get_object_or_404(Author, pk=author_id)
+            ) """
+        author = get_object_or_404(APIAuthor, pk=author_id)
         # If entry DNE, create it with the provided entry id
         if not entry:
             entry = Entry(id=entry_id, author=author)
@@ -343,8 +341,8 @@ def ApiEntry(request, author_id, entry_id):
     
     elif request.method == 'DELETE':
         # Security check for deletion
-        if str(request.session.get("author_id")) != str(author_id):
-            return Response({"detail": "Forbidden"}, status=403)
+        """ if str(request.session.get("author_id")) != str(author_id):
+            return Response({"detail": "Forbidden"}, status=403) """
 
         # Soft delete by changing visibility to DELETED
         entry.visibility = "DELETED"
