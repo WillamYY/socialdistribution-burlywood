@@ -3,8 +3,16 @@
 This document covers the API implementation and expected behavior for **Commenting on Entries** user stories, referencing GitHub issues.
 
 ## API User Stories
-* **#62** Comment visibility on friends-only entries
-* **#59** Commenting on entries as an author
+Comments
+
+#62 As an author, comments on my friends-only entries are visible only to my friends and the comment's author.
+
+#57 As an author, I want to comment on entries that I can access, so I can make a witty reply.
+
+Likes on Comments
+
+#59 As an author, I want to like comments that I can access, so I can show my appreciation.
+
 
 ## Object Schemas
 **Note:** \* Denotes a required field for POST body
