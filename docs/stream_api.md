@@ -101,5 +101,5 @@ Status: `403`
 ```
 Status: `405`
 
-###Citations
+### Citations
 - Use of Cursor and Chatgpt (Gen AI tools) for debugging help during issues and for test cases.
