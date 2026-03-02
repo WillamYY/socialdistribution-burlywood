@@ -1,11 +1,10 @@
 import uuid
 from django.db import models
+from core.models import Author
 
 class Entry(models.Model):
-    type = "entry"
     title = models.CharField(max_length=255)
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    web = None  # 
     description = models.TextField()
 
     CONTENT_TYPE_CHOICES = [
@@ -20,9 +19,6 @@ class Entry(models.Model):
     content_raw = models.TextField(blank=True, null=True)    # Store Markdown raw text
 
     author = models.ForeignKey("core.Author", on_delete=models.CASCADE)
-    # TODO: comments and likes
-    comments = None
-    likes = None
     published = models.DateTimeField(auto_now_add=True)
 
     VISIBILITY_CHOICES = [
@@ -31,11 +27,6 @@ class Entry(models.Model):
         ("UNLISTED", "Unlisted"),
     ]
     visibility = models.CharField(max_length=20, choices=VISIBILITY_CHOICES, default="PUBLIC")
-    
-"""
-Class for likes attached to an entry
-"""
-class Like(models.Model):
-    id = models.AutoField(primary_key = True)
-    entry = models.ForeignKey("Entry", on_delete=models.CASCADE)
-    user = models.ForeignKey("core.Author", on_delete=models.CASCADE)
+
+    def __str__(self):
+        return self.title

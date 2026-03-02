@@ -3,7 +3,6 @@ from django.contrib import messages
 from .models import Author, FollowRequest, AuthorRequest
 from django.contrib.auth.hashers import check_password
 
-
 def SignUpView(request):
     """
     Displays the signup form.
@@ -89,7 +88,8 @@ def logout_view(request):
 
 def edit_profile(request):
     """
-    Allows the logged-in author to edit their profile
+    Allows the logged-in author to edit their profile.
+    Checks for username uniqueness before updating.
     """
     if not request.session.get("author_id"):
         return redirect("/app/login")
@@ -119,12 +119,18 @@ def edit_profile(request):
     return render(request, "edit_profile.html", {"author": author})
 
 def profile_view(request):
+    """
+    Displays the profile of the logged-in user.
+    Shows counts for followers, following, and pending follow requests.
+    """
     if not request.session.get("author_id"):
         return redirect("/app/login")
 
     author = Author.objects.get(id=request.session["author_id"])
-    followers_count = author.followers.count()
-    following_count = author.following.count()
+
+    followers_count = author.followers.exclude(id__in=author.following.values_list("id", flat=True)).count()
+    following_count = author.following.exclude(id__in=author.followers.values_list("id", flat=True)).count()
+    friends_count = author.friends().count()
 
     # Count pending follow requests for this author
     pending_requests_count = FollowRequest.objects.filter(target=author).count()
@@ -133,10 +139,15 @@ def profile_view(request):
         "author": author,
         "followers_count": followers_count,
         "following_count": following_count,
+        "friends_count": friends_count,
         "pending_requests_count": pending_requests_count
     })
 
 def ProfileDisplay(request, id):
+    """
+    Displays the profile of another user.
+    Checks if the logged-in user is following them or has sent a follow request.
+    """
     author = get_object_or_404(Author, pk=id)
     logged_in_id = request.session.get("author_id")
     is_following = False
@@ -158,6 +169,9 @@ def ProfileDisplay(request, id):
     return render(request, "profileview.html", context)
 
 def follow_author(request, author_id):
+    """
+    Sends a follow request to another author.
+    """
     if not request.session.get('author_id'):
         return redirect('/app/login')
 
@@ -178,6 +192,9 @@ def follow_author(request, author_id):
     return redirect(f'/app/user/{author_id}/')
 
 def unfollow_author(request, author_id):
+    """
+    Unfollows a user.
+    """
     if not request.session.get('author_id'):
         return redirect('/app/login')
 
@@ -190,6 +207,9 @@ def unfollow_author(request, author_id):
     return redirect(f'/app/user/{author_id}/')
 
 def view_follow_requests(request):
+    """
+    Shows all pending follow requests for the logged-in author.
+    """
     author_id = request.session.get('author_id')
     if not author_id:
         return redirect('/app/login')
@@ -203,6 +223,10 @@ def view_follow_requests(request):
     })
 
 def approve_follow(request, req_id):
+    """
+    Approves a follow request.
+    Adds requester to followers of target author and deletes the request.
+    """
     follow_request = get_object_or_404(FollowRequest, id=req_id)
     follow_request.target.followers.add(follow_request.requester)
     follow_request.delete()
@@ -210,7 +234,27 @@ def approve_follow(request, req_id):
     return redirect('view_follow_requests')
 
 def deny_follow(request, req_id):
+    """
+    Denies a follow request by deleting it.
+    """
     follow_request = get_object_or_404(FollowRequest, id=req_id)
     follow_request.delete()
     messages.info(request, "Request denied.", extra_tags='follow')
     return redirect('view_follow_requests')
+
+def connections(request):
+    author_id = request.session.get('author_id')
+    if not author_id:
+        return redirect('/app/login')
+    author = get_object_or_404(Author, id=author_id)
+
+    # From https://stackoverflow.com/questions/4523282/django-in-not-in-query by Harph
+    followers = author.followers.exclude(id__in=author.following.values_list("id", flat=True))
+    followings = author.following.exclude(id__in=author.followers.values_list("id", flat=True))
+    friends = author.friends()
+
+    return render(request, "connections.html", {
+        "followers": followers,
+        "followings": followings,
+        "friends": friends
+    })

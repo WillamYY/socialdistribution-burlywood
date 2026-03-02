@@ -82,12 +82,16 @@
         <p><strong>GitHub:</strong> 
           {% if author.github %}
             <a href="{{ author.github }}" target="_blank">{{ author.github }}</a>
-            <p><strong>Followers:</strong> {{ followers_count }} |
-            <strong>Following:</strong> {{ following_count }}</p>
           {% else %}
             Not provided
           {% endif %}
         </p>
+
+        <ul>
+          <li><a href="{% url 'connections' %}#followers"><strong>Followers:</strong> {{ followers_count }}</a></li>
+          <li><a href="{% url 'connections' %}#following"><strong>Following:</strong> {{ following_count }}</a></li>
+          <li><a href="{% url 'connections' %}#friends"><strong>Friends:</strong> {{ friends_count }}</a></li>
+        </ul>
 
         <div class="action-row">
           <a href="/app/edit-profile" class="button">Edit Profile</a>

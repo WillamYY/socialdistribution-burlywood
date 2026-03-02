@@ -35,6 +35,7 @@ INSTALLED_APPS = [
     "core",
     "entries",
     "api",
+    "interactions",
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',

@@ -1,3 +1,5 @@
+{% extends 'base.html' %}
+
 {% load static %}
 <!DOCTYPE html>
 <html lang="en">
@@ -7,6 +9,7 @@
     <title>Document</title>
 </head>
 <body>
+    {% block content %}
     {% if allowed %}
     <header>
         <h1>{{ entry.title }}</h1>
@@ -16,7 +19,7 @@
     </header>
     <main>
         <article>
-            {{entry.content}}
+            {{entry.content|safe}}
         </article>
         <form method="POST" action="button">
             <!-- add like functionality here -->
@@ -40,5 +43,6 @@
         <a href="{% url 'view_entries' entry.author.id %}">Back</a>
     </main>
     {% endif %}
+    {% endblock %}
 </body>
 </html>
