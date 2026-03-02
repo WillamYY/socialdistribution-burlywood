@@ -2,7 +2,7 @@ from django.urls import path
 from . import views
 from django.contrib import admin
 
-app_name = "api"
+#app_name = "api"
 
 # Specifies the url patterns for all in the api of the project
 urlpatterns = [
@@ -21,4 +21,6 @@ urlpatterns = [
     path("authors/<int:author_id>/entries/", views.ApiEntries, name="ApiEntries"),
     path("authors/<int:author_id>/entries/<uuid:entry_id>/image", views.ApiEntryImage, name="ApiEntryImage"),
     path("entries/<uuid:entry_id>/image", views.ApiEntryImage, name="ApiEntryImageGlobal"),
+    path("authors/<int:author_id>/entries/<uuid:entry_id>/comments/", views.ApiEntryComments, name="api-entry-comments"),
+    path("authors/<int:author_id>/entries/<uuid:entry_id>/comments/add/", views.ApiAddComment, name="api-add-comment"),
 ]

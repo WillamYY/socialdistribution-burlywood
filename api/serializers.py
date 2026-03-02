@@ -1,7 +1,7 @@
 from rest_framework import serializers
-from core.models import Author
+from .models import Author
 from entries.models import Entry
-from interactions.models import Like
+from interactions.models import Like, Comment
 from .models import Author as APIAuthor
 
 """
@@ -148,7 +148,7 @@ class EntrySerializer(serializers.ModelSerializer):
         likes_url = f"{base_url}likes" 
         
         # Query the database for likes on this entry
-        entry_likes = Like.objects.filter(entry=obj)
+        entry_likes = Like.objects.filter(object=base_url)
         
         # Package the data for LikesSerializer
         likes_data = {
@@ -173,3 +173,17 @@ class EntriesSerializer(serializers.Serializer):
     size = serializers.IntegerField()
     count = serializers.IntegerField()
     src = EntrySerializer(many=True)
+
+class CommentSerializer(serializers.ModelSerializer):
+    type = serializers.CharField(default="comment", read_only=True)
+
+    class Meta:
+        model = Comment
+        fields = [
+            "type",
+            "id",
+            "author",
+            "comment",
+            "contentType",
+            "published",
+        ]
