@@ -9,7 +9,7 @@ def add_like(request, entry_id):
         author_id = request.session.get("author_id")
 
         if not author_id:
-            return redirect('/app/login') 
+            return redirect('/app/login/') 
             
         entry = get_object_or_404(Entry, id=entry_id)
         entry_fqid = f"{request.build_absolute_uri('/')[:-1]}/app/entry/{entry.id}/"
@@ -33,7 +33,7 @@ def add_comment(request, entry_id):
         author_id = request.session.get("author_id")
         
         if not author_id:
-            return redirect('/app/login')
+            return redirect('/app/login/')
 
         entry = get_object_or_404(Entry, id=entry_id)
         comment_text = request.POST.get("comment")
@@ -57,7 +57,7 @@ def add_comment_like(request, comment_id):
     if request.method == "POST":
         author_id = request.session.get("author_id")
         if not author_id:
-            return redirect('/app/login')
+            return redirect('/app/login/')
 
         base = request.build_absolute_uri('/')[:-1]
 
