@@ -80,8 +80,10 @@ POST /api/authors/2/inbox
 
 ### Status codes
 * `201` → Like object successfully created
-* `404` → Author or object not found
+* `400` → Author does not have object of that ID or Author does not exist
+* `404` → Object not found
 * `405` → Method not allowed on endpoint
+* `409` → Object already liked by author
 
 ### Listing an Entry's likes
 
@@ -199,7 +201,6 @@ POST /api/authors/2/inbox
 
 ### Status codes
 * `200` → Successfully returned query
-* `404` → Author not found
 * `405` → Method not allowed on endpoint
 
 ### Getting a single like object
@@ -267,7 +268,6 @@ POST /api/authors/2/inbox
 
 ### Status codes
 * `200` → Successfully returned query
-* `404` → Author not found
 * `405` → Method not allowed on endpoint
 
 ### Getting a single like object (LOCAL)
