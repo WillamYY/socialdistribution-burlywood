@@ -21,18 +21,18 @@
         <article>
             {{entry.content|safe}}
         </article>
-        <form method="POST" action="button">
+        <!-- <form method="POST" action="button"> -->
             <!-- add like functionality here -->
-            <label class="offscreen" for=""></label>
+            <!-- <label class="offscreen" for=""></label>
             <input type="submit" name="" id="">
-        </form>
+        </form> -->
         <a href="{% url 'view_entries' entry.author.id %}">Back</a>
-        <section>
+        <!-- <section>
             <h2>Comments:</h2>
-            {% for comment in entry.comments %}
+            {% for comment in entry.comments %} -->
             <!-- add comments functionality here -->
             {% endfor %}
-        </section>
+        <!-- </section> -->
     </main>
     {% else %}
     <header>
