@@ -1,0 +1,103 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
+
+:root {
+  --bg-page: #f6f7fb;
+  --bg-card: #ffffff;
+  --text-main: #111827;
+  --text-muted: #6b7280;
+  --border: #e5e7eb;
+  --primary: #2563eb;
+  --primary-hover: #1d4ed8;
+  --success: #16a34a;
+  --danger: #dc2626;
+  --shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
+  --radius: 12px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
+  background-color: var(--bg-page);
+  color: var(--text-main);
+}
+
+.top-nav {
+  display: flex;
+  gap: 14px;
+  justify-content: center;
+  align-items: center;
+  padding: 15px 16px;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.top-nav a {
+  text-decoration: none;
+  color: var(--text-main);
+  font-weight: 600;
+  font-size: 14px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  transition: background-color 0.2s ease;
+}
+
+.top-nav a:hover {
+  background-color: #eef2ff;
+  color: var(--primary);
+}
+
+.page {
+  max-width: 980px;
+  margin: 32px auto 60px;
+  padding: 0 20px;
+}
+
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 24px;
+}
+
+.card h1,
+.card h2 {
+  margin-top: 0;
+}
+
+.button {
+  display: inline-block;
+  padding: 8px 14px;
+  border-radius: 8px;
+  background: var(--primary);
+  color: white;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.button:hover {
+  background: var(--primary-hover);
+}
+
+.button.secondary {
+  background: #4b5563;
+}
+
+.button.success {
+  background: var(--success);
+}
+
+.button.danger {
+  background: var(--danger);
+}
+
+.muted {
+  color: var(--text-muted);
+}
