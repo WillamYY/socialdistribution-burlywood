@@ -1,36 +1,17 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <title>Authors Directory</title>
+  <link rel="stylesheet" href="{% static 'core/styles.css' %}">
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      background-color: #fafafa;
-      margin: 0;
-      padding: 0;
-      display: flex;
-      justify-content: center;
-    }
-    .container {
-      margin: 40px;
-      background: white;
-      padding: 30px;
-      border-radius: 10px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-      width: 650px;
-    }
-    h1 {
-      text-align: center;
-      color: #333;
-      margin-bottom: 25px;
-    }
     .author-card {
       display: flex;
       align-items: center;
       gap: 15px;
       border-bottom: 1px solid #eee;
-      padding: 10px 0;
+      padding: 12px 0;
     }
     .profile-pic {
       width: 60px;
@@ -45,59 +26,64 @@
     .author-info h3 {
       margin: 0;
       font-size: 18px;
-      color: #333;
+      color: #111827;
     }
     .author-info p {
       margin: 2px 0;
       font-size: 14px;
-      color: #777;
-    }
-    a.button {
-      background-color: #1a73e8;
-      color: white;
-      padding: 6px 12px;
-      border-radius: 5px;
-      text-decoration: none;
-      font-size: 14px;
-    }
-    a.button:hover {
-      background-color: #155ab6;
+      color: #6b7280;
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1>All Authors on This Node</h1>
+  <nav class="top-nav">
+    <a href="/">Home</a>
+    <a href="/app/stream/">Stream</a>
+    <a href="/app/my-entries/">My Entries</a>
+    <a href="/app/create-entry/">Create Entry</a>
     {% if request.session.author_id %}
-    <p style="text-align:center; margin-bottom: 20px;">
-      <a href="{% url 'stream' %}" class="button" style="background-color: #4caf50;">Go to Stream</a>
-    </p>
+      <a href="/app/profile/">My Profile</a>
+      <a href="/app/follow-requests/">Follow Requests</a>
+      <a href="/app/logout/">Logout</a>
+    {% else %}
+      <a href="/app/login/">Login</a>
+      <a href="/app/signup/">Sign Up</a>
     {% endif %}
-    <ul style="list-style:none; padding:0;">
-      {% for user in users %}
-        <li>
-          <div class="author-card">
-            {% load static %}
-            {% if user.picture and user.picture.name %}
-              <img src="{{ user.picture.url }}" class="profile-pic" alt="{{ user.username }}">
-            {% else %}
-              <img src="{% if user.picture %}{{ user.picture.url }}{% else %}{% static 'images/default_profile.jpg' %}{% endif %}" class="profile-pic" alt="Profile Picture">
-            {% endif %}
-            
-            <div class="author-info">
-              <h3>{{ user.username }}</h3>
-              {% if user.name %}
-                <p>{{ user.name }}</p>
+  </nav>
+  <div class="page">
+    <div class="card">
+      <h1>All Authors on This Node</h1>
+      {% if request.session.author_id %}
+        <p class="muted">Browse authors or jump to your stream.</p>
+        <p>
+          <a href="{% url 'stream' %}" class="button success">Go to Stream</a>
+        </p>
+      {% endif %}
+      <ul style="list-style:none; padding:0;">
+        {% for user in users %}
+          <li>
+            <div class="author-card">
+              {% if user.picture and user.picture.name %}
+                <img src="{{ user.picture.url }}" class="profile-pic" alt="{{ user.username }}">
+              {% else %}
+                <img src="{% if user.picture %}{{ user.picture.url }}{% else %}{% static 'images/default_profile.jpg' %}{% endif %}" class="profile-pic" alt="Profile Picture">
               {% endif %}
-            </div>
+              
+              <div class="author-info">
+                <h3>{{ user.username }}</h3>
+                {% if user.name %}
+                  <p>{{ user.name }}</p>
+                {% endif %}
+              </div>
 
-            <a href="{% url 'ProfileDisplay' user.id %}" class="button">View Profile</a>
-          </div>
-        </li>
-      {% empty %}
-        <li>No authors found.</li>
-      {% endfor %}
-    </ul>
+              <a href="{% url 'ProfileDisplay' user.id %}" class="button">View Profile</a>
+            </div>
+          </li>
+        {% empty %}
+          <li class="muted">No authors found.</li>
+        {% endfor %}
+      </ul>
+    </div>
   </div>
 </body>
 </html>
