@@ -217,7 +217,7 @@ class EntryWebUITests(TestCase):
         """
         User Story #14: As an author, entries I make can be in simple plain text.
         """
-        url = reverse('ApiEntries', kwargs={'author_id': self.author.id})
+        url = reverse('api:ApiEntries', kwargs={'author_id': self.author.id})
         data = {"contentType": "text/plain", "content": "## Not a Header"}
         self.client.post(url, data, format='json')
         
@@ -235,7 +235,7 @@ class EntryWebUITests(TestCase):
         other_author = AuthorModel.objects.create(username="hacker", name="Hacker")
 
         # Point to the original author's entry
-        url = reverse('ApiEntry', kwargs={
+        url = reverse('api:ApiEntry', kwargs={
             'author_id': self.author.id, 
             'entry_id': self.image_entry.id
         })
