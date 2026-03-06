@@ -3,6 +3,7 @@ import markdown
 import bleach
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import HttpResponse, JsonResponse
+from django.urls import reverse, resolve, Resolver404
 from django.contrib import messages
 from django.views.decorators.http import require_POST
 from django.db.models import Count, Q
@@ -193,36 +194,19 @@ def stream_view(request):
     )
 
     # Build the current user's URL
-    user_fqid = f"{request.build_absolute_uri('/')[:-1]}/authors/{viewer.id}"
+    base_url = request.build_absolute_uri('/')[:-1]
 
     for entry in entries:
-        entry_url = f"{request.build_absolute_uri('/')[:-1]}/app/entry/{entry.id}/"
-
-        # entry likes
+        entry_url = f"{base_url}/app/entry/{entry.id}/"
+        
+        # Fetch the count of interactions
+        entry.comment_count = Comment.objects.filter(entry=entry_url).count()
         entry.like_count = Like.objects.filter(object=entry_url).count()
-        entry.liked_by_user = Like.objects.filter(object=entry_url, author=user_fqid).exists()
-
-        # fetch comments
-        entry.fetched_comments = Comment.objects.filter(entry=entry_url).order_by("published")
-
-        # all objects liked by current user
-        liked_objects = Like.objects.filter(author=user_fqid).values_list("object", flat=True)
-
-        # extract UUIDs from liked objects
-        liked_uuids = {
-            obj.rstrip("/").split("/")[-1]
-            for obj in liked_objects
-        }
-
-        for comment in entry.fetched_comments:
-            comment_uuid = comment.id.rstrip("/").split("/")[-1]
-
-            comment.like_count = Like.objects.filter(
-                object__endswith=comment_uuid
-            ).count()
-
-            comment.liked_by_user = comment_uuid in liked_uuids
-
+        
+        if "author_id" in request.session:
+            user_fqid = f"{base_url}/authors/{request.session['author_id']}"
+            entry.liked_by_user = Like.objects.filter(object=entry_url, author=user_fqid).exists()
+        
     return render(
         request,
         "entries/stream.html",
@@ -394,17 +378,74 @@ def view_entries(request, author_id):
     })
 
 def get_entry(request, entry_id):
+    """
+    Get a single entry by ID
+    Check visibility as well as Like/Comment data.
+    """
     entry = get_object_or_404(Entry, id=entry_id)
-    if "author_id" in request.session:
-        logged_in_id = request.session.get("author_id")
+    
+    # Not found if entry is DELETED
+    if entry.visibility == "DELETED":
+        return HttpResponse(status=404)
+    
+    base_url = request.build_absolute_uri('/')[:-1]
+    entry_url = f"{base_url}/app/entry/{entry.id}/"
+    logged_in_id = request.session.get("author_id")
+    referer = request.META.get('HTTP_REFERER')
+    
+    if referer:
+        try:
+            # Resolve the URL to see which view function it points to
+            match = resolve(referer.replace(base_url, ""))
+            
+            # Update the return URL only if came from a LIST view (i.e. stream, my-entries, etc.)
+            list_views = ['stream', 'view_my_entries', 'view_entries']
+            
+            if match.url_name in list_views:
+                request.session['last_feed_url'] = referer
+        except (Resolver404, ValueError):
+            # If the URL doesn't match, don't update the session
+            pass
+
+    # Default to Stream if don't have a saved feed yet
+    return_url = request.session.get('last_feed_url', reverse('stream'))
+
+    # Base Entry Interactions
+    entry.like_count = Like.objects.filter(object=entry_url).count()
+    entry.fetched_comments = Comment.objects.filter(entry=entry_url).order_by('published')
+
+    # Check if the logged-in user liked the this entry
+    if logged_in_id:
+        user_fqid = f"{base_url}/authors/{logged_in_id}"
+        entry.liked_by_user = Like.objects.filter(object=entry_url, author=user_fqid).exists()
+    else:
+        entry.liked_by_user = False
+
+    # Fetch data for each comment
+    for comment in entry.fetched_comments:
+        comment_url = comment.id 
+        comment.like_count = Like.objects.filter(object=comment_url).count()
+        
+        if logged_in_id:
+            user_fqid = f"{base_url}/authors/{logged_in_id}"
+            comment.liked_by_user = Like.objects.filter(object=comment_url, author=user_fqid).exists()
+
+    # Check the visibility for the logged-in user
+    allowed = False
+
+    if entry.visibility in ["PUBLIC", "UNLISTED"]:
+        allowed = True
+    elif logged_in_id:
         viewer = get_object_or_404(Author, id=logged_in_id)
-        return render(
-            request,
-            "entries/entry.html",
-            {"entry": entry, "allowed": entry.visibility in ["PUBLIC", "UNLISTED"] or viewer in entry.author.friends()},
-        )
-    return render(
-        request,
-        "entries/entry.html",
-        {"entry": entry, "allowed": entry.visibility in ["PUBLIC", "UNLISTED"]},
-    )
+        # Author can always see their own non-deleted entries
+        if viewer == entry.author:
+            allowed = True
+        # Friends check for mutual followers
+        elif entry.visibility == "FRIENDS" and viewer in entry.author.friends():
+            allowed = True
+
+    return render(request, "entries/entry.html", {
+        "entry": entry,
+        "allowed": allowed,
+        "return_url": return_url,
+    })
