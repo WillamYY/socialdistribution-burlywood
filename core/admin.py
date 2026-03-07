@@ -18,7 +18,7 @@ class AuthorRequestAdmin(admin.ModelAdmin):
             # Gets the info from request
             authorInfo = AuthorRequest.objects.get(pk=authorrequest.id)
             # Creates the new author with it's username and password
-            newAuthor = Author(id = authorInfo.id,username = authorInfo.username,name = authorInfo.name,github = authorInfo.github, picture = authorInfo.picture,host = authorInfo.host)
+            newAuthor = Author(id = authorInfo.id,username = authorInfo.username,name = authorInfo.name,github = authorInfo.github, picture = authorInfo.picture,picture_url =authorInfo.picture_url,host = authorInfo.host)
             newAuthor.set_password(authorInfo.password)
             newAuthor.save()
             web = f"{newAuthor.host[:len(newAuthor.host) - len("api/")]}/authors/{newAuthor.id}"

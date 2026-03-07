@@ -59,7 +59,7 @@
     </nav>
     <div class="page">
         <div class="card profile-card">
-            <img src="{% if author.picture %}{{ author.picture.url }}{% else %}{% static 'images/default_profile.jpg' %}{% endif %}" 
+            <img src="{% if author.picture %}{{ author.picture.url }}{% elif author.picture_url %}{{ author.picture_url }}{% else %}{% static 'images/default_profile.jpg' %}{% endif %}" 
                  alt="Profile Picture" 
                  class="profile-picture">
 

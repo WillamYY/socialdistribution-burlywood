@@ -34,7 +34,7 @@ def ApiAuthors(request):
     for author in allAuthors:
         # Gets the authors info
         authorID = author.host + "authors/" + str(author.id)
-        authorInfo = {"type":"author","id": authorID,"host": author.host,"displayName": author.name, "github":author.github, "profileImage":author.picture,"web":author.web}
+        authorInfo = {"type":"author","id": authorID,"host": author.host,"displayName": author.name, "github":author.github, "profileImage":author.picture_url,"web":author.web}
         authors.append(authorInfo)
     # If size is not specified returns all authors
     if size == None:
@@ -59,7 +59,7 @@ def ApiAuthor(request,id):
         author = get_object_or_404(Author,pk=id) # Gets the author
         authorID = author.host + "authors/" + str(author.id)
         # Creates the information that will be returned
-        authorInfo = {"type":"author","id": authorID,"host": author.host,"displayName": author.name, "github":author.github, "profileImage":author.picture,"web":author.web}
+        authorInfo = {"type":"author","id": authorID,"host": author.host,"displayName": author.name, "github":author.github, "profileImage":author.picture_url,"web":author.web}
         return Response(authorInfo)
     elif request.method == "PUT":
         # Replaces the object if it is put on top of
@@ -67,10 +67,10 @@ def ApiAuthor(request,id):
             # Ensures that the authors id matches the correct Id of where it is being placed and that the name is unique
             if str(id) == request.data.get("id").split("/")[-1] and not Author.objects.filter(username = request.data.get("displayName")).exists():
                 # Creates an author request with the information
-                author = AuthorRequest(id = id,username = request.data.get("displayName"),name = request.data.get("displayName"),github = request.data.get("github"),picture = request.data.get("profileImage"),web = request.data.get("web"),host = request.data.get("host") )
+                author = AuthorRequest(id = id,username = request.data.get("displayName"),name = request.data.get("displayName"),github = request.data.get("github"),web = request.data.get("web"), host = request.data.get("host"),picture_url = request.data.get("profileImage"))
                 author.save()
                 authorID = author.host + "authors/" + str(author.id)
-                return Response({"type":"author","id": authorID,"host": author.host,"displayName": author.name, "github":author.github, "profileImage":author.picture,"web":author.web})
+                return Response({"type":"author","id": authorID,"host": author.host,"displayName": author.name, "github":author.github, "profileImage":author.picture_url,"web":author.web})
             # If the authors Id is invalid return a 400 respose
             else:
                 return Response(status = 400)
@@ -89,12 +89,12 @@ def ApiAuthor(request,id):
                 author.username = request.data.get("displayName")
                 author.name = request.data.get("displayName")
                 author.github = request.data.get("github")
-                author.picture = request.data.get("profileImage")
                 author.web = request.data.get("web")
+                author.picture_url = request.data.get("profileImage")
                 author.save()
                 # Turns the authors id into it's string
                 authorID = author.host + "authors/" + str(author.id)
-                return Response({"type":"author","id": authorID,"host": author.host,"displayName": author.name, "github":author.github, "profileImage":author.picture,"web":author.web})
+                return Response({"type":"author","id": authorID,"host": author.host,"displayName": author.name, "github":author.github, "profileImage":author.picture_url,"web":author.web})
             else:
                 return Response(status = 400)
     # Returns a 405 error if using invalid method

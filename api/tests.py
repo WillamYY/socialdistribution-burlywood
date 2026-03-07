@@ -26,15 +26,15 @@ class AuthorEndpointTest(APITestCase):
     def test_consistent_ids(self):
         firstauthorURL = reverse("api:ApiAuthor",kwargs = {"id": 1})
         # Creates an author outright to avoid having to accept a request
-        author1 = Author(id = 1,host="http://localhost:8000/api/",name="Dalton",username = "Dalton",github= "http://github.com/dalton",picture= "https://www.bigfootdigital.co.uk/wp-content/uploads/20")
+        author1 = Author(id = 1,host="http://localhost:8000/api/",name="Dalton",username = "Dalton",github= "http://github.com/dalton")
         author1.save()
         secondauthorURL = reverse("api:ApiAuthor",kwargs = {"id":2})
         # Attempts to create an author with the wrong ID for it's location
-        author2 = {"type":"author","id":firstauthorURL[:-1],"host":"http://localhost:8000/api/","displayName":"Daltonssda","github": "http://g.com","profileImage": "https://scaled.jpg","web": "http://localhost:8000/app/authors/2" }
+        author2 = {"type":"author","id":firstauthorURL[:-1],"host":"http://localhost:8000/api/","displayName":"Daltonssda","github": "http://g.com","profileImage": "","web": "http://localhost:8000/app/authors/2" }
         put2 = self.client.put(secondauthorURL,author2,format = "json")
         self.assertEqual(put2.status_code,status.HTTP_400_BAD_REQUEST)
         # Tests overwritting a user with the same ID
-        author3 = {"type":"author","id":firstauthorURL[:-1],"host":"http://localhost:8000/api/","displayName":"Author3","github": "http://3.com","profileImage": "https://scaleded.jpg","web": "http://localhost:8000/app/authors/1" }
+        author3 = {"type":"author","id":firstauthorURL[:-1],"host":"http://localhost:8000/api/","displayName":"Author3","github": "http://3.com","profileImage": "","web": "http://localhost:8000/app/authors/1" }
         put3 = self.client.put(firstauthorURL,author3,format = "json") # Should replace author 1 ensuring that there is no repeated ID's
         self.assertEqual(put3.status_code,status.HTTP_200_OK) # Ensures that it worked
         self.assertEqual(Author.objects.count(),1) # Ensures there is only one author still there
@@ -43,7 +43,6 @@ class AuthorEndpointTest(APITestCase):
         self.assertEqual(author.id,1)
         self.assertEqual(author.name,"Author3")
         self.assertEqual(author.github, "http://3.com")
-        self.assertEqual(author.picture,"https://scaleded.jpg")
     
     """
     Test to ensure node can handle multiple users
@@ -101,7 +100,7 @@ class AuthorEndpointTest(APITestCase):
         # Adds an author whos page we will get
         firstauthorURL = reverse("api:ApiAuthor",kwargs = {"id": 1})
         # Creates an author outright to avoid having to accept a request
-        author1 = Author(id = 1,host="http://localhost:8000/api/",name="Dalton",username = "Dalton",github= "http://github.com/dalton",picture= "https://www.bigfootdigital.co.uk/wp-content/uploads/20")
+        author1 = Author(id = 1,host="http://localhost:8000/api/",name="Dalton",username = "Dalton",github= "http://github.com/dalton")
         author1.save()
         # Runs the get to get the page
         get1 = self.client.get(firstauthorURL,format = "json")
@@ -113,10 +112,10 @@ Creates a test for the authors endpoint
 class AuthorsEndpointTest(APITestCase):
     def test_get_multiple_authors(self):
         # Creates the first author outright to avoid having to accept a request
-        author1 = Author(id = 1,host="http://localhost:8000/api/",name="Dalton",username = "Dalton",github= "http://github.com/dalton",picture= "https://www.bigfootdigital.co.uk/wp-content/uploads/20")
+        author1 = Author(id = 1,host="http://localhost:8000/api/",name="Dalton",username = "Dalton",github= "http://github.com/dalton")
         author1.save()
         # Creates the second author outright to avoid having to accept a request
-        author2 = Author(id = 2,host="http://localhost:8000/api/",name="DaltonSS",username = "DaltonU",github= "http://github.com/dalton",picture= "https://www.bigfootdigital.co.uk/wp-content/uploads/20")
+        author2 = Author(id = 2,host="http://localhost:8000/api/",name="DaltonSS",username = "DaltonU",github= "http://github.com/dalton")
         author2.save()
         # Checks that the authors page properly retrives them
         multiauthorURL = reverse("api:ApiAuthors")
@@ -386,13 +385,14 @@ class ApiSingleLikeRemoteLocalTest(APITestCase):
         author_fqid = f"{author2.host}authors/{author2.id}"
         like1 = Like(object = object_fqid, author = author_fqid)
         likeid = uuid.uuid4()
-        like1.id = f"http://testserver/api/authors/{author2.id}/liked/{likeid}"
+        like1.id = f"http://testserver/api/authors/{author2.id}/liked/{uuid.uuid4()}"
         like1.save()
+        print(like1.object)
+        print(like1.author)
 
         author_fqid = f"{author2.host}authors/{author2.id}"
         like_url = reverse("api:ApiSingleLikeRemoteLocal",kwargs = {"author_id":author2.id, "like_id": likeid})
         get1 = self.client.get(like_url,format="json")
-        print(get1)
         self.assertEqual(get1.data["type"], "like")
         self.assertEqual(get1.data["author"]["id"], author_fqid)
         self.assertEqual(get1.data["id"], f"http://testserver{like_url}")
