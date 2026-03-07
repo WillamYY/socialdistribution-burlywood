@@ -741,7 +741,7 @@ class EntryAPITest(APITestCase):
             "entry_id": text_entry.id
         })
         text_response = self.client.get(text_image_url)
-        self.assertEqual(text_response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(text_response.status_code, status.HTTP_400_BAD_REQUEST)
 
         # Global image endpoint
         global_url = reverse("api:ApiEntryImageGlobal", kwargs={"entry_id": self.image_entry.id})

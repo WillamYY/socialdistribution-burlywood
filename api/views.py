@@ -423,12 +423,32 @@ def ApiEntryImage(request, author_id=None, entry_id=None):
 
     # Check if base64 data, implying an image
     if ";base64" not in entry.contentType:
-        return HttpResponse("This entry is not an image.", status=404)
+        return HttpResponse("This entry is not an image.", status=400)
     
-    # Check if public entry or if user is authenticated
-    if entry.visibility != "PUBLIC" and not request.user.is_authenticated:
+    # Not found if entry is DELETED
+    if entry.visibility == "DELETED":
+        return HttpResponse(status=404)
+    
+    # Check the visibility for the logged-in user
+    allowed = False
+    logged_in_id = request.session.get("author_id")
+
+    # Anyone with the link can see Public and Unlisted
+    if entry.visibility in ["PUBLIC", "UNLISTED"]:
+        allowed = True
+    elif logged_in_id:
+        viewer = get_object_or_404(Author, id=logged_in_id)
+        # Author can always see their own non-deleted entries
+        if viewer == entry.author:
+            allowed = True
+        # Friends check for mutual followers
+        elif entry.visibility == "FRIENDS" and viewer in entry.author.friends():
+            allowed = True
+
+    if not allowed:
         return HttpResponseForbidden("You do not have permission to view this image.")
     
+    # Decode and Serve
     try:
         # Strip the content string to get the actual base64 data 
         content_str = entry.content
