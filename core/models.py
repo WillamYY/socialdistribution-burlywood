@@ -53,3 +53,8 @@ class AuthorRequest(models.Model):
     id = models.AutoField(primary_key = True) # Makes each request unique
     username = models.CharField(max_length=40, unique=True)  # Login ID
     password = models.CharField(max_length=40)           # Hashed password
+    name = models.CharField(max_length = 40,default = "user") # Display name
+    github = models.URLField(blank=True)
+    picture = models.URLField(blank=True, null=True)
+    host = models.URLField(blank=True)
+    web = models.URLField(blank=True)

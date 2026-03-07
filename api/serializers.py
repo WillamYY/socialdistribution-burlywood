@@ -1,8 +1,7 @@
 from rest_framework import serializers
-from .models import Author
+from core.models import Author
 from entries.models import Entry
 from interactions.models import Like, Comment
-from .models import Author as APIAuthor
 
 """
 Serializes author objects
@@ -47,7 +46,7 @@ class LikeSerializer(serializers.ModelSerializer):
     # Serializes the author
     def get_author(self, obj):
         author_id = obj.author.split("/")[-1]
-        author_obj = APIAuthor.objects.get(id = int(author_id))
+        author_obj = Author.objects.get(id = int(author_id))
         return AuthorSerializer(author_obj).data
 
 """

@@ -13,7 +13,7 @@ urlpatterns = [
     path("entries/<path:entry_fqid>/likes",views.ApiEntryLikes, name="ApiEntryLikes"),
 
     path("authors/<int:author_id>/liked", views.ApiAuthorLiked, name="ApiAuthorLiked"),
-    path("authors/<int:author_id>/liked/<int:like_id>", views.ApiSingleLikeRemoteLocal, name="ApiSingleLikeRemoteLocal"),
+    path("authors/<int:author_id>/liked/<uuid:like_id>", views.ApiSingleLikeRemoteLocal, name="ApiSingleLikeRemoteLocal"),
     path("authors/<path:author_fqid>/liked", views.ApiAuthorLikedLocal, name="ApiAuthorLikedLocal"),
     path("liked/<path:like_url>", views.ApiSingleLikeLocal, name="ApiSingleLikeLocal"),
     
