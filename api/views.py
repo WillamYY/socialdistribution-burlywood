@@ -206,7 +206,9 @@ def ApiSendLike(request,author_id):
                 return Response(status = 409)
 
             like = Like(author = request.data.get("author").get("id"), object = request.data.get("object"))
-
+            likeId = uuid.uuid4()
+            like.id =f"{request.build_absolute_uri('/')[:-1]}/likes/{likeId}"
+            like.uuid = likeId
             like.save()
             like_serializer = LikeSerializer(like)
             return Response(status = 201, data = like_serializer.data)
@@ -236,8 +238,8 @@ def ApiAuthorLiked(request, author_id):
     # only deal with local for now
     likes = []
     for like in likes_tmp:
-        entry_id = like.object.split("/")[-1]
-        if Entry.objects.filter(id = entry_id, visibility__in = ["PUBLIC", "UNLISTED"]).exists():
+        id = like.object.rstrip("/").split("/")[-1]
+        if Entry.objects.filter(id = id, visibility__in = ["PUBLIC", "UNLISTED"]).exists():
             likes.append(like)
 
     count = len(likes)
@@ -255,9 +257,8 @@ def ApiAuthorLiked(request, author_id):
 @api_view(["GET"])
 def ApiSingleLikeRemoteLocal(request, author_id, like_id):
     author_fqid = "/".join(request.build_absolute_uri().split("/")[:-2])
-    likeURL = f"{request.build_absolute_uri('/')[:-1]}/likes/{uuid.uuid4()}"
-    if Like.objects.filter(id = likeURL, author = author_fqid).exists():
-        like = Like.objects.get(id = likeURL, author = author_fqid)
+    if Like.objects.filter(uuid = like_id, author = author_fqid).exists():
+        like = Like.objects.get(uuid = like_id, author = author_fqid)
         like_json = LikeSerializer(like)
         return Response(like_json.data)
     return Response(status = 404)
@@ -282,8 +283,8 @@ def ApiAuthorLikedLocal(request, author_fqid):
     likes_tmp = Like.objects.filter(author = author_fqid).order_by("-published")
     likes = []
     for like in likes_tmp:
-        entry_id = like.object.split("/")[-1]
-        if Entry.objects.filter(id = entry_id, visibility__in = ["PUBLIC", "UNLISTED"]).exists():
+        id = like.object.rstrip("/").split("/")[-1]
+        if Entry.objects.filter(id = id, visibility__in = ["PUBLIC", "UNLISTED"]).exists():
             likes.append(like)
 
     count = len(likes)
@@ -301,9 +302,9 @@ def ApiAuthorLikedLocal(request, author_fqid):
 @api_view(["GET"])
 def ApiSingleLikeLocal(request, like_url):
     like_id = like_url.split("/")[-1]
-    author_fqid = "/".join(like_url.split("/")[:6])
-    if Like.objects.filter(id = int(like_id), author = author_fqid):
-        like_object = Like.objects.get(id = int(like_id), author = author_fqid)
+    #author_fqid = "/".join(like_url.split("/")[:6])
+    if Like.objects.filter(uuid = like_id):
+        like_object = Like.objects.get(uuid = like_id)
 
         like_json = LikeSerializer(like_object)
         return Response(like_json.data)

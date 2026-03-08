@@ -165,8 +165,12 @@ class AuthorEntryLikeEndpointTest(APITestCase):
         author1_fqid = f"{author1.host}authors/{author1.id}"
         author2_fqid = f"{author2.host}authors/{author2.id}"
         like1 = Like(object = object_fqid, author = author1_fqid)
+        like1.uuid = uuid.uuid4()
+        like1.id = f"{author1_fqid}/liked/{like1.uuid}"
         like1.save()
         like2 = Like(object = object_fqid, author = author2_fqid)
+        like2.uuid = uuid.uuid4()
+        like2.id = f"{author2_fqid}/liked/{like2.uuid}"
         like2.save()
         # Gets the info from the website
         like_url = f"{reverse("api:ApiAuthorAndEntryLikes",kwargs = {"author_id":author1.id,"entry_id":entry1.id})}?page_number=1&size=1"
@@ -233,8 +237,12 @@ class EntryLikeEndpointTest(APITestCase):
         author1_fqid = f"{author1.host}authors/{author1.id}"
         author2_fqid = f"{author2.host}authors/{author2.id}"
         like1 = Like(object = object_fqid, author = author1_fqid)
+        like1.uuid = uuid.uuid4()
+        like1.id = f"{author1_fqid}/liked/{like1.uuid}"
         like1.save()
         like2 = Like(object = object_fqid, author = author2_fqid)
+        like2.uuid = uuid.uuid4()
+        like2.id = f"{author2_fqid}/liked/{like2.uuid}"
         like2.save()
         # Gets the info from the website
         like_url = f"{reverse("api:ApiEntryLikes",kwargs = {"entry_fqid":object_fqid})}?page_number=1&size=1"
@@ -306,9 +314,11 @@ class ApiAuthorLikedTest(APITestCase):
         object_fqid = f"{author1.host}authors/{author1.id}/entries/{entry1.id}"
         author_fqid = f"{author2.host}authors/{author2.id}"
         like1 = Like(object = object_fqid, author = author_fqid)
+        like1.uuid = uuid.uuid4()
+        like1.id = f"{author_fqid}/liked/{like1.uuid}"
         like1.save()
 
-        like_id = f"{author_fqid}/liked/{like1.id}"
+        like_id = f"{author_fqid}/liked/{like1.uuid}"
 
         # Gets the info from the website
         like_url = reverse("api:ApiAuthorLiked",kwargs = {"author_id":author2.id})
@@ -320,7 +330,7 @@ class ApiAuthorLikedTest(APITestCase):
         self.assertEqual(get1.data["id"], f"http://testserver{like_url}")
         self.assertEqual(get1.data["src"][0]["type"], "like")
         self.assertEqual(get1.data["src"][0]["author"]["id"], author_fqid)
-        self.assertEqual(get1.data["src"][0]["id"], like_id)
+        self.assertEqual(get1.data["src"][0]["id"], like1.id)
         self.assertEqual(get1.data["src"][0]["object"], object_fqid)
 
     def test_get_author_like_pagination(self):
@@ -336,13 +346,17 @@ class ApiAuthorLikedTest(APITestCase):
         object1_fqid = f"{author.host}authors/{author.id}/entries/{entry1.id}"
         author_fqid = f"{author.host}authors/{author.id}"
         like1 = Like(object = object1_fqid, author = author_fqid)
+        like1.uuid = uuid.uuid4()
+        like1.id = f"{author_fqid}/liked/{like1.uuid}"
         like1.save()
 
         object2_fqid = f"{author.host}authors/{author.id}/entries/{entry2.id}"
         like2 = Like(object = object2_fqid, author = author_fqid)
+        like2.uuid = uuid.uuid4()
+        like2.id = f"{author_fqid}/liked/{like2.uuid}"
         like2.save()
         
-        like2_id = f"{author_fqid}/liked/{like2.id}"
+        like2_id = f"{author_fqid}/liked/{like2.uuid}"
 
         # Gets the info from the website
         like_url = f"{reverse("api:ApiAuthorLiked",kwargs = {"author_id":author.id})}?page_number=1&size=1"
@@ -384,14 +398,12 @@ class ApiSingleLikeRemoteLocalTest(APITestCase):
         object_fqid = f"{author1.host}authors/{author1.id}/entries/{entry1.id}"
         author_fqid = f"{author2.host}authors/{author2.id}"
         like1 = Like(object = object_fqid, author = author_fqid)
-        likeid = uuid.uuid4()
-        like1.id = f"http://testserver/api/authors/{author2.id}/liked/{uuid.uuid4()}"
+        like1.uuid = uuid.uuid4()
+        like1.id = f"http://testserver/api/authors/{author2.id}/liked/{like1.uuid}"
         like1.save()
-        print(like1.object)
-        print(like1.author)
 
         author_fqid = f"{author2.host}authors/{author2.id}"
-        like_url = reverse("api:ApiSingleLikeRemoteLocal",kwargs = {"author_id":author2.id, "like_id": likeid})
+        like_url = reverse("api:ApiSingleLikeRemoteLocal",kwargs = {"author_id":author2.id, "like_id": like1.uuid})
         get1 = self.client.get(like_url,format="json")
         self.assertEqual(get1.data["type"], "like")
         self.assertEqual(get1.data["author"]["id"], author_fqid)
@@ -412,6 +424,8 @@ class ApiAuthorLikedLocalTest(APITestCase):
         object_fqid = f"{author1.host}authors/{author1.id}/entries/{entry1.id}"
         author_fqid = f"{author2.host}authors/{author2.id}"
         like1 = Like(object = object_fqid, author = author_fqid)
+        like1.uuid = uuid.uuid4()
+        like1.id = f"http://testserver/api/authors/{author2.id}/liked/{like1.uuid}"
         like1.save()
 
         like_id = f"{author_fqid}/liked/{like1.id}"

@@ -41,7 +41,7 @@ class LikeSerializer(serializers.ModelSerializer):
     # Turns ID into URL
     def get_id(self, obj):
         author = self.get_author(obj)
-        return f"{author["id"]}/liked/{obj.id}"
+        return f"{author["id"]}/liked/{obj.uuid}"
     
     # Serializes the author
     def get_author(self, obj):

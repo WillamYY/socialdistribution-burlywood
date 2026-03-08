@@ -34,6 +34,7 @@ class Like(models.Model):
     type = "like"
 
     id = models.URLField(primary_key=True, max_length=500)
+    uuid = models.UUIDField(null = True)
     author = models.URLField(max_length=500)
     object = models.URLField(max_length=500)
     published = models.DateTimeField(default=timezone.now)
