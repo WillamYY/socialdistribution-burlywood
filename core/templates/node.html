@@ -66,6 +66,8 @@
             <div class="author-card">
               {% if user.picture and user.picture.name %}
                 <img src="{{ user.picture.url }}" class="profile-pic" alt="{{ user.username }}">
+                {% elif user.picture_url %}
+                <img src="{{ user.picture_url}}" class="profile-pic" alt="{{ user.username }}">
               {% else %}
                 <img src="{% if user.picture %}{{ user.picture.url }}{% else %}{% static 'images/default_profile.jpg' %}{% endif %}" class="profile-pic" alt="Profile Picture">
               {% endif %}

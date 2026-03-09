@@ -33,6 +33,7 @@ def SignUpProcessing(request):
                 #description=description,
                 #github=github,
                 #picture=picture
+                host = f"http://{request.get_host()}/api",
                 password = password
             )
             #new_author.set_password(password)  # hash password
