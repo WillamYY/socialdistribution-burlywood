@@ -862,3 +862,167 @@ class CommentApiTest(TestCase):
         )
 
         self.assertEqual(response.status_code, 404)
+
+class VisibilityAPITest(TestCase):
+    def setUp(self):
+        # Create Author A and Author B
+        self.author_a = Author.objects.create(username="A", name="AA")
+        self.author_b = Author.objects.create(username="B", name="BB")
+        
+        # Create different types of entries of Author A
+        self.private_entry = Entry.objects.create(
+            author=self.author_a,
+            title="A's Secret",
+            content="Top Secret",
+            visibility="FRIENDS"
+        )
+        
+        self.public_entry = Entry.objects.create(
+            author=self.author_a,
+            title="A's Entry Bus",
+            content="No More Secretes",
+            visibility="UNLISTED"
+        )
+
+        self.tiny_png_b64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="        
+        self.private_image_entry = Entry.objects.create(
+            id=uuid.uuid4(),
+            author=self.author_a,
+            title="Test Image Entry with PNG",
+            contentType="image/png;base64",
+            content=f"data:image/png;base64,{self.tiny_png_b64}",
+            visibility="FRIENDS"
+        )
+    
+    def test_api_public_access(self):
+        # Log in as B
+        session = self.client.session
+        session['author_id'] = self.author_b.id
+        session.save()
+
+        # Try to access A's unlisted entry via API
+        url = reverse('api:ApiEntry', kwargs={'author_id': self.author_a.id, 'entry_id': self.public_entry.id})
+        response = self.client.get(url)
+
+        # Check if the status code is 200 OK
+        self.assertEqual(response.status_code, 200)
+
+    def test_api_entry_visibility(self):
+        # Log in as B
+        session = self.client.session
+        session['author_id'] = self.author_b.id
+        session.save()
+
+        # Try to access A's private entry via API
+        url = reverse('api:ApiEntry', kwargs={'author_id': self.author_a.id, 'entry_id': self.private_entry.id})
+        response = self.client.get(url)
+        
+        # Check if the status code is 403 Forbidden
+        self.assertEqual(response.status_code, 403)
+
+        # Make B a friend of A (Mutual Follow)
+        self.author_a.followers.add(self.author_b)
+        self.author_b.followers.add(self.author_a)
+
+        url = reverse('api:ApiEntry', kwargs={'author_id': self.author_a.id, 'entry_id': self.private_entry.id})
+        response = self.client.get(url)
+        
+        # Check if the status code is 200 OK
+        self.assertEqual(response.status_code, 200)
+        
+    def test_api_image_visibility(self):
+        # Log in as B
+        session = self.client.session
+        session['author_id'] = self.author_b.id
+        session.save()
+
+        url = reverse('api:ApiEntryImage', kwargs={'author_id': self.author_a.id, 'entry_id': self.private_image_entry.id})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 403)
+
+        # Make B a friend of A (Mutual Follow)
+        self.author_a.followers.add(self.author_b)
+        self.author_b.followers.add(self.author_a)
+
+        url = reverse('api:ApiEntryImage', kwargs={'author_id': self.author_a.id, 'entry_id': self.private_image_entry.id})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+
+    def test_api_comments_visibility(self):
+        # Set up the private entry with a comment
+        base_url = "http://testserver"
+        entry_url = f"{base_url}/app/entry/{self.private_entry.id}/"
+        Comment.objects.create(
+            id=f"{base_url}/comments/test-uuid",
+            author=f"{base_url}/authors/{self.author_a.id}",
+            entry=entry_url,
+            comment="Secret comment"
+        )
+
+        # Log in as B
+        session = self.client.session
+        session['author_id'] = self.author_b.id
+        session.save()
+
+        url = reverse('api:ApiEntryComments', kwargs={'author_id': self.author_a.id, 'entry_id': self.private_entry.id})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 403)
+
+        # Make B a friend of A (Mutual Follow)
+        self.author_a.followers.add(self.author_b)
+        self.author_b.followers.add(self.author_a)
+
+        url = reverse('api:ApiEntryComments', kwargs={'author_id': self.author_a.id, 'entry_id': self.private_entry.id})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+    
+    def test_api_entry_likes_visibility(self):
+        base_url = "http://testserver"
+        entry_url = f"{base_url}/app/entry/{self.private_entry.id}/"
+    
+        APILike.objects.create(
+            author=f"http://testserver/api/authors/{self.author_a.id}",
+            object=entry_url
+        )
+
+        # Log in as B
+        session = self.client.session
+        session['author_id'] = self.author_b.id
+        session.save()
+
+        url = reverse('api:ApiAuthorAndEntryLikes', kwargs={'author_id': self.author_a.id, 'entry_id': self.private_entry.id})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 403)
+
+        # Make B a friend of A (Mutual Follow)
+        self.author_a.followers.add(self.author_b)
+        self.author_b.followers.add(self.author_a)
+
+        url = reverse('api:ApiAuthorAndEntryLikes', kwargs={'author_id': self.author_a.id, 'entry_id': self.private_entry.id})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+    
+    def test_api_liked_history_visibility(self):
+        # Setup B likes A's private entry
+        entry_url = f"http://testserver/app/entry/{self.private_entry.id}/"
+        APILike.objects.create(
+            author=f"http://testserver/authors/{self.author_b.id}",
+            object=entry_url
+        )
+
+        # Log in as C (stranger)
+        author_c = Author.objects.create(username="strangerC")
+        session = self.client.session
+        session['author_id'] = author_c.id
+        session.save()
+
+        # Let author C views B's 'Liked' history
+        url = reverse('api:ApiAuthorLiked', kwargs={'author_id': self.author_a.id})
+        response = self.client.get(url)
+        
+        # Check if the status code is 200 OK
+        self.assertEqual(response.status_code, 200)
+        
+        # Author C cannot views B's 'Liked' on the private entry to C
+        # Check if the list is empty
+        self.assertEqual(len(response.data['src']), 0)

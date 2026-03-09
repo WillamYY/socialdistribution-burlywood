@@ -13,6 +13,36 @@ from interactions.models import Like, Comment
 from .serializers import LikesSerializer, LikeSerializer, EntrySerializer, EntriesSerializer, CommentSerializer
 
 # Create your views here.
+def check_visibility(entry, viewer_id):
+    """
+    Helper function to verify if a user can see an entry.
+    """
+    # Not found if entry is DELETED
+    if entry.visibility == "DELETED":
+        return False
+    # Anyone with the link can see Public and Unlisted
+    if entry.visibility in ["PUBLIC", "UNLISTED"]:
+        return True
+    # If not logged in, cannot see anything other than PUBLIC/UNLISTED
+    if not viewer_id:
+        return False
+        
+    # Author can always see their own non-deleted stuff
+    if str(entry.author.id) == str(viewer_id):
+        return True
+        
+    # Friends check for mutual followers
+    if entry.visibility == "FRIENDS":
+        try:
+            viewer = Author.objects.get(id=viewer_id)
+            entry_author = Author.objects.get(id=entry.author.id)
+            # Check if the viewer is in entry author's friends list
+            return viewer in entry_author.friends()
+        except Author.DoesNotExist:
+            return False
+            
+    return False
+
 @api_view(['GET'])
 def ApiAuthors(request):
     query_string = request.META["QUERY_STRING"].split("&")
@@ -106,7 +136,6 @@ def ApiAuthor(request,id):
 @api_view(["GET"])
 def ApiAuthorAndEntryLikes(request,author_id,entry_id):
     # Ensures the entry exists before accessing it
-    # Only getting entries that are PUBLIC or UNLISTED
     if request.GET.get("page_number") and request.GET.get("page_number").isnumeric():
         if int(request.GET.get("page_number")) > 0:
             page_number = int(request.GET.get("page_number"))
@@ -121,34 +150,42 @@ def ApiAuthorAndEntryLikes(request,author_id,entry_id):
             size = 5
     else:
         size = 5
-
-    if APIEntry.objects.filter(id = entry_id, visibility__in = ["PUBLIC", "UNLISTED"]).exists():
-        # getting the URL of the object requested
-        liked_obj = "/".join(request.build_absolute_uri().split("/")[:-1])
-
-        # getting all the likes whose object is the given liked object, ordered by publish date
-        likes = APILike.objects.filter(object = liked_obj).order_by("-published")
-
-        count = likes.count()
-        # should only get 5 likes per entry
-        start = (page_number - 1) * size
-        end = start + size
-        src = likes[start:end]
-
-        # Finds the link to the object that was liked
-        entryURL = request.build_absolute_uri()
-        # Serializes the data
-        likesSerializer = LikesSerializer({"page_number":page_number,"size":size,"count":count,"src":src},context = {"link":entryURL,"object":entryURL[:-len("/likes")]})
-        return Response(likesSerializer.data)
+    
+    # I don't know but since we have two entry models so I just check both to ensure "like" works
+    if Entry.objects.filter(id=entry_id).exists():
+        entry = Entry.objects.get(id=entry_id)
+    elif APIEntry.objects.filter(id=entry_id).exists():
+        entry = APIEntry.objects.get(id=entry_id)
     else:
-        # Returns 404 if the entry does not exist
         return Response(status = 404)
+    
+    # Check the visibility for the logged-in user
+    logged_in_id = request.session.get("author_id")
+    if not check_visibility(entry, logged_in_id):
+        return Response({"detail": "Forbidden"}, status=403)
+    
+    # getting the URL of the object requested
+    liked_obj = "/".join(request.build_absolute_uri().split("/")[:-1])
+
+    # getting all the likes whose object is the given liked object, ordered by publish date
+    likes = APILike.objects.filter(object = liked_obj).order_by("-published")
+
+    count = likes.count()
+    # should only get 5 likes per entry
+    start = (page_number - 1) * size
+    end = start + size
+    src = likes[start:end]
+
+    # Finds the link to the object that was liked
+    entryURL = request.build_absolute_uri()
+    # Serializes the data
+    likesSerializer = LikesSerializer({"page_number":page_number,"size":size,"count":count,"src":src},context = {"link":entryURL,"object":entryURL[:-len("/likes")]})
+    return Response(likesSerializer.data)
 
 # Returns who liked a specific entry with no author
 @api_view(["GET"])
 def ApiEntryLikes(request, entry_fqid):
     # Ensures the entry exists before accessing it
-    # Only getting entries that are PUBLIC or UNLISTED
     # From https://stackoverflow.com/questions/150505/how-to-get-get-request-values-in-django by camlfan, downloaded 2026-03-01
     if request.GET.get("page_number") and request.GET.get("page_number").isnumeric():
         if int(request.GET.get("page_number")) > 0:
@@ -165,24 +202,34 @@ def ApiEntryLikes(request, entry_fqid):
     else:
         size = 5
     entry_id = entry_fqid.split("/")[-1]
-    if APIEntry.objects.filter(id = entry_id, visibility__in = ["PUBLIC", "UNLISTED"]).exists():
-        # getting local authors only, order by publish date
-        likes = APILike.objects.filter(object = entry_fqid).order_by("-published")
 
-        count = likes.count()
-        # should only get 5 likes per entry
-        start = (page_number - 1) * size
-        end = start + size
-        src = likes[start:end]
-
-        # Finds the link to the object that was liked
-        entryURL = request.build_absolute_uri()
-        # Serializes the data
-        likesSerializer = LikesSerializer({"page_number":page_number,"size":size,"count":count,"src":src},context = {"link":entryURL,"object":entryURL[:-len("/likes")]})
-        return Response(likesSerializer.data)
+    # Check both entry models for the entry
+    if Entry.objects.filter(id=entry_id).exists():
+        entry = Entry.objects.get(id=entry_id)
+    elif APIEntry.objects.filter(id=entry_id).exists():
+        entry = APIEntry.objects.get(id=entry_id)
     else:
-        # Returns 404 if the entry does not exist
         return Response(status = 404)
+
+    # Check the visibility for the logged-in user
+    logged_in_id = request.session.get("author_id")
+    if not check_visibility(entry, logged_in_id):
+        return Response({"detail": "Forbidden"}, status=403)
+    
+    # getting local authors only, order by publish date
+    likes = APILike.objects.filter(object = entry_fqid).order_by("-published")
+
+    count = likes.count()
+    # should only get 5 likes per entry
+    start = (page_number - 1) * size
+    end = start + size
+    src = likes[start:end]
+
+    # Finds the link to the object that was liked
+    entryURL = request.build_absolute_uri()
+    # Serializes the data
+    likesSerializer = LikesSerializer({"page_number":page_number,"size":size,"count":count,"src":src},context = {"link":entryURL,"object":entryURL[:-len("/likes")]})
+    return Response(likesSerializer.data)
 
 # Sends a like to the author (Currently creates a like on an entry only)
 @api_view(["POST"])
@@ -190,30 +237,37 @@ def ApiSendLike(request,author_id):
     # Gets the id of the liked entry from the url
     entry_id = request.data.get("object").split("/")[-1]
     # Ensures the entry exists before accessing it
-    if APIEntry.objects.filter(id = entry_id).exists():
-        entry = APIEntry.objects.get(id = entry_id)
-        # If the entry is from a different author show an error code
-        if entry.author.id != author_id:
-            return Response(status = 400)
-        else:
-            # Gets the id of the author from data
-            likeAuthor = request.data.get("author").get("id").split("/")[-1]
-            # If the author doing the liking does not exist return an error
-            if not APIAuthor.objects.filter(id = likeAuthor).exists():
-                return Response(status = 400)
-            likeAuthor = APIAuthor.objects.get(id = likeAuthor)
-
-            if APILike.objects.filter(author = request.data.get("author").get("id"), object = request.data.get("object")).exists():
-                return Response(status = 409)
-
-            like = APILike(author = request.data.get("author").get("id"), object = request.data.get("object"))
-
-            like.save()
-            like_serializer = LikeSerializer(like)
-            return Response(status = 201, data = like_serializer.data)
+    if Entry.objects.filter(id=entry_id).exists():
+        entry = Entry.objects.get(id=entry_id)
+    elif APIEntry.objects.filter(id=entry_id).exists():
+        entry = APIEntry.objects.get(id=entry_id)
     else:
         return Response(status = 404)
     
+    # Check the visibility for the logged-in user
+    logged_in_id = request.session.get("author_id")
+    if not check_visibility(entry, logged_in_id):
+        return Response({"detail": "Forbidden from commenting on this entry."}, status=403)
+    # If the entry is from a different author show an error code
+    if entry.author.id != author_id:
+        return Response(status = 400)
+    else:
+        # Gets the id of the author from data
+        likeAuthor = request.data.get("author").get("id").split("/")[-1]
+        # If the author doing the liking does not exist return an error
+        if not APIAuthor.objects.filter(id = likeAuthor).exists():
+            return Response(status = 400)
+        likeAuthor = APIAuthor.objects.get(id = likeAuthor)
+
+        if APILike.objects.filter(author = request.data.get("author").get("id"), object = request.data.get("object")).exists():
+            return Response(status = 409)
+
+        like = APILike(author = request.data.get("author").get("id"), object = request.data.get("object"))
+
+        like.save()
+        like_serializer = LikeSerializer(like)
+        return Response(status = 201, data = like_serializer.data)
+
 @api_view(["GET"])
 def ApiAuthorLiked(request, author_id):
     if request.GET.get("page_number") and request.GET.get("page_number").isnumeric():
@@ -233,12 +287,15 @@ def ApiAuthorLiked(request, author_id):
     author_fqid = "/".join(request.build_absolute_uri().split("/")[:-1])
 
     likes_tmp = APILike.objects.filter(author = author_fqid).order_by("-published")
-    # the liked object's visibilities must either be PUBLIC or UNLISTED
+    logged_in_id = request.session.get("author_id")
+
     # only deal with local for now
     likes = []
     for like in likes_tmp:
         entry_id = like.object.split("/")[-1]
-        if APIEntry.objects.filter(id = entry_id, visibility__in = ["PUBLIC", "UNLISTED"]).exists():
+        entry = APIEntry.objects.filter(id=entry_id).first()
+        # Check the visibility for the logged-in user
+        if entry and check_visibility(entry, logged_in_id):
             likes.append(like)
 
     count = len(likes)
@@ -280,10 +337,13 @@ def ApiAuthorLikedLocal(request, author_fqid):
         size = 5
 
     likes_tmp = APILike.objects.filter(author = author_fqid).order_by("-published")
+    logged_in_id = request.session.get("author_id")
     likes = []
     for like in likes_tmp:
         entry_id = like.object.split("/")[-1]
-        if APIEntry.objects.filter(id = entry_id, visibility__in = ["PUBLIC", "UNLISTED"]).exists():
+        entry = APIEntry.objects.filter(id=entry_id).first()
+        # Check the visibility for the logged-in user
+        if entry and check_visibility(entry, logged_in_id):
             likes.append(like)
 
     count = len(likes)
@@ -320,21 +380,24 @@ def ApiEntries(request, author_id):
         # Get pagination parameters
         page = int(request.query_params.get('page', 1))
         size = int(request.query_params.get('size', 5))
+        logged_in_id = request.session.get("author_id")
         
-        # Query the entries
-        # TODO: handle visibilities; currently only show PUBLIC posts and exclude DELETED posts.
-        entries = Entry.objects.filter(author=author).exclude(visibility="DELETED").filter(visibility="PUBLIC").order_by('-published')
+        # Fetch all non-deleted entries
+        all_entries = Entry.objects.filter(author=author).exclude(visibility="DELETED").order_by('-published')
+        
+        # Query the entries by checking visibility for logged-in user
+        visible_entries = [e for e in all_entries if check_visibility(e, logged_in_id)]
         
         # Paginate the queryset
         start = (page - 1) * size
         end = start + size
-        paginated_entries = entries[start:end]
+        paginated_entries = visible_entries[start:end]
         
         # Package the data for EntriesSerializer
         data = {
             "page_number": page,
             "size": size,
-            "count": entries.count(),
+            "count": len(visible_entries),
             "src": paginated_entries
         }
         
@@ -369,6 +432,11 @@ def ApiEntry(request, author_id, entry_id):
         if not entry or entry.visibility == "DELETED":
             return Response({"detail": "Not found."}, status=404)
 
+        # Check the visibility for the logged-in user
+        logged_in_id = request.session.get("author_id")
+        if not check_visibility(entry, logged_in_id):
+            return Response({"detail": "Forbidden"}, status=403)
+        
         # Serialize and return
         serializer = EntrySerializer(entry, context={'request': request})
         return Response(serializer.data)
@@ -430,22 +498,8 @@ def ApiEntryImage(request, author_id=None, entry_id=None):
         return HttpResponse(status=404)
     
     # Check the visibility for the logged-in user
-    allowed = False
     logged_in_id = request.session.get("author_id")
-
-    # Anyone with the link can see Public and Unlisted
-    if entry.visibility in ["PUBLIC", "UNLISTED"]:
-        allowed = True
-    elif logged_in_id:
-        viewer = get_object_or_404(Author, id=logged_in_id)
-        # Author can always see their own non-deleted entries
-        if viewer == entry.author:
-            allowed = True
-        # Friends check for mutual followers
-        elif entry.visibility == "FRIENDS" and viewer in entry.author.friends():
-            allowed = True
-
-    if not allowed:
+    if not check_visibility(entry, logged_in_id):
         return HttpResponseForbidden("You do not have permission to view this image.")
     
     # Decode and Serve
@@ -477,6 +531,11 @@ def ApiEntryComments(request, author_id, entry_id):
 
     entry = get_object_or_404(Entry, id=entry_id, author_id=author_id)
 
+    # Check the visibility for the logged-in user
+    logged_in_id = request.session.get("author_id")
+    if not check_visibility(entry, logged_in_id):
+        return Response({"detail": "Forbidden"}, status=403)
+        
     # Build FQID of the entry like your site uses
     base = request.build_absolute_uri('/')[:-1]
     entry_fqid = f"{base}/app/entry/{entry.id}/"
@@ -502,6 +561,11 @@ def ApiAddComment(request, author_id, entry_id):
     """
 
     entry = get_object_or_404(Entry, id=entry_id, author_id=author_id)
+
+    # Check the visibility for the logged-in user
+    logged_in_id = request.session.get("author_id")
+    if not check_visibility(entry, logged_in_id):
+        return Response({"detail": "Forbidden from commenting on this entry."}, status=403)
 
     author_url = request.data.get("author")
     comment_text = request.data.get("comment")
