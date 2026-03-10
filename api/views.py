@@ -70,7 +70,7 @@ def ApiAuthor(request,id):
                 author = AuthorRequest(id = id,username = request.data.get("displayName"),name = request.data.get("displayName"),github = request.data.get("github"),web = request.data.get("web"), host = request.data.get("host"),picture_url = request.data.get("profileImage"))
                 author.save()
                 authorID = author.host + "authors/" + str(author.id)
-                return Response({"type":"author","id": authorID,"host": author.host,"displayName": author.name, "github":author.github, "profileImage":author.picture_url,"web":author.web})
+                return Response({"type":"author","id": authorID,"host": author.host,"displayName": author.name, "github":author.github, "profileImage":author.picture_url,"web":author.web},status = 201)
             # If the authors Id is invalid return a 400 respose
             else:
                 return Response(status = 400)
