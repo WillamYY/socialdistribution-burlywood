@@ -27,18 +27,49 @@ def SignUpProcessing(request):
 
         # Ensures the username is not taken and that it isn't currently pending in an author request
         if not Author.objects.filter(username=username).exists() and not AuthorRequest.objects.filter(username=username).exists():
-            new_author = AuthorRequest(
-                username=username,
-                #name=name,
-                #description=description,
-                #github=github,
-                #picture=picture
-                password = password
-            )
-            #new_author.set_password(password)  # hash password
-            new_author.save()
-            messages.info(request,"Approval Pending") # Tells the user that the approval for siging up is pending
-            return redirect("SignUp")
+            # Ensures the length of the password is at least 8 letters
+            if len(password) >= 8:
+                # Ensures there is at least one letter and at least one number
+                has_letter = False
+                has_number = False
+                for char in password:
+                    if char.isalpha(): # Upon the first letter being found break and note that one was found
+                        has_letter = True
+                    if char.isnumeric():
+                        has_number = True
+                    # Once both a letter and number have been found break immediately
+                    if has_number and has_letter:
+                        break
+                if has_letter and has_number:
+                    new_author = AuthorRequest(
+                        username=username,
+                        #name=name,
+                        #description=description,
+                        #github=github,
+                        #picture=picture
+                        host = f"http://{request.get_host()}/api",
+                        password = password
+                    )
+                    #new_author.set_password(password)  # hash password
+                    new_author.save()
+                    messages.info(request,"Approval Pending") # Tells the user that the approval for siging up is pending
+                    return redirect("SignUp")
+                # Prints an error message if the password is missing both a number and letter
+                elif not has_letter and not has_number:
+                    messages.error(request,"Password requires at least one letter and one number")
+                    return redirect("SignUp")
+                # Prints an error message if the password is missing only letter
+                elif not has_letter:
+                    messages.error(request,"Password requires at least one letter")
+                    return redirect("SignUp")
+                    # Prints an error message if the password is missing only letter
+                elif not has_number:
+                    messages.error(request,"Password requires at least one number")
+                    return redirect("SignUp")
+            # Displays an error message if the password is too short
+            else:
+                messages.error(request, "Password must be 8 letters")
+                return redirect("SignUp")
         else:
             messages.error(request, "Username already taken")
             return redirect("SignUp")

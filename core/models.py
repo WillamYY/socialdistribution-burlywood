@@ -11,6 +11,7 @@ class Author(models.Model):
     name = models.CharField(max_length=40, blank=True)   # Display name / editable
     description = models.TextField(blank=True)            # Bio
     picture = models.ImageField(upload_to='profile_pics', blank=True, null=True)
+    picture_url = models.URLField(blank=True)
     github = models.URLField(blank=True)                  # GitHub link
     followers = models.ManyToManyField(
         'self',
@@ -53,3 +54,9 @@ class AuthorRequest(models.Model):
     id = models.AutoField(primary_key = True) # Makes each request unique
     username = models.CharField(max_length=40, unique=True)  # Login ID
     password = models.CharField(max_length=40)           # Hashed password
+    name = models.CharField(max_length = 40,default = "user") # Display name
+    github = models.URLField(blank=True)
+    picture = models.URLField(blank=True, null=True)
+    picture_url = models.URLField(blank=True)
+    host = models.URLField(blank=True)
+    web = models.URLField(blank=True)
