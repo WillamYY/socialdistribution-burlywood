@@ -53,12 +53,12 @@ class AuthorEndpointTest(APITestCase):
         firstauthorURL = reverse("api:ApiAuthor",kwargs = {"id": 1})
         author1 = {"type":"author","id":firstauthorURL[:-1],"host":"http://localhost:8000/api/","displayName":"Dalton","github": "http://github.com/dalton","profileImage": "https://www.bigfootdigital.co.uk/wp-content/uploads/2020/07/image-optimisation-scaled.jpg","web": "http://localhost:8000/app/authors/1" }
         put1 = self.client.put(firstauthorURL,author1,format = "json")
-        self.assertEqual(put1.status_code,status.HTTP_200_OK) # Ensures the first author was added successfully
+        self.assertEqual(put1.status_code,status.HTTP_201_CREATED) # Ensures the first author was added successfully
         # Adds the second author
         secondauthorURL = reverse("api:ApiAuthor",kwargs = {"id": 2})
         author2 = {"type":"author","id":secondauthorURL[:-1],"host":"http://localhost:8000/api/","displayName":"Low","github": "http://github.com/daltons","profileImage": "https://image-optimisation-scaled.jpg","web": "http://localhost:8000/app/authors/2" }
         put2 = self.client.put(secondauthorURL,author2,format = "json")
-        self.assertEqual(put2.status_code,status.HTTP_200_OK) # Ensures the first author was added successfully
+        self.assertEqual(put2.status_code,status.HTTP_201_CREATED) # Ensures the first author was added successfully
         self.assertEqual(AuthorRequest.objects.count(),2) # Ensures that both are in the database
         # Checks that the two author requests were created
         author1 = AuthorRequest.objects.get(id = 1)
@@ -76,7 +76,7 @@ class AuthorEndpointTest(APITestCase):
         firstauthorURL = reverse("api:ApiAuthor",kwargs = {"id": 1})
         author1 = {"type":"author","id":firstauthorURL[:-1],"host":"http://localhost:8000/api/","displayName":"Dalton","github": "http://github.com/dalton","profileImage": "https://www.bigfootdigital.co.uk/wp-content/uploads/2020/07/image-optimisation-scaled.jpg","web": "http://localhost:8000/app/authors/1" }
         put1 = self.client.put(firstauthorURL,author1,format = "json")
-        self.assertEqual(put1.status_code,status.HTTP_200_OK) # Ensures the first author was added successfully
+        self.assertEqual(put1.status_code,status.HTTP_201_CREATED) # Ensures the first author was added successfully
         self.assertEqual(AuthorRequest.objects.count(),1) # Checks that it made an author request object
         # Creates an instance of the AuthorRequestAdmin
         admin = AuthorRequestAdmin(AuthorRequest, AdminSite())
@@ -996,7 +996,7 @@ class VisibilityAPITest(TestCase):
         base_url = "http://testserver"
         entry_url = f"{base_url}/app/entry/{self.private_entry.id}/"
     
-        APILike.objects.create(
+        Like.objects.create(
             author=f"http://testserver/api/authors/{self.author_a.id}",
             object=entry_url
         )
@@ -1021,7 +1021,7 @@ class VisibilityAPITest(TestCase):
     def test_api_liked_history_visibility(self):
         # Setup B likes A's private entry
         entry_url = f"http://testserver/app/entry/{self.private_entry.id}/"
-        APILike.objects.create(
+        Like.objects.create(
             author=f"http://testserver/authors/{self.author_b.id}",
             object=entry_url
         )
