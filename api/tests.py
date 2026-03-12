@@ -880,6 +880,9 @@ class CommentApiTest(TestCase):
         self.assertEqual(response.status_code, 404)
 
 class VisibilityAPITest(TestCase):
+    """
+    Create a series of tests for visibilities of entry API endpoints.
+    """
     def setUp(self):
         # Create Author A and Author B
         self.author_a = Author.objects.create(username="A", name="AA")
@@ -911,6 +914,9 @@ class VisibilityAPITest(TestCase):
         )
     
     def test_api_public_access(self):
+        """
+        Verify the access to public or unlist entries.
+        """
         # Log in as B
         session = self.client.session
         session['author_id'] = self.author_b.id
@@ -924,6 +930,9 @@ class VisibilityAPITest(TestCase):
         self.assertEqual(response.status_code, 200)
 
     def test_api_entry_visibility(self):
+        """
+        Verify the access to friends only entry.
+        """
         # Log in as B
         session = self.client.session
         session['author_id'] = self.author_b.id
@@ -947,6 +956,9 @@ class VisibilityAPITest(TestCase):
         self.assertEqual(response.status_code, 200)
         
     def test_api_image_visibility(self):
+        """
+        Verify the access to friends only image entry.
+        """
         # Log in as B
         session = self.client.session
         session['author_id'] = self.author_b.id
@@ -965,6 +977,9 @@ class VisibilityAPITest(TestCase):
         self.assertEqual(response.status_code, 200)
 
     def test_api_comments_visibility(self):
+        """
+        Verify the access to comments on a friends only entry.
+        """
         # Set up the private entry with a comment
         base_url = "http://testserver"
         entry_url = f"{base_url}/app/entry/{self.private_entry.id}/"
@@ -993,6 +1008,9 @@ class VisibilityAPITest(TestCase):
         self.assertEqual(response.status_code, 200)
     
     def test_api_entry_likes_visibility(self):
+        """
+        Verify the access to likes on a friends only entry.
+        """
         base_url = "http://testserver"
         entry_url = f"{base_url}/app/entry/{self.private_entry.id}/"
     
@@ -1019,6 +1037,9 @@ class VisibilityAPITest(TestCase):
         self.assertEqual(response.status_code, 200)
     
     def test_api_liked_history_visibility(self):
+        """
+        Verify the access to liked history for friends only entries.
+        """
         # Setup B likes A's private entry
         entry_url = f"http://testserver/app/entry/{self.private_entry.id}/"
         Like.objects.create(
