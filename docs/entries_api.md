@@ -1,6 +1,6 @@
 # Entries and Image API Documentation
 
-This document covers the API implementation and expected behavior for **Entries, Markdown, and Image** user stories, referencing GitHub issues. The following content in this document is generated via the generative AI: Gemini 3 Pro, Google, 2026-03-01, https://gemini.google.com/u/0/app/48a83dd17d81fcf7?pageId=none
+This document covers the API implementation and expected behavior for **Entries, Markdown, and Image** user stories, referencing GitHub issues. The following content in this document is mainly generated via the generative AI: Gemini 3 Pro, Google, 2026-03-01, https://gemini.google.com/u/0/app/48a83dd17d81fcf7?pageId=none
 
 ### User Stories Covered
 * **#10**: As an author, I want to make entries.
@@ -10,6 +10,8 @@ This document covers the API implementation and expected behavior for **Entries,
 * **#18**: As an author, CommonMark entries can link to images.
 * **#21**: As an author, I want to be able to use my web-browser to manage/author my entries.
 * **#22**: As an author, other authors cannot modify my entries.
+* **#41**: As an author, I don't want anyone who isn't a friend to be able to see my friends-only entries and images.
+* **#91**: As an author, entries I create should always be visible to me until they are deleted.
 
 ---
 
@@ -23,25 +25,29 @@ To provide a user-friendly, browser-based management system for authors to creat
 * **Management (`/app/my-entries/`):** A dashboard to view, edit, or delete existing content.
 * **Viewing (`/app/stream/`):** A human-readable feed of posts from the author and their friends.
 
-**How it works:** Relies on `request.session['author_id']` to manage state and permissions. It uses Django Templates to render database content into sanitized HTML, automatically handling Markdown.
+**How it works:** Relies on `request.session['author_id']` to manage state and permissions. It uses Django Templates to render database content into sanitized HTML, automatically handling Markdown and image embedding.
 
 ---
 
 ## Get Author Entries (Paginated)
 
 **URL:** `GET /api/authors/{AUTHOR_SERIAL}/entries/`
+**Relevant User Stories:** #41, #91
 
 * **When to use it:** When a client needs to retrieve a feed of recent entries published by a specific author.
 * **How to use it:** Send a GET request. You can optionally append `?page=1&size=5` to paginate the results.
 * *Unauthenticated:* Returns only `PUBLIC` entries.
-* *Authenticated as Author:* Returns all entries.
+* *Authenticated as Author:* Returns all non-deleted entries (**US #91**).
 * *Authenticated as Follower:* Returns `PUBLIC` + `UNLISTED`.
-* *Authenticated as Friend:* Returns all entries.
+* *Authenticated as Friend:* Returns all entries, enforcing **US #41**.
 
 
 * **Why to use it:** It correctly implements the project's pagination requirements and filters visibility based on the requester's relationship to the author.
 * **Why Not to use it:** Do not use this if you are a remote node trying to pull entries. Remote nodes become aware of local entries via the local node pushing to their inbox, not by pulling from this endpoint.
 
+### Expected Status Codes
+
+* **`200 OK`**: Successfully retrieved and filtered the paginated list of entries.
 ### Response Examples
 
 **Example 1: First page of public entries**
@@ -80,38 +86,61 @@ To provide a user-friendly, browser-based management system for authors to creat
 
 **URL 1 (Local):** `GET /api/authors/{AUTHOR_SERIAL}/entries/{ENTRY_SERIAL}`
 **URL 2 (FQID):** `GET /api/entries/{ENTRY_FQID}`
+**Relevant User Stories:** #41, #91
 
 * **When to use it:** To view the full details of a specific entry, including its comments and likes.
 * **How to use it:** Send a GET request. For URL 2, the `ENTRY_FQID` must be URL-encoded.
 * **Why to use it:** It returns a deeply nested object with all metadata required to render a single post page.
-* **Why Not to use it:** If the entry has a `visibility` of `DELETED`, this will return a `404 Not Found`.
+
+### Expected Status Codes
+
+* **`200 OK`**: Successfully retrieved the entry.
+* **`403 Forbidden`**: The entry is `FRIENDS` only, and the requester is a stranger/unauthorized (**US #41**).
+* **`404 Not Found`**: The entry does not exist, or its visibility is set to `DELETED`.
 
 ### B. Create Entry (Auto-generated ID)
 
 **URL:** `POST /api/authors/{AUTHOR_SERIAL}/entries/`
+**Relevant User Stories:** #10, #14, #15, #16
 
 * **When to use it:** When a local author is creating a brand new post and wants the server to assign it a unique ID.
 * **How to use it:** Send a POST request with the entry details in the body. Must be authenticated locally as the author.
 * **Why to use it:** Standard way for the frontend to create posts without needing to generate UUIDs client-side.
-* **Why Not to use it:** Do not use this if you are a remote node.
+
+### Expected Status Codes
+
+* **`201 Created`**: The entry was successfully generated and saved.
+* **`400 Bad Request`**: Missing required fields in the JSON payload.
+* **`403 Forbidden`**: The requester is not logged in or is not the target author.
 
 ### C. Update / Create Entry (Specific ID)
 
 **URL:** `PUT /api/authors/{AUTHOR_SERIAL}/entries/{ENTRY_SERIAL}`
+**Relevant User Stories:** #12, #22
 
 * **When to use it:** When a local author is editing an existing post, or when a remote node is pushing an entry to a local inbox.
 * **How to use it:** Send a PUT request with the full entry object. Must be authenticated locally.
 * **Why to use it:** It allows idempotent creation and updating of entries.
-* **Why Not to use it:** If the `session['author_id']` doesn't match the `AUTHOR_SERIAL`, you will get a `403 Forbidden` (US #22).
+
+### Expected Status Codes
+
+* **`200 OK`**: An existing entry was successfully updated.
+* **`201 Created`**: A new entry was successfully created using the provided UUID.
+* **`403 Forbidden`**: The `session['author_id']` does not match the `AUTHOR_SERIAL`. Other authors cannot impersonate or modify this entry (**US #22**).
 
 ### D. Delete Entry
 
 **URL:** `DELETE /api/authors/{AUTHOR_SERIAL}/entries/{ENTRY_SERIAL}`
+**Relevant User Stories:** #17
 
 * **When to use it:** When an author wants to remove their own entry.
 * **How to use it:** Send a DELETE request. Must be authenticated locally.
 * **Why to use it:** Performs a soft-delete, changing the visibility to `DELETED` so it no longer appears in feeds.
-* **Why Not to use it:** Cannot be used by remote nodes or other authors.
+
+### Expected Status Codes
+
+* **`204 No Content`**: The entry was successfully soft-deleted.
+* **`403 Forbidden`**: The requester is attempting to delete an entry belonging to another author (**US #22**).
 
 ### Request / Response Examples
 
@@ -175,15 +204,22 @@ To provide a user-friendly, browser-based management system for authors to creat
 
 ---
 
-## Image Proxy API (US #16, #18)
+## Image Proxy API
 
 **URL 1:** `GET /api/authors/{AUTHOR_SERIAL}/entries/{ENTRY_SERIAL}/image`
 **URL 2:** `GET /api/entries/{ENTRY_FQID}/image`
+**Relevant User Stories:** #16, #18, #41
 
 * **When to use it:** Use this to render an image entry directly inside an HTML `<img>` tag, or to embed images within a CommonMark entry.
 * **How to use it:** Place this URL in the `src` attribute of an image tag. It decodes the base64 content on the fly.
 * **Why to use it:** It returns raw binary data with the correct `Content-Type` header (e.g., `image/png`). It automates base64 decoding so the frontend client doesn't have to parse JSON just to display a picture.
-* **Why Not to use it:** Do not use this endpoint if the target entry has a `contentType` of `text/plain` or `text/markdown`. It will return a `404 Not Found`.
+
+### Expected Status Codes
+
+* **`200 OK`**: Successfully returns the decoded binary image file.
+* **`400 Bad Request`**: The target entry exists but its `contentType` is not an image (e.g., `text/plain`).
+* **`403 Forbidden`**: The image is attached to a `FRIENDS` only post, and the requester is a stranger (**US #41**).
+* **`404 Not Found`**: The entry is `DELETED` or does not exist.
 
 ---
 
