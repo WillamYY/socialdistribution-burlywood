@@ -4,6 +4,7 @@ from core.models import Author, FollowRequest
 from interactions.models import Like, Comment
 from entries.models import Entry
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.contrib.postgres.fields import ArrayField
 import uuid
 
 class UnfollowAPITestCase(TestCase):
@@ -271,4 +272,24 @@ class AdminUserStoryTestCase(TestCase):
         comment2.save()
         self.assertEqual(list(Comment.objects.raw("SELECT * from interactions_comment")),[comment1,comment2])
         self.assertEqual(Comment.objects.raw(f"SELECT * FROM interactions_comment WHERE author = %s",[author1.web])[0].comment, "HELLO")
-        
+
+    """
+    Checks that arrays are not stored in database fields
+    User Story #75
+    """
+    def test_array_database_field(self):
+        # Ensures no authors have arrayfields
+        for field in Author._meta.get_fields():
+            self.assertFalse(isinstance(field,ArrayField))
+        # Ensures no follow request have arrayfields
+        for field in FollowRequest._meta.get_fields():
+            self.assertFalse(isinstance(field,ArrayField))
+        # Ensures no entires have arrayfields
+        for field in Entry._meta.get_fields():
+            self.assertFalse(isinstance(field,ArrayField))
+        # Ensures no comments have arrayfields
+        for field in Comment._meta.get_fields():
+            self.assertFalse(isinstance(field,ArrayField))
+        # Ensures no likes have arrayfields
+        for field in Like._meta.get_fields():
+            self.assertFalse(isinstance(field,ArrayField))
