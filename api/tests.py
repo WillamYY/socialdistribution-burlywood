@@ -1,5 +1,6 @@
 from django.test import TestCase, Client, RequestFactory
 from django.urls import reverse
+from django.shortcuts import render
 from rest_framework import status
 from rest_framework.test import APITestCase
 from .serializers import LikeSerializer, AuthorSerializer
@@ -12,6 +13,7 @@ import uuid
 from core.models import Author, AuthorRequest
 from entries.models import Entry
 from interactions.models import Comment, Like
+from core.views import SignUpProcessing
 
 # Create your tests here.
 
@@ -1063,3 +1065,33 @@ class VisibilityAPITest(TestCase):
         # Author C cannot views B's 'Liked' on the private entry to C
         # Check if the list is empty
         self.assertEqual(len(response.data['src']), 0)
+
+"""
+Tests that there is only a single database for front and backend
+"""
+class DatabaseTest(TestCase):
+    """
+    User Story #77
+    """
+    def test_single_database(self):
+        # Creates an author request in the front end
+        client = Client()
+        response = client.post("/app/process-signup/", data={"username": "FRIEND","password": "Password5"})
+        # Checks if the author is in the database
+        self.assertEqual(AuthorRequest.objects.count(), 1)
+        # Manually adds an author to the database to avoid having to accept the author request
+        author1 = Author(id = 1,username = "John",name = "John Doe",description = "This is John Doe's Account",host = "http://localhost:8000/api/",web = "http://localhost:8000/user/1",github = "https://github.com/John")
+        author1.save()
+        # Checks if the author is in the front end
+        response = client.get("/app/user/1/")
+        self.assertEqual(response.status_code,200)
+        # Checks that the author appears on the frontend
+        self.assertContains(response,"John")
+        self.assertContains(response,"https://github.com/John")
+        # Gets the author from the api
+        authorURL = reverse("api:ApiAuthor",kwargs = {"id": 1})
+        get1 = self.client.get(authorURL,format = "json")
+        # Check that the details match
+        self.assertEqual(get1.data["displayName"],author1.name)
+        self.assertEqual(get1.data["github"],author1.github)
+        self.assertEqual(get1.data["web"],author1.web)
