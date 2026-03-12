@@ -1,7 +1,10 @@
 from django.test import TestCase, Client
 from django.urls import reverse
 from core.models import Author, FollowRequest
+from interactions.models import Like, Comment
+from entries.models import Entry
 from django.core.files.uploadedfile import SimpleUploadedFile
+import uuid
 
 class UnfollowAPITestCase(TestCase):
     """
@@ -213,3 +216,59 @@ class EditProfileAPITestCase(TestCase):
         response = self.client.post(self.url, {"name": "Fail"})
         self.assertEqual(response.status_code, 302)  # redirect to login
         self.assertIn("/login", response.url)
+
+"""
+Creates the test for the admin user stories
+"""
+class AdminUserStoryTestCase(TestCase):
+    """
+    Tests using SQL queries on database
+    User Story #75
+    """
+    def test_sql_queries(self):
+        # Tries sql queries on the Authors
+        author1 = Author(username = "John",name = "John Doe",description = "This is John Doe's Account",host = "http://localhost:8000/api/",web = "http://localhost:8000/user/1")
+        author1.save()
+        author2 = Author(username = "Jane",name = "Jane Doe",description = "This is Jane Doe's Account",host = "http://localhost:8000/api/",web = "http://localhost:8000/user/2")
+        author2.save()
+        self.assertEqual(list(Author.objects.raw("SELECT * FROM core_author")),[author1,author2])
+        self.assertEqual(Author.objects.raw("SELECT description, id FROM core_author WHERE username = 'Jane'")[0].description,"This is Jane Doe's Account")
+
+        # SQL queries on Follow Request
+        followRequest1 = FollowRequest(requester = author1,target = author2)
+        followRequest1.save()
+        followRequest2 = FollowRequest(requester = author2,target = author1)
+        followRequest2.save()
+        self.assertEqual(list(FollowRequest.objects.raw("SELECT * FROM core_followrequest")),[followRequest1,followRequest2])
+        self.assertEqual(FollowRequest.objects.raw(f"SELECT requester_id, id FROM core_followrequest WHERE target_id = 2")[0].requester_id,1)
+
+        # SQL queries on Entries
+        entry1 = Entry(title = "John's Post",description = "This is the first entry",contentType = "text/plain",content = "NUMBER 1!",author = author1, visibility = "PUBLIC")
+        entry1.save()
+        entry2 = Entry(title = "Jane's Post",description = "This is the second entry",contentType = "text/plain",content = "NUMBER 2!",author = author2, visibility = "PRIVATE")
+        entry2.save()
+        self.assertEqual(list(Entry.objects.raw("SELECT * FROM entries_entry")),[entry1, entry2])
+        self.assertEqual(Entry.objects.raw("SELECT title, id FROM entries_entry WHERE content = 'NUMBER 2!'")[0].title,"Jane's Post")
+
+        # SQL queries on Like
+        firstUUID = uuid.uuid4()
+        entry1Id = f"http://localhost:8000/api/authors/{entry1.author.id}/entries/{entry1.id}/"
+        like1 = Like(author = author1.web,object = entry1Id, id = "http://localhost:8000/likes/" + str(firstUUID), uuid = firstUUID)
+        like1.save()
+        secondUUID = uuid.uuid4()
+        entry2Id = f"http://localhost:8000/api/authors/{entry2.author.id}/entries/{entry2.id}/"
+        like2 = Like(author = author2.web,object = entry2Id, id = "http://localhost:8000/likes/" + str(secondUUID), uuid = secondUUID)
+        like2.save()
+        self.assertEqual(list(Like.objects.raw("SELECT * from interactions_like")),[like1,like2])
+        self.assertEqual(Like.objects.raw(f"SELECT * FROM interactions_like WHERE id = %s",["http://localhost:8000/likes/" + str(firstUUID)])[0].uuid, firstUUID)
+
+        # SQL queries on comments (Reuses the uuid's from like)
+        comment1Id = f"http://localhost:8000/api/comments/{firstUUID}"
+        comment1 = Comment(author = author1.web,entry = entry1Id, id = comment1Id, comment = "HELLO",contentType = "text/plain")
+        comment1.save()
+        comment2Id = f"http://localhost:8000/api/comments/{secondUUID}"
+        comment2 = Comment(author = author2.web,entry = entry2Id, id = comment2Id, comment = "GOODBYE",contentType = "text/plain")
+        comment2.save()
+        self.assertEqual(list(Comment.objects.raw("SELECT * from interactions_comment")),[comment1,comment2])
+        self.assertEqual(Comment.objects.raw(f"SELECT * FROM interactions_comment WHERE author = %s",[author1.web])[0].comment, "HELLO")
+        
