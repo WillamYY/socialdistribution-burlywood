@@ -138,21 +138,35 @@ class EntryWebUITests(TestCase):
         self.AuthorModel = Entry._meta.get_field('author').related_model
         self.client = Client()
         
-        # Create a test author
-        self.author = self.AuthorModel.objects.create(
+        # Create test authors
+        self.author_a = self.AuthorModel.objects.create(
             username="web_user",
             name="Web User"
         )
+        self.author_b = self.AuthorModel.objects.create(
+            username="B",
+            name="BB"
+        )
         
-        # Create a public entry and a deleted entry
+        # Create entries with different visibilities
         self.public_entry = Entry.objects.create(
-            author=self.author,
+            author=self.author_a,
             title="Visible Post",
             content="Hello World",
             visibility="PUBLIC"
         )
+        self.unlisted_entry = Entry.objects.create(
+            author=self.author_a,
+            title="Visible Post",
+            content="Hello World",
+            visibility="UNLISTED"
+        )
+        self.private_entry = Entry.objects.create(
+            author=self.author_a,
+            visibility="FRIENDS"
+        )
         self.deleted_entry = Entry.objects.create(
-            author=self.author,
+            author=self.author_a,
             title="Invisible Post",
             content="Should not be seen ~",
             visibility="DELETED"
@@ -161,12 +175,12 @@ class EntryWebUITests(TestCase):
         self.tiny_png_b64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
         
         # Save it to the database
-        self.image_entry = Entry.objects.create(
-            author=self.author,
+        self.private_image_entry = Entry.objects.create(
+            author=self.author_a,
             title="Test Image Entry with PNG",
             contentType="image/png;base64",
             content=f"data:image/png;base64,{self.tiny_png_b64}",
-            visibility="PUBLIC"
+            visibility="FRIENDS"
         )
     
     def test_markdown_renders_in_html(self):
@@ -178,7 +192,7 @@ class EntryWebUITests(TestCase):
 
         # entry.content stores the rendered HTML for text posts or base64 data for images.
         md_entry = Entry.objects.create(
-            author=self.author,
+            author=self.author_a,
             title="MD Test",
             contentType="text/markdown",
             content=rendered_content,
@@ -188,7 +202,7 @@ class EntryWebUITests(TestCase):
         url = reverse('get_entry', kwargs={'entry_id': md_entry.id})
         
         session = self.client.session
-        session['author_id'] = self.author.id
+        session['author_id'] = self.author_a.id
         session.save()
 
         # Check if the markdown is rendered correctly in the HTML response
@@ -199,7 +213,7 @@ class EntryWebUITests(TestCase):
         """
         User Story #14: As an author, entries I make can be in simple plain text.
         """
-        url = reverse('api:ApiEntries', kwargs={'author_id': self.author.id})
+        url = reverse('api:ApiEntries', kwargs={'author_id': self.author_a.id})
         data = {"contentType": "text/plain", "content": "## Not a Header"}
         self.client.post(url, data, format='json')
         
@@ -212,19 +226,15 @@ class EntryWebUITests(TestCase):
         """
         User Story #22: Prove other authors cannot modify my entries.
         """
-        # Create a different author (the "Hacker")
-        AuthorModel = Entry._meta.get_field('author').related_model
-        other_author = AuthorModel.objects.create(username="hacker", name="Hacker")
-
         # Point to the original author's entry
         url = reverse('api:ApiEntry', kwargs={
-            'author_id': self.author.id, 
-            'entry_id': self.image_entry.id
+            'author_id': self.author_a.id, 
+            'entry_id': self.public_entry.id
         })
         
         # Simulates being logged in as the Hacker
         session = self.client.session
-        session['author_id'] = other_author.id
+        session['author_id'] = self.author_b.id
         session.save()
         
         # Try to PUT (edit) the first author's entry
@@ -239,5 +249,54 @@ class EntryWebUITests(TestCase):
         self.assertEqual(response.status_code, 403)
         
         # Ensure the title didn't actually change
-        self.image_entry.refresh_from_db()
-        self.assertNotEqual(self.image_entry.title, "Hacked Title")
+        self.public_entry.refresh_from_db()
+        self.assertNotEqual(self.public_entry.title, "Hacked Title")
+    
+    def test_get_entry_public_deleted_access(self):
+        """
+        User Story #91: As an author, entries I create should always be visible to me until they are deleted.
+        """
+        public_url = reverse('get_entry', kwargs={'entry_id': self.public_entry.id})
+        unlisted_url = reverse('get_entry', kwargs={'entry_id': self.unlisted_entry.id})
+        deleted_url = reverse('get_entry', kwargs={'entry_id': self.deleted_entry.id})
+        
+        # Log in as author A
+        session = self.client.session
+        session['author_id'] = self.author_a.id
+        session.save()
+
+        # Check if the status code is 200 OK
+        self.assertEqual(self.client.get(public_url).status_code, 200)
+        self.assertEqual(self.client.get(unlisted_url).status_code, 200)
+        self.assertEqual(self.client.get(deleted_url).status_code, 404)
+
+    def test_get_entry_friends_only(self):
+        """
+        User Story #41: As an author, I don't anyone who isn't a friend to be able to see my friends-only entries and images.
+        """
+        # Note: the image endpoint is separate from the web UI
+        private_img_url = reverse('api:ApiEntryImage', kwargs={'author_id': self.author_a.id, 'entry_id': self.private_image_entry.id})
+        private_text_url = reverse('get_entry', kwargs={'entry_id': self.private_entry.id})
+
+        # Log in as B (stranger)
+        session = self.client.session
+        session['author_id'] = self.author_b.id
+        session.save()
+
+        # Check if B cannot access A's friends-only entry
+        response_text = self.client.get(private_text_url)
+        response_img = self.client.get(private_img_url)
+        self.assertEqual(response_img.status_code, 403)
+        self.assertEqual(response_text.status_code, 200)
+        self.assertFalse(response_text.context['allowed'])
+
+        # Make B a friend of A (Mutual Follow)
+        self.author_a.followers.add(self.author_b)
+        self.author_b.followers.add(self.author_a)
+
+        # Check if B can now access
+        response_text = self.client.get(private_text_url)
+        response_img = self.client.get(private_img_url)
+        self.assertEqual(response_img.status_code, 200)
+        self.assertEqual(response_text.status_code, 200)
+        self.assertTrue(response_text.context['allowed'])

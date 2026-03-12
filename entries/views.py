@@ -11,6 +11,36 @@ from .models import Entry
 from core.models import Author
 from interactions.models import Like, Comment
 
+def check_visibility(entry, viewer_id):
+    """
+    Helper function to verify if a user can see an entry.
+    """
+    # Not found if entry is DELETED
+    if entry.visibility == "DELETED":
+        return False
+    # Anyone with the link can see Public and Unlisted
+    if entry.visibility in ["PUBLIC", "UNLISTED"]:
+        return True
+    # If not logged in, cannot see anything other than PUBLIC/UNLISTED
+    if not viewer_id:
+        return False
+        
+    # Author can always see their own non-deleted stuff
+    if str(entry.author.id) == str(viewer_id):
+        return True
+        
+    # Friends check for mutual followers
+    if entry.visibility == "FRIENDS":
+        try:
+            viewer = Author.objects.get(id=viewer_id)
+            entry_author = Author.objects.get(id=entry.author.id)
+            # Check if the viewer is in entry author's friends list
+            return viewer in entry_author.friends()
+        except Author.DoesNotExist:
+            return False
+            
+    return False
+
 def render_safe_markdown(text_content):
     """
     Helper function to convert raw Markdown text to HTML and sanitize it to prevent XSS.
@@ -431,18 +461,7 @@ def get_entry(request, entry_id):
             comment.liked_by_user = Like.objects.filter(object=comment_url, author=user_fqid).exists()
 
     # Check the visibility for the logged-in user
-    allowed = False
-
-    if entry.visibility in ["PUBLIC", "UNLISTED"]:
-        allowed = True
-    elif logged_in_id:
-        viewer = get_object_or_404(Author, id=logged_in_id)
-        # Author can always see their own non-deleted entries
-        if viewer == entry.author:
-            allowed = True
-        # Friends check for mutual followers
-        elif entry.visibility == "FRIENDS" and viewer in entry.author.friends():
-            allowed = True
+    allowed = check_visibility(entry, logged_in_id)
 
     return render(request, "entries/entry.html", {
         "entry": entry,
