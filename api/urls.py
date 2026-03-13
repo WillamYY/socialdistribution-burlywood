@@ -23,4 +23,5 @@ urlpatterns = [
     path("entries/<uuid:entry_id>/image", views.ApiEntryImage, name="ApiEntryImageGlobal"),
     path("authors/<int:author_id>/entries/<uuid:entry_id>/comments/", views.ApiEntryComments, name="ApiEntryComments"),
     path("authors/<int:author_id>/entries/<uuid:entry_id>/comments/add/", views.ApiAddComment, name="ApiAddComment"),
+    path('entries/public/', views.ApiBrowsePublicEntries, name='browse_public_entries'),
 ]

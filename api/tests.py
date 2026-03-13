@@ -1095,3 +1095,51 @@ class DatabaseTest(TestCase):
         self.assertEqual(get1.data["displayName"],author1.name)
         self.assertEqual(get1.data["github"],author1.github)
         self.assertEqual(get1.data["web"],author1.web)
+
+class PublicEntriesAPITest(TestCase):
+    def setUp(self):
+        # Create some authors
+        self.author1 = Author.objects.create(
+            id=1, username="author1", name="Author One", host="http://testserver/", github="", web="", picture_url=""
+        )
+        self.author2 = Author.objects.create(
+            id=2, username="author2", name="Author Two", host="http://testserver/", github="", web="", picture_url=""
+        )
+
+        # Create public entries
+        for i in range(8):
+            Entry.objects.create(
+                id=uuid.uuid4(),
+                author=self.author1 if i % 2 == 0 else self.author2,
+                title=f"Public Entry {i+1}",
+                description=f"Description {i+1}",
+                content=f"Content {i+1}",
+                contentType="text/plain",
+                visibility="PUBLIC"
+            )
+
+        self.client = Client()
+
+    def test_browse_public_entries(self):
+        url = reverse('api:browse_public_entries')
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn("page_number", data)
+        self.assertIn("size", data)
+        self.assertIn("count", data)
+        self.assertIn("src", data)
+        # There should be 8 public entries total
+        self.assertEqual(data["count"], 8)
+        # Default size is 5
+        self.assertEqual(len(data["src"]), 5)
+
+    def test_pagination(self):
+        url = reverse('api:browse_public_entries') + "?page=2&size=5"
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["page_number"], 2)
+        self.assertEqual(data["size"], 5)
+        # Second page should have remaining 3 entries
+        self.assertEqual(len(data["src"]), 3)

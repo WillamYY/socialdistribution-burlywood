@@ -11,7 +11,9 @@ This document covers the API implementation and expected behavior for **Entries,
 * **#21**: As an author, I want to be able to use my web-browser to manage/author my entries.
 * **#22**: As an author, other authors cannot modify my entries.
 * **#41**: As an author, I don't want anyone who isn't a friend to be able to see my friends-only entries and images.
+* **#46**: As an author, I should be able to browse the public entries of everyone, so that I can see what's going on beyond authors I follow. Note: this should include all local public entries and all public entries received in any inbox.
 * **#91**: As an author, entries I create should always be visible to me until they are deleted.
+
 
 ---
 
@@ -201,7 +203,58 @@ To provide a user-friendly, browser-based management system for authors to creat
 }
 
 ```
+## Browse Public Entries (US #46)
 
+**URL:** `GET /api/entries/public/?page=<page>&size=<size>`  
+**Relevant User Stories:** #46, #91
+
+* **When to use it:**  
+  To retrieve all public entries in the system, including local public entries and entries received in any inbox.  
+  Useful for “explore” pages or feeds visible to all users, including unauthenticated ones.
+
+* **How to use it:**  
+  Send a GET request. Optional query parameters: `page` (default 1), `size` (default 5).  
+  Example: `/api/entries/public/?page=2&size=5`
+
+* **Why to use it:**  
+  Provides a paginated list of public entries.  
+  Enforces visibility rules (PUBLIC only).  
+  Supports frontend feed rendering without needing per-author requests.
+
+* **Why Not to use it:**  
+  Returns only PUBLIC entries.  
+  Remote/federated inbox entries will be merged after inbox implementation.  
+  Do not use if you need entries visible only to friends or followers.
+
+### Request Parameters
+
+* `page`: integer, default 1 — Page number for pagination.  
+* `size`: integer, default 5 — Number of entries per page.
+
+### Response Example
+
+```json
+{
+  "page_number": 1,
+  "size": 5,
+  "count": 8,
+  "src": [
+    {
+      "type": "entry",
+      "title": "Public Entry 1",
+      "id": "http://node/api/authors/1/entries/123",
+      "description": "Description 1",
+      "contentType": "text/plain",
+      "content": "Content 1",
+      "author": { "type": "author", "id": "http://node/api/authors/1" },
+      "comments": { "type": "comments", "count": 0, "src": [] },
+      "likes": { "type": "likes", "count": 0, "src": [] },
+      "published": "2026-03-12T10:00:00+00:00",
+      "visibility": "PUBLIC"
+    }
+  ]
+}
+```
 ---
 
 ## Image Proxy API
