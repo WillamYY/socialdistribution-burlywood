@@ -60,3 +60,15 @@ class AuthorRequest(models.Model):
     picture_url = models.URLField(blank=True)
     host = models.URLField(blank=True)
     web = models.URLField(blank=True)
+
+class HostedImage(models.Model):
+    title = models.CharField(max_length=255)
+    image = models.ImageField(upload_to='hosted_images/')
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.title
+        
+    def get_markdown_link(self):
+        # A handy property to show the admin exactly what to copy/paste
+        return f"![{self.title}](/media/{self.image.name})"
