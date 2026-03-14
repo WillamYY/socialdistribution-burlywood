@@ -1,6 +1,8 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from .models import Author, FollowRequest, AuthorRequest
+from entries.models import Entry
+from interactions.models import Like
 from django.contrib.auth.hashers import check_password
 
 def SignUpView(request):
@@ -189,6 +191,12 @@ def ProfileDisplay(request, id):
         is_following = author in me.following.all()
         request_sent = FollowRequest.objects.filter(requester=me, target=author).exists()
 
+    public_entries = Entry.objects.filter(author = author, visibility="PUBLIC")
+    base_url = request.build_absolute_uri('/')[:-1]
+    for entry in public_entries:
+        entry_url = f"{base_url}/app/entry/{entry.id}/"
+        entry.like_count = Like.objects.filter(object=entry_url).count()
+
     context = {
         "author": author,
         "followers_count": author.followers.count(),
@@ -196,6 +204,7 @@ def ProfileDisplay(request, id):
         "is_following": is_following,
         "request_sent": request_sent,
         "logged_in_id": logged_in_id,
+        "public_entries": public_entries
     }
     return render(request, "profileview.html", context)
 

@@ -40,7 +40,38 @@
             font-size: 14px;
             color: #6b7280;
         }
+        .entry__container {
+            margin-top: 1em;
+            border: none;
+            box-shadow: 0.1rem 0.1rem 1rem rgba(0, 0, 0, 0.5);
+            border-radius: 1em;
+            overflow-y: auto;
+            height: 30em;
+        }
+
+        .h2__container {
+            position: sticky;
+            top: 0;
+            width: 100%;
+            margin-top: 0;
+            padding: 1em;
+            background-color: var(--primary);
+            color: white;
+        }
+
+        .entry__section {
+            border: none;
+            margin: 2em;
+            padding: 1em;
+            border-radius: 1em;
+            background-color: green;
+        }
     </style>
+    <script>
+        window.addEventListener("load", () => {
+
+        });
+    </script>
 </head>
 <body>
     <nav class="top-nav">
@@ -92,6 +123,23 @@
                 <a href="{% url 'view_entries' author.id %}" class="follow-btn view-entries">View Entries</a>
             {% endif %}
         </div>
+        <section class="entry__container">
+            <h2 class="h2__container">Public entries</h2>
+            {% for entry in public_entries %}
+                <section class="entry__section">
+                    <h2>{{ entry.title }}</h2>
+                    <h3>{{ entry.published }}</h3>
+                    <h3>{{ entry.description }}</h3>
+                    {% if "image" in entry.contentType %}
+                        <img src="{% url 'api:ApiEntryImage' author_id=entry.author.id entry_id=entry.id %}" class="entry-image">
+                    {% elif entry.contentType == "text/markdown" %}
+                        <div class="entry-markdown">{{ entry.content|safe }}</div>
+                    {% else %}
+                        <div class="entry-plain-text">{{ entry.content|linebreaks }}</div>
+                    {% endif %}
+                </section>
+            {% endfor %}
+        </section>
     </div>
 </body>
 </html>
