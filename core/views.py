@@ -47,8 +47,9 @@ def SignUpProcessing(request):
                         #description=description,
                         #github=github,
                         #picture=picture
-                        host = f"http://{request.get_host()}/api",
-                        password = password
+                        name=username,
+                        host=f"http://{request.get_host()}/",
+                        password=password
                     )
                     #new_author.set_password(password)  # hash password
                     new_author.save()

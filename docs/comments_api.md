@@ -1,172 +1,274 @@
 # Comments API Documentation
 
-This document covers the API implementation and expected behavior for **Commenting on Entries** user stories, referencing GitHub issues.
+This document describes the API endpoints related to comments on entries, including comment creation, retrieval, and visibility rules.
 
-## API User Stories
-Comments
+These endpoints support the following user stories:
 
-#62 As an author, comments on my friends-only entries are visible only to my friends and the comment's author.
-
-#57 As an author, I want to comment on entries that I can access, so I can make a witty reply.
-
-Likes on Comments
-
-#59 As an author, I want to like comments that I can access, so I can show my appreciation.
-
-
-## Object Schemas
-**Note:** \* Denotes a required field for POST body
-
-### Comment Object
-* `type` → type of object
-* `author`\* → author object defined by the following:
-    * `type` → type of object
-    * `id`\* → FQID of the author of the comment
-    * `host` → host node of author
-    * `displayName` → displayed name of the author
-    * `github` → link to author's github
-    * `profileImage` → link to profile picture
-    * `web` → URL to author profile page
-* `comment`\* → text content of the comment
-* `contentType` → format of comment (e.g. `text/plain`, `text/markdown`)
-* `published` → date the comment was created
-* `id` → id of the comment object
-* `object`\* → FQID of the entry being commented on
-
-### Comments Object
-* `type` → type of object
-* `id` → endpoint used to query this object
-* `page_number` → current page number
-* `size` → size of each page
-* `count` → total number of comments
-* `src` → list of Comment objects, [Comment[]](#comment-object)
+- #57 As an author, I want to comment on entries I can access.
+- #62 As an author, comments on my friends-only entries are visible only to my friends and the comment's author.
+- #59 As an author, I want to like comments that I can access.
 
 ---
 
-## Comments APIs
+# Object Schemas
 
-### Creating a comment
+## Comment Object
 
-**URL:** `POST /api/authors/{AUTHOR_ID}/entries/{ENTRY_ID}/comments`  
-**Description:** Creates a comment on a local entry
+Represents a single comment made on an entry.
 
-**POST Example:**
-POST /api/authors/2/entries/20de2d32/comments
+| Field | Type | Description |
+|------|------|-------------|
+| type | string | Always `"comment"` |
+| id | string (URL) | Fully Qualified ID (FQID) of the comment |
+| author | object | Author object describing the commenter |
+| comment | string | Text content of the comment |
+| contentType | string | Content format (`text/plain` or `text/markdown`) |
+| published | datetime | Timestamp when the comment was created |
+| object | string (URL) | FQID of the entry the comment belongs to |
+
+---
+
+## Author Object
+
+Represents the author who created the comment.
+
+| Field | Type | Description |
+|------|------|-------------|
+| type | string | `"author"` |
+| id | string (URL) | FQID of the author |
+| host | string (URL) | Host node of the author |
+| displayName | string | Author display name |
+| github | string | GitHub profile URL |
+| profileImage | string | Profile image URL |
+| web | string | Author profile webpage |
+
+Example:
+
 ```json
 {
-    "type": "comment",
-    "author": {
-        "type": "author",
-        "id": "http://127.0.0.1:8000/api/authors/1",
-        "displayName": "displayName",
-        "github": "",
-        "profileImage": ""
-    },
-    "comment": "Nice post!",
-    "contentType": "text/plain"
+  "type": "author",
+  "id": "http://127.0.0.1:8000/api/authors/1",
+  "host": "http://127.0.0.1:8000/api/",
+  "displayName": "displayName",
+  "github": "",
+  "profileImage": null,
+  "web": "http://127.0.0.1:8000/authors/1"
 }
+```
 
+---
+
+## Comments Object
+
+Represents a paginated collection of comments.
+
+| Field | Type | Description |
+|------|------|-------------|
+| type | string | `"comments"` |
+| id | string | Endpoint used to retrieve the comments |
+| page_number | integer | Current page number |
+| size | integer | Number of comments per page |
+| count | integer | Total number of comments |
+| src | array | List of Comment objects |
+
+---
+
+# API Endpoints
+
+## Create Comment
+
+Creates a comment on a specific entry.
+
+### Endpoint
+
+```
+POST /api/authors/{AUTHOR_ID}/entries/{ENTRY_ID}/comments
+```
+
+### Description
+
+Creates a comment on an entry if the requesting author has permission to access the entry.
+
+---
+
+### Request Body Example
 
 ```json
 {
-    "type": "comment",
-    "author": {
+  "type": "comment",
+  "author": {
+    "type": "author",
+    "id": "http://127.0.0.1:8000/api/authors/1",
+    "displayName": "displayName",
+    "github": "",
+    "profileImage": ""
+  },
+  "comment": "Nice post!",
+  "contentType": "text/plain"
+}
+```
+
+---
+
+### Successful Response
+
+**201 Created**
+
+```json
+{
+  "type": "comment",
+  "id": "http://127.0.0.1:8000/comments/4fae7c18",
+  "author": {
+    "type": "author",
+    "id": "http://127.0.0.1:8000/api/authors/1",
+    "displayName": "displayName",
+    "github": "",
+    "profileImage": ""
+  },
+  "comment": "Nice post!",
+  "contentType": "text/plain",
+  "published": "2026-03-01T13:10:07.085666-07:00",
+  "object": "http://127.0.0.1:8000/api/authors/2/entries/20de2d32"
+}
+```
+
+---
+
+### Status Codes
+
+| Code | Meaning |
+|-----|--------|
+| 201 | Comment successfully created |
+| 400 | Invalid request body |
+| 401 | Authentication required |
+| 403 | User does not have permission to comment |
+| 404 | Entry or author not found |
+| 405 | Method not allowed |
+
+---
+
+## Get Comments on Entry
+
+Returns all comments on a specific entry.
+
+### Endpoint
+
+```
+GET /api/authors/{AUTHOR_ID}/entries/{ENTRY_ID}/comments
+```
+
+### Description
+
+Returns comments associated with the entry.
+
+Comments returned depend on the visibility of the entry and the requesting user's permissions.
+
+---
+
+### Response Example
+
+```json
+{
+  "type": "comments",
+  "id": "http://127.0.0.1:8000/api/authors/2/entries/20de2d32/comments",
+  "page_number": 1,
+  "size": 5,
+  "count": 1,
+  "src": [
+    {
+      "type": "comment",
+      "id": "http://127.0.0.1:8000/comments/4fae7c18",
+      "author": {
         "type": "author",
         "id": "http://127.0.0.1:8000/api/authors/1",
+        "host": "http://127.0.0.1:8000/api/",
         "displayName": "displayName",
         "github": "",
-        "profileImage": ""
-    },
-    "comment": "Nice post!",
-    "contentType": "text/plain"
+        "profileImage": null,
+        "web": "http://127.0.0.1:8000/authors/1"
+      },
+      "comment": "Nice post!",
+      "contentType": "text/plain",
+      "published": "2026-03-01T13:10:07.085666-07:00",
+      "object": "http://127.0.0.1:8000/api/authors/2/entries/20de2d32"
+    }
+  ]
 }
-Status codes
+```
 
-201 → Comment successfully created
+---
 
-401 → Login required to comment
+### Status Codes
 
-403 → Author cannot access this entry
+| Code | Meaning |
+|-----|--------|
+| 200 | Comments successfully retrieved |
+| 403 | Entry is not visible to requester |
+| 404 | Entry or author not found |
+| 405 | Method not allowed |
 
-404 → Author or entry not found
+---
 
-405 → Method not allowed on endpoint
+## Get Comments Using Entry FQID
 
+Allows nodes to retrieve comments using the entry's fully qualified ID.
 
-URL: GET /api/authors/{AUTHOR_ID}/entries/{ENTRY_ID}/comments
-Description: Returns all comments visible to the requesting user
-{
-    "type": "comments",
-    "id": "http://127.0.0.1:8000/api/authors/2/entries/20de2d32/comments",
-    "page_number": 1,
-    "size": 5,
-    "count": 1,
-    "src": [
-        {
-            "type": "comment",
-            "author": {
-                "type": "author",
-                "id": "http://127.0.0.1:8000/api/authors/1",
-                "host": "http://127.0.0.1:8000/api/",
-                "displayName": "displayName",
-                "github": "",
-                "profileImage": null,
-                "web": "http://127.0.0.1:8000/api/"
-            },
-            "comment": "Nice post!",
-            "contentType": "text/plain",
-            "published": "2026-03-01T13:10:07.085666-07:00",
-            "id": "http://127.0.0.1:8000/api/authors/1/commented/99",
-            "object": "http://127.0.0.1:8000/api/authors/2/entries/20de2d32"
-        }
-    ]
-}
-Status codes
+### Endpoint
 
-200 → Successfully returned comments
+```
+GET /api/entries/{ENTRY_FQID}/comments
+```
 
-403 → Entry not visible to requester
+### Description
 
-404 → Author or entry not found
+Returns comments associated with the entry identified by the FQID.
 
-405 → Method not allowed on endpoint
+This endpoint is used for federated node communication between servers.
 
+The response structure is the same as the **Comments Object**.
 
-URL: GET /api/authors/{AUTHOR_ID}/entries/{ENTRY_ID}/comments
-Description: Returns all comments visible to the requesting user
-{
-    "type": "comments",
-    "id": "http://127.0.0.1:8000/api/entries/http://127.0.0.1:8000/api/authors/2/entries/20de2d32/comments",
-    "page_number": 1,
-    "size": 5,
-    "count": 1,
-    "src": [
-        {
-            "type": "comment",
-            "author": {
-                "type": "author",
-                "id": "http://127.0.0.1:8000/api/authors/1",
-                "host": "http://127.0.0.1:8000/api/",
-                "displayName": "displayName",
-                "github": "",
-                "profileImage": null,
-                "web": "http://127.0.0.1:8000/api/"
-            },
-            "comment": "Nice post!",
-            "contentType": "text/plain",
-            "published": "2026-03-01T13:10:07.085666-07:00",
-            "id": "http://127.0.0.1:8000/api/authors/1/commented/99",
-            "object": "http://127.0.0.1:8000/api/authors/2/entries/20de2d32"
-        }
-    ]
-}
-Status codes
+---
 
-200 → Successfully returned comments
+# Pagination
 
-404 → Entry FQID not found
+Comment lists support pagination.
 
-405 → Method not allowed on endpoint
+| Parameter | Description |
+|----------|-------------|
+| page | Page number |
+| size | Number of comments per page |
 
+Example request:
 
-Some documentation text was generated with the assistance of ChatGPT (OpenAI, https://chatgpt.com) on March 1, 2026. The prompt is: Check my current comment api doc and add parts with similar structure to api_like.md.
+```
+GET /api/authors/{AUTHOR_ID}/entries/{ENTRY_ID}/comments?page=1&size=5
+```
+
+---
+
+# Visibility Rules
+
+Comments follow the visibility rules of the entry they belong to.
+
+| Entry Visibility | Who Can See Comments |
+|-----------------|----------------------|
+| PUBLIC | Everyone |
+| UNLISTED | Anyone with the link |
+| FRIENDS | Mutual followers only |
+| DELETED | No one |
+
+---
+
+# Notes
+
+Comments reference entries using **Fully Qualified IDs (FQIDs)** to ensure compatibility with federated nodes.
+
+Comment IDs are also stored as FQIDs to guarantee global uniqueness across different nodes.
+
+---
+
+# Citation
+
+Some documentation text and formatting improvements were generated with assistance from **ChatGPT (OpenAI)**.
+
+OpenAI. (2026). *ChatGPT*. https://chatgpt.com
