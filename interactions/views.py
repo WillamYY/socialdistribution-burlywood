@@ -43,8 +43,9 @@ def add_comment(request, entry_id):
         comment_text = request.POST.get("comment")
         
         if comment_text:
-            entry_fqid = f"{request.build_absolute_uri('/')[:-1]}/app/entry/{entry.id}/"
-            author_fqid = f"{request.build_absolute_uri('/')[:-1]}/api/authors/{author_id}"
+            base = request.build_absolute_uri('/')[:-1]
+            entry_fqid = f"{base}/api/authors/{entry.author.id}/entries/{entry.id}"
+            author_fqid = f"{base}/api/authors/{author_id}"
 
             Comment.objects.create(
                 id=f"{request.build_absolute_uri('/')[:-1]}/comments/{uuid.uuid4()}",

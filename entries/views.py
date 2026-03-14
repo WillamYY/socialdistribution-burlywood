@@ -331,6 +331,7 @@ def view_my_entries(request):
 
     # Manually attach Like/Comment data for interactions
     for entry in entries:
+        base = request.build_absolute_uri('/')[:-1]
         entry_url = f"{base}/api/authors/{entry.author.id}/entries/{entry.id}"
         
         # entry likes
