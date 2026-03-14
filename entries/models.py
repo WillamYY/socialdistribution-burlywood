@@ -28,5 +28,8 @@ class Entry(models.Model):
     ]
     visibility = models.CharField(max_length=20, choices=VISIBILITY_CHOICES, default="PUBLIC")
 
+    # For GitHub activity sync (User Story #5): avoid importing same event twice
+    github_event_id = models.BigIntegerField(null=True, blank=True, unique=True)
+
     def __str__(self):
         return self.title

@@ -2,6 +2,8 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from .models import Author, FollowRequest, AuthorRequest
 from django.contrib.auth.hashers import check_password
+from .services import sync_author_github_activity
+from .validators import validate_username, validate_password, validate_github_url
 
 def SignUpView(request):
     """
@@ -16,63 +18,38 @@ def SignUpView(request):
 def SignUpProcessing(request):
     """
     Handles form submission for signup.
+    Validates username, password, and account type.
     """
     if request.method == "POST":
-        username = request.POST.get("username")
-        password = request.POST.get("password")
-        #name = request.POST.get("name", "")
-        #description = request.POST.get("description", "")
-        #github = request.POST.get("github", "")
-        #picture = request.FILES.get("picture", None)
+        username = (request.POST.get("username") or "").strip()
+        password = request.POST.get("password") or ""
+        account_type = request.POST.get("account_type", "author")
 
-        # Ensures the username is not taken and that it isn't currently pending in an author request
-        if not Author.objects.filter(username=username).exists() and not AuthorRequest.objects.filter(username=username).exists():
-            # Ensures the length of the password is at least 8 letters
-            if len(password) >= 8:
-                # Ensures there is at least one letter and at least one number
-                has_letter = False
-                has_number = False
-                for char in password:
-                    if char.isalpha(): # Upon the first letter being found break and note that one was found
-                        has_letter = True
-                    if char.isnumeric():
-                        has_number = True
-                    # Once both a letter and number have been found break immediately
-                    if has_number and has_letter:
-                        break
-                if has_letter and has_number:
-                    new_author = AuthorRequest(
-                        username=username,
-                        #name=name,
-                        #description=description,
-                        #github=github,
-                        #picture=picture
-                        host = f"http://{request.get_host()}/api",
-                        password = password
-                    )
-                    #new_author.set_password(password)  # hash password
-                    new_author.save()
-                    messages.info(request,"Approval Pending") # Tells the user that the approval for siging up is pending
-                    return redirect("SignUp")
-                # Prints an error message if the password is missing both a number and letter
-                elif not has_letter and not has_number:
-                    messages.error(request,"Password requires at least one letter and one number")
-                    return redirect("SignUp")
-                # Prints an error message if the password is missing only letter
-                elif not has_letter:
-                    messages.error(request,"Password requires at least one letter")
-                    return redirect("SignUp")
-                    # Prints an error message if the password is missing only letter
-                elif not has_number:
-                    messages.error(request,"Password requires at least one number")
-                    return redirect("SignUp")
-            # Displays an error message if the password is too short
-            else:
-                messages.error(request, "Password must be 8 letters")
-                return redirect("SignUp")
-        else:
+        # Validate username format
+        ok, err = validate_username(username)
+        if not ok:
+            messages.error(request, err)
+            return redirect("SignUp")
+
+        # Validate password
+        ok, err = validate_password(password)
+        if not ok:
+            messages.error(request, err)
+            return redirect("SignUp")
+
+        # Check username availability
+        if Author.objects.filter(username=username).exists() or AuthorRequest.objects.filter(username=username).exists():
             messages.error(request, "Username already taken")
             return redirect("SignUp")
+
+        new_author = AuthorRequest(
+            username=username,
+            host=f"http://{request.get_host()}/api",
+            password=password,
+        )
+        new_author.save()
+        messages.info(request, "Approval Pending")
+        return redirect("SignUp")
     return redirect("SignUp")
 
 def NodeDisplay(request):
@@ -120,7 +97,7 @@ def logout_view(request):
 def edit_profile(request):
     """
     Allows the logged-in author to edit their profile.
-    Checks for username uniqueness before updating.
+    Validates username format, uniqueness, and GitHub URL.
     """
     if not request.session.get("author_id"):
         return redirect("/app/login")
@@ -128,17 +105,34 @@ def edit_profile(request):
     author = Author.objects.get(id=request.session["author_id"])
 
     if request.method == "POST":
-        new_username = request.POST.get("username")
+        new_username = (request.POST.get("username") or "").strip()
+        github = (request.POST.get("github") or "").strip()
+        # Apply POST data to author for re-display on validation error
+        author.name = request.POST.get("name", author.name)
+        author.description = request.POST.get("description", author.description)
+        author.github = github
+
+        # Validate username format
+        if new_username:
+            ok, err = validate_username(new_username)
+            if not ok:
+                author.username = new_username
+                return render(request, "edit_profile.html", {"author": author, "error": err})
+
+        # Check username change and uniqueness
         if new_username and new_username != author.username:
             if Author.objects.filter(username=new_username).exists():
-                error = "Username already taken"
-                return render(request, "edit_profile.html", {"author": author, "error": error})
+                author.username = new_username
+                return render(request, "edit_profile.html", {"author": author, "error": "Username already taken"})
             author.username = new_username
             request.session["username"] = new_username
 
-        author.name = request.POST.get("name")
-        author.description = request.POST.get("description")
-        author.github = request.POST.get("github")
+        # Validate GitHub URL
+        ok, err = validate_github_url(github)
+        if not ok:
+            return render(request, "edit_profile.html", {"author": author, "error": err})
+
+        author.github = github if github else ""
 
         if request.FILES.get("picture"):
             author.picture = request.FILES["picture"]
@@ -148,6 +142,23 @@ def edit_profile(request):
         return render(request, "edit_profile.html", {"author": author, "success": success})
 
     return render(request, "edit_profile.html", {"author": author})
+
+def sync_github_view(request):
+    """
+    Sync the logged-in author's GitHub public activity into public entries.
+    User Story #5.
+    """
+    if not request.session.get('author_id'):
+        return redirect('/app/login/')
+
+    author = get_object_or_404(Author, id=request.session['author_id'])
+    created, err = sync_author_github_activity(author)
+    if err:
+        messages.warning(request, err)
+    else:
+        messages.success(request, f'Synced {created} new GitHub activity as public entries.')
+    return redirect('ProfileView')
+
 
 def profile_view(request):
     """

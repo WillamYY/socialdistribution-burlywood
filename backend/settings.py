@@ -47,6 +47,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'core.middleware.SameOriginSecurityMiddleware',  # US#79: UI only communicates with node's web server
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -128,3 +129,7 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 LOGIN_URL = '/app/login/'
 LOGIN_REDIRECT_URL = '/app/profile/'
+
+# Optional: GitHub token for higher API rate limit (5000/hr vs 60/hr without)
+# Set GITHUB_TOKEN env var or add to local settings
+GITHUB_TOKEN = os.environ.get('GITHUB_TOKEN', '')

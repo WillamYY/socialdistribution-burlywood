@@ -293,3 +293,31 @@ class AdminUserStoryTestCase(TestCase):
         # Ensures no likes have arrayfields
         for field in Like._meta.get_fields():
             self.assertFalse(isinstance(field,ArrayField))
+
+
+class SameOriginSecurityMiddlewareTestCase(TestCase):
+    """
+    Tests for User Story #79: UI only communicates with node's web server.
+    Verifies security headers are set to prevent XSS.
+    """
+
+    def test_csp_header_present(self):
+        """Content-Security-Policy restricts connect-src to 'self'."""
+        response = self.client.get("/")
+        self.assertIn("Content-Security-Policy", response)
+        self.assertIn("connect-src 'self'", response["Content-Security-Policy"])
+
+    def test_x_content_type_options(self):
+        """X-Content-Type-Options prevents MIME sniffing."""
+        response = self.client.get("/")
+        self.assertEqual(response.get("X-Content-Type-Options"), "nosniff")
+
+    def test_x_frame_options(self):
+        """X-Frame-Options prevents clickjacking."""
+        response = self.client.get("/")
+        self.assertEqual(response.get("X-Frame-Options"), "SAMEORIGIN")
+
+    def test_referrer_policy(self):
+        """Referrer-Policy limits referrer leakage."""
+        response = self.client.get("/")
+        self.assertIsNotNone(response.get("Referrer-Policy"))

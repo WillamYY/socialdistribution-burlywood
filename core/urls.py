@@ -8,6 +8,7 @@ urlpatterns = [
     path("login/", views.login_view, name="Login"),
     path("logout/", views.logout_view, name="Logout"),
     path("profile/", views.profile_view, name="ProfileView"),
+    path("profile/sync-github/", views.sync_github_view, name="sync_github"),
     path("edit-profile/", views.edit_profile, name="EditProfileView"),
     path("user/<int:id>/", views.ProfileDisplay, name="ProfileDisplay"),
     path("user/<int:author_id>/follow/", views.follow_author, name="FollowAuthor"),
