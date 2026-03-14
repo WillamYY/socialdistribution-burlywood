@@ -192,11 +192,20 @@ def ProfileDisplay(request, id):
         is_following = author in me.following.all()
         request_sent = FollowRequest.objects.filter(requester=me, target=author).exists()
 
+
+    user_fqid = None
+    if logged_in_id:
+        user_fqid = f"{request.build_absolute_uri('/')[:-1]}/api/authors/{logged_in_id}"
     public_entries = Entry.objects.filter(author = author, visibility="PUBLIC")
     base_url = request.build_absolute_uri('/')[:-1]
     for entry in public_entries:
-        entry_url = f"{base_url}/app/entry/{entry.id}/"
+        entry_url = f"{base_url}/api/authors/{entry.author.id}/entries/{entry.id}"
         entry.like_count = Like.objects.filter(object=entry_url).count()
+
+        if user_fqid:
+            entry.liked_by_user = Like.objects.filter(object=entry_url, author=user_fqid).exists()
+        else:
+            entry.liked_by_user = False
 
     context = {
         "author": author,

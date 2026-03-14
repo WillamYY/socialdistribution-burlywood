@@ -433,14 +433,13 @@ def get_entry(request, entry_id):
     entry_url = f"{base_url}/api/authors/{entry.author.id}/entries/{entry.id}"
     logged_in_id = request.session.get("author_id")
     referer = request.META.get('HTTP_REFERER')
-    
     if referer:
         try:
             # Resolve the URL to see which view function it points to
             match = resolve(referer.replace(base_url, ""))
             
             # Update the return URL only if came from a LIST view (i.e. stream, my-entries, etc.)
-            list_views = ['stream', 'view_my_entries', 'view_entries']
+            list_views = ['stream', 'view_my_entries', 'view_entries', "ProfileDisplay"]
             
             if match.url_name in list_views:
                 request.session['last_feed_url'] = referer
