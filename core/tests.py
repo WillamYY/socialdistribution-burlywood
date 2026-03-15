@@ -218,6 +218,30 @@ class EditProfileAPITestCase(TestCase):
         self.assertEqual(response.status_code, 302)  # redirect to login
         self.assertIn("/login", response.url)
 
+class FollowerFollowingFriendsTestCase(TestCase):
+    """
+    User story #55: As an author, my node will know about my followers, who I am following, and my friends, so that I don't have to keep track of it myself.
+    """
+    def test_follower_following_friend(self):
+        self.author1 = Author.objects.create(username='author1', password='pass1')
+        self.author2 = Author.objects.create(username='author2', password='pass2')
+
+        # initially no one is following each other
+        self.assertEqual(self.author1.followers.count(), 0)
+        self.assertEqual(self.author2.followers.count(), 0)
+        
+        # author 2 follows author 1
+        self.author1.followers.add(self.author2)
+        self.assertEqual(self.author1.followers.count(), 1)
+        self.assertEqual(self.author2.followers.count(), 0)
+
+        # author 1 follows author 2
+        self.author2.followers.add(self.author1)
+        self.assertEqual(self.author1.followers.count(), 1)
+        self.assertEqual(self.author1.followers.count(), 1)
+        self.assertEqual(self.author1.friends().count(), 1)
+        self.assertEqual(self.author2.friends().count(), 1)
+
 class ProfileViewTestCase(TestCase):
     def test_get_profile_entries(self):
         """
