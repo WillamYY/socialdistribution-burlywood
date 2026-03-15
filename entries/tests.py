@@ -300,3 +300,121 @@ class EntryWebUITests(TestCase):
         self.assertEqual(response_img.status_code, 200)
         self.assertEqual(response_text.status_code, 200)
         self.assertTrue(response_text.context['allowed'])
+
+    def test_see_deleted_entries(self):
+        """
+        User Story #42: As an author, I don't want anyone except the node admin to see my deleted entries.
+        """
+        deleted_url = reverse('get_entry', kwargs={'entry_id': self.deleted_entry.id})
+        
+        # Log in as author A
+        session = self.client.session
+        session['author_id'] = self.author_a.id
+        session.save()
+
+        # Check if the status code is 404, not found since deleted
+        self.assertEqual(self.client.get(deleted_url).status_code, 404)
+
+        # Node admin able to see the deleted entry
+        self.assertTrue(Entry.objects.filter(id=self.deleted_entry.id).exists())
+
+    def test_see_public_unlisted(self):
+        """
+        User Story #40: As an author, I want everyone to be able to see my public and unlisted entries, if they have a link to it.
+        """
+        public_url = reverse('get_entry', kwargs={'entry_id': self.public_entry.id})
+        unlisted_url = reverse('get_entry', kwargs={'entry_id': self.unlisted_entry.id})
+
+        # Not logged in, a generic user
+        session = self.client.session
+        session['author_id'] = None
+        session.save()
+
+        # Check if generic user can access user A's public and unlisted entries
+        public_response = self.client.get(public_url)
+        unlisted_response = self.client.get(unlisted_url)
+        self.assertEqual(public_response.status_code, 200)
+        self.assertEqual(unlisted_response.status_code, 200)
+
+    def test_see_friends_only(self):
+        """
+        User story #36: As an author, I want to be able to make my entries "friends-only," so that I don't have to worry about people I don't know seeing them.
+        """
+        private_url = reverse('get_entry', kwargs={'entry_id': self.private_entry.id})
+        
+        # Log in as B (stranger)
+        session = self.client.session
+        session['author_id'] = self.author_b.id
+        session.save()
+
+        friend_response = self.client.get(private_url)
+        self.assertContains(friend_response, "<h1>Entry Unavailable</h1>")
+
+    def test_everyone_see_public_entries(self):
+        """
+        User story #34: As an author, I want to be able to make my entries "public", so that everyone can see them.
+        """
+        entries_url = reverse("view_entries", kwargs={"author_id": self.author_a.id})
+
+        # Not logged in, a generic user
+        session = self.client.session
+        session['author_id'] = None
+        session.save()
+
+        response = self.client.get(entries_url)
+        self.assertContains(response, "<h2 class=\"entry-title\">Visible Post</h2>")
+        self.assertContains(response, "<span class=\"badge-visibility\">PUBLIC</span>")
+
+    def test_followers_see_unlisted_entries(self):
+        """
+        User story #35: As an author, I want to be able to make my entries "unlisted," so that my followers see them, and anyone with the link can also see them.
+        """
+        unlisted_url = reverse('get_entry', kwargs={'entry_id': self.unlisted_entry.id})
+        
+        # Not logged in, a generic user
+        session = self.client.session
+        session['author_id'] = None
+        session.save()
+
+        # anyone with the link can see the unlisted post
+        unlisted_response = self.client.get(unlisted_url)
+        self.assertEqual(unlisted_response.status_code, 200)
+
+        # Logged in as B, follower of A
+        session = self.client.session
+        session['author_id'] = self.author_b.id
+        session.save()
+
+        # makes B follow A
+        self.author_a.followers.add(self.author_b)
+
+        entries_url = reverse("view_entries", kwargs={"author_id": self.author_a.id})
+
+        response = self.client.get(entries_url)
+        self.assertContains(response, "<h2 class=\"entry-title\">Visible Post</h2>")
+        self.assertContains(response, "<span class=\"badge-visibility\">UNLISTED</span>")
+
+    def test_get_entry_url(self):
+        """
+        User Story #41: As a reader, I can get a link to a public or unlisted entry, so I can send it to my friends over email, discord, slack, etc.
+        """
+        public_url = reverse('get_entry', kwargs={'entry_id': self.public_entry.id})
+        unlisted_url = reverse('get_entry', kwargs={'entry_id': self.unlisted_entry.id})
+        private_url = reverse('get_entry', kwargs={'entry_id': self.private_entry.id})
+        deleted_url = reverse('get_entry', kwargs={'entry_id': self.deleted_entry.id})
+
+        # Not logged in, a generic reader
+        session = self.client.session
+        session['author_id'] = None
+        session.save()
+
+        # Reader should only be able to access the public and unlisted entries given the URL
+        public_url_response = self.client.get(public_url)
+        self.assertTrue(public_url_response.context['allowed'])
+        unlisted_url_response = self.client.get(unlisted_url)
+        self.assertTrue(unlisted_url_response.context['allowed'])
+
+        private_url_response = self.client.get(private_url)
+        self.assertFalse(private_url_response.context['allowed'])
+        deleted_url_response = self.client.get(deleted_url)
+        self.assertEqual(deleted_url_response.status_code, 404)
