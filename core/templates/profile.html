@@ -83,9 +83,6 @@
         <p><strong>GitHub:</strong> 
           {% if author.github %}
             <a href="{{ author.github }}" target="_blank">{{ author.github }}</a>
-            {% if request.session.author_id == author.id %}
-              <a href="{% url 'sync_github' %}" class="button" style="margin-left: 10px; font-size: 0.9em;">Sync GitHub Activity</a>
-            {% endif %}
           {% else %}
             Not provided
           {% endif %}

@@ -12,12 +12,12 @@ Authors with a GitHub profile URL in their profile can sync their public GitHub 
 
 - Go to **Edit Profile** and add your GitHub profile URL (e.g. `https://github.com/yourusername`).
 
-### 2. Manual Sync (Profile Page)
+### 2. Automatic Sync (No Action Required)
 
-- On your **My Profile** page, next to your GitHub link, click **Sync GitHub Activity**.
-- New public events (pushes, forks, stars, issues, PRs, releases) will be imported as entries.
+- **When you view the stream:** GitHub activity for all authors with a GitHub URL is synced automatically (throttled to every 10 seconds). New pushes, stars, issues, etc. show up in the stream without any button click or profile save.
+- **When you save your profile** with a GitHub URL: your activity is also synced immediately so new entries appear right away.
 
-### 3. Automatic Sync (Management Command)
+### 3. Bulk Sync (Management Command)
 
 Run periodically (e.g. via cron) to sync all authors with GitHub URLs:
 

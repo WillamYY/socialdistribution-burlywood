@@ -138,7 +138,15 @@ def edit_profile(request):
             author.picture = request.FILES["picture"]
 
         author.save()
-        success = "Profile updated successfully!"
+
+        # Auto-sync GitHub activity when profile has a GitHub URL (User Story #5)
+        if author.github:
+            synced, _ = sync_author_github_activity(author)
+            success = "Profile updated successfully!"
+            if synced:
+                success += f" Synced {synced} new GitHub activity."
+        else:
+            success = "Profile updated successfully!"
         return render(request, "edit_profile.html", {"author": author, "success": success})
 
     return render(request, "edit_profile.html", {"author": author})

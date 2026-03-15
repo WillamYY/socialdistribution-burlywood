@@ -56,9 +56,10 @@ def format_github_event_as_entry(event):
     if event_type == 'PushEvent':
         commits = payload.get('commits', [])
         size = payload.get('size', len(commits))
+        commit_count = max(size, len(commits))  # API sometimes sends size=0
         ref = payload.get('ref', '')
         branch = ref.replace('refs/heads/', '') if ref.startswith('refs/heads/') else ref
-        title = f"Pushed {size} commit(s) to {repo_name}"
+        title = f"Pushed {commit_count} commit(s) to {repo_name}" if commit_count else f"Pushed to {repo_name}"
         description = f"Push to {branch}"
         if commits:
             content_parts.append("\n**Commits:**")
@@ -211,3 +212,18 @@ def sync_all_authors_github():
         created, err = sync_author_github_activity(author)
         results[author.id] = (created, err)
     return results
+
+
+def maybe_sync_github_for_stream():
+    """
+    Run sync for all authors with GitHub URLs if enough time has passed since last run.
+    Called when the stream is viewed so new GitHub activity shows up automatically.
+    Uses cache to throttle (default: once per GITHUB_SYNC_INTERVAL seconds).
+    """
+    from django.core.cache import cache
+    cache_key = 'github_stream_sync_last_run'
+    interval = getattr(settings, 'GITHUB_SYNC_INTERVAL', 300)
+    if cache.get(cache_key):
+        return
+    cache.set(cache_key, True, timeout=interval)
+    sync_all_authors_github()

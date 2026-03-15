@@ -133,3 +133,13 @@ LOGIN_REDIRECT_URL = '/app/profile/'
 # Optional: GitHub token for higher API rate limit (5000/hr vs 60/hr without)
 # Set GITHUB_TOKEN env var or add to local settings
 GITHUB_TOKEN = os.environ.get('GITHUB_TOKEN', '')
+
+# Cache for GitHub sync throttle (auto-sync when stream is viewed)
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'OPTIONS': {'MAX_ENTRIES': 100},
+    }
+}
+# How often to run GitHub sync when stream is viewed (seconds)
+GITHUB_SYNC_INTERVAL = 10  # 10 seconds
