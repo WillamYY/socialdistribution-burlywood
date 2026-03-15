@@ -3,6 +3,7 @@
 This document covers the API implementation and expected behavior for **Entries, Markdown, and Image** user stories, referencing GitHub issues. The following content in this document is mainly generated via the generative AI: Gemini 3 Pro, Google, 2026-03-01, https://gemini.google.com/u/0/app/48a83dd17d81fcf7?pageId=none
 
 ### User Stories Covered
+* **#6**: As an author, I want my profile page to show my public entries (most recent first), so they can decide if they want to follow me.
 * **#10**: As an author, I want to make entries.
 * **#12**: As an author, I want to edit my entries locally.
 * **#16**: As an author, entries I create can be images.
@@ -10,8 +11,13 @@ This document covers the API implementation and expected behavior for **Entries,
 * **#18**: As an author, CommonMark entries can link to images.
 * **#21**: As an author, I want to be able to use my web-browser to manage/author my entries.
 * **#22**: As an author, other authors cannot modify my entries.
+* **#36**: As an author, I want to be able to make my entries "friends-only," so that I don't have to worry about people I don't know seeing them.
+* **#40**: As an author, I want everyone to be able to see my public and unlisted entries, if they have a link to it.
 * **#41**: As an author, I don't want anyone who isn't a friend to be able to see my friends-only entries and images.
+* **#42**: As an author, I don't want anyone except the node admin to see my deleted entries.
+* **#44**: As a reader, I can get a link to a public or unlisted entry, so I can send it to my friends over email, discord, slack, etc.
 * **#46**: As an author, I should be able to browse the public entries of everyone, so that I can see what's going on beyond authors I follow. Note: this should include all local public entries and all public entries received in any inbox.
+* **#78**: As a node admin, I want deleted entries stay in the database and only be removed from the UI and API, so I can see what was deleted.
 * **#91**: As an author, entries I create should always be visible to me until they are deleted.
 
 
@@ -38,10 +44,10 @@ To provide a user-friendly, browser-based management system for authors to creat
 
 * **When to use it:** When a client needs to retrieve a feed of recent entries published by a specific author.
 * **How to use it:** Send a GET request. You can optionally append `?page=1&size=5` to paginate the results.
-* *Unauthenticated:* Returns only `PUBLIC` entries.
+* *Unauthenticated:* Returns only `PUBLIC` entries (**US #6, US #34**).
 * *Authenticated as Author:* Returns all non-deleted entries (**US #91**).
-* *Authenticated as Follower:* Returns `PUBLIC` + `UNLISTED`.
-* *Authenticated as Friend:* Returns all entries, enforcing **US #41**.
+* *Authenticated as Follower:* Returns `PUBLIC` + `UNLISTED` (**US #35, US #40**).
+* *Authenticated as Friend:* Returns all entries, enforcing **US #41** and **US #36**.
 
 
 * **Why to use it:** It correctly implements the project's pagination requirements and filters visibility based on the requester's relationship to the author.
@@ -88,7 +94,7 @@ To provide a user-friendly, browser-based management system for authors to creat
 
 **URL 1 (Local):** `GET /api/authors/{AUTHOR_SERIAL}/entries/{ENTRY_SERIAL}`
 **URL 2 (FQID):** `GET /api/entries/{ENTRY_FQID}`
-**Relevant User Stories:** #41, #91
+**Relevant User Stories:** #41, #44, #91
 
 * **When to use it:** To view the full details of a specific entry, including its comments and likes.
 * **How to use it:** Send a GET request. For URL 2, the `ENTRY_FQID` must be URL-encoded.
@@ -98,7 +104,7 @@ To provide a user-friendly, browser-based management system for authors to creat
 
 * **`200 OK`**: Successfully retrieved the entry.
 * **`403 Forbidden`**: The entry is `FRIENDS` only, and the requester is a stranger/unauthorized (**US #41**).
-* **`404 Not Found`**: The entry does not exist, or its visibility is set to `DELETED`.
+* **`404 Not Found`**: The entry does not exist, or its visibility is set to `DELETED` (**US #42**).
 
 ### B. Create Entry (Auto-generated ID)
 
@@ -141,7 +147,7 @@ To provide a user-friendly, browser-based management system for authors to creat
 
 ### Expected Status Codes
 
-* **`204 No Content`**: The entry was successfully soft-deleted.
+* **`204 No Content`**: The entry was successfully soft-deleted (**US #78**).
 * **`403 Forbidden`**: The requester is attempting to delete an entry belonging to another author (**US #22**).
 
 ### Request / Response Examples
