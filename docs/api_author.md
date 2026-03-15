@@ -6,6 +6,7 @@ This document covers the API implementation and expected behavior for the **Auth
 * **#2** Consistent ID for author
 * **#3** Multiple authors on a node
 * **#4** Public page of author
+* **#75** Everything is stored in a well-indexed relational database
 * **#77** No seperate database for front and backend
 
 ## Object Schemas
