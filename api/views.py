@@ -2,12 +2,13 @@
 import base64
 from email.mime import base
 import uuid
+from urllib.parse import unquote
 from django.http import HttpResponse, HttpResponseForbidden
-from django.shortcuts import render,get_object_or_404
+from django.shortcuts import render, get_object_or_404
 from django.urls import path
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from core.models import Author, AuthorRequest
+from core.models import Author, AuthorRequest, FollowRequest
 from entries.models import Entry
 from interactions.models import Like, Comment
 from .serializers import LikesSerializer, LikeSerializer, EntrySerializer, EntriesSerializer, CommentSerializer
@@ -224,43 +225,112 @@ def ApiEntryLikes(request, entry_fqid):
     likesSerializer = LikesSerializer({"page_number":page_number,"size":size,"count":count,"src":src},context = {"link":entryURL,"object":entryURL[:-len("/likes")]})
     return Response(likesSerializer.data)
 
-# Sends a like to the author (Currently creates a like on an entry only)
+# Unified Inbox (User Story #69): routes by object type
 @api_view(["POST"])
-def ApiSendLike(request,author_id):
-    # Gets the id of the liked entry from the url
-    entry_id = request.data.get("object").split("/")[-1]
-    # Ensures the entry exists before accessing it
-    if Entry.objects.filter(id = entry_id).exists():
-        entry = Entry.objects.get(id = entry_id)
-    else:
-        return Response(status = 404)
-    
-    # Check the visibility for the logged-in user
-    logged_in_id = request.session.get("author_id")
-    if not check_visibility(entry, logged_in_id):
-        return Response({"detail": "Forbidden"}, status=403)
-    
-    # If the entry is from a different author show an error code
+def ApiInbox(request, author_id):
+    """
+    POST [remote]: Unified inbox accepts like, follow, comment, entry.
+    Routes to appropriate handler by request body type.
+    """
+    obj_type = (request.data.get("type") or "like").lower()
+    if obj_type == "follow":
+        return _inbox_handle_follow(request, author_id)
+    if obj_type == "comment":
+        return _inbox_handle_comment(request, author_id)
+    if obj_type == "entry":
+        return _inbox_handle_entry(request, author_id)
+    return _inbox_handle_like(request, author_id)
+
+
+def _inbox_handle_follow(request, author_id):
+    """Handle follow request: actor wants to follow object (our author)."""
+    target = get_object_or_404(Author, id=author_id)
+    actor_data = request.data.get("actor") or {}
+    actor_id_str = (actor_data.get("id") or "").strip().rstrip("/")
+    if not actor_id_str:
+        return Response({"detail": "Missing actor"}, status=400)
+    # For local actor: extract id and get Author
+    try:
+        actor_local_id = int(actor_id_str.split("/")[-1])
+        actor = Author.objects.filter(id=actor_local_id).first()
+    except (ValueError, IndexError):
+        actor = None
+    if not actor:
+        return Response({"detail": "Actor author not found on this node"}, status=400)
+    if FollowRequest.objects.filter(requester=actor, target=target).exists():
+        return Response({"detail": "Follow request already sent"}, status=409)
+    if actor.following.filter(id=target.id).exists():
+        return Response({"detail": "Already following"}, status=409)
+    FollowRequest.objects.create(requester=actor, target=target)
+    return Response({"detail": "Follow request received"}, status=202)
+
+
+def _inbox_handle_comment(request, author_id):
+    """Handle comment: add comment to an entry."""
+    target_author = get_object_or_404(Author, id=author_id)
+    entry_url = request.data.get("entry") or (request.data.get("object") if isinstance(request.data.get("object"), str) else None)
+    if not entry_url:
+        return Response({"detail": "Missing entry"}, status=400)
+    entry_uuid = entry_url.rstrip("/").split("/")[-1]
+    try:
+        entry = Entry.objects.get(id=entry_uuid, author=target_author)
+    except Entry.DoesNotExist:
+        return Response({"detail": "Entry not found"}, status=404)
+    if entry.visibility == "DELETED":
+        return Response({"detail": "Entry not found"}, status=404)
+    author_data = request.data.get("author") or {}
+    author_url = author_data.get("id") or ""
+    comment_text = request.data.get("comment") or ""
+    if not comment_text or not author_url:
+        return Response({"detail": "Missing author or comment"}, status=400)
+    base = request.build_absolute_uri("/")[:-1]
+    entry_fqid = f"{base}/app/entry/{entry.id}/"
+    Comment.objects.create(
+        id=f"{base}/comments/{uuid.uuid4()}",
+        author=author_url,
+        entry=entry_fqid,
+        comment=comment_text,
+        contentType=request.data.get("contentType", "text/plain"),
+    )
+    return Response({"detail": "Comment received"}, status=202)
+
+
+def _inbox_handle_entry(request, author_id):
+    """Handle incoming entry: store for stream (basic support)."""
+    return Response({"detail": "Entry received (inbox storage not yet implemented)"}, status=202)
+
+
+def _inbox_handle_like(request, author_id):
+    """Handle like: existing like logic."""
+    obj_url = request.data.get("object")
+    if not obj_url:
+        return Response({"detail": "Missing object"}, status=400)
+    obj_url = obj_url.rstrip("/")
+    entry_id = obj_url.split("/")[-1]
+    try:
+        entry = Entry.objects.get(id=entry_id)
+    except (Entry.DoesNotExist, ValueError):
+        return Response(status=404)
+    if entry.visibility == "DELETED":
+        return Response(status=404)
     if entry.author.id != author_id:
-        return Response(status = 400)
-    else:
-        # Gets the id of the author from data
-        likeAuthor = request.data.get("author").get("id").split("/")[-1]
-        # If the author doing the liking does not exist return an error
-        if not Author.objects.filter(id = likeAuthor).exists():
-            return Response(status = 400)
-        likeAuthor = Author.objects.get(id = likeAuthor)
+        return Response(status=400)
+    author_data = request.data.get("author") or {}
+    author_url = (author_data.get("id") if isinstance(author_data, dict) else None) or ""
+    if not author_url:
+        return Response(status=400)
+    if Like.objects.filter(author=author_url, object=obj_url.rstrip("/")).exists():
+        return Response(status=409)
+    like = Like(
+        author=author_url,
+        object=obj_url.rstrip("/"),
+        id=f"{request.build_absolute_uri('/')[:-1]}/likes/{uuid.uuid4()}",
+        uuid=uuid.uuid4(),
+    )
+    like.save()
+    return Response(LikeSerializer(like).data, status=201)
 
-        if Like.objects.filter(author = request.data.get("author").get("id"), object = request.data.get("object")).exists():
-            return Response(status = 409)
 
-        like = Like(author = request.data.get("author").get("id"), object = request.data.get("object"))
-        likeId = uuid.uuid4()
-        like.id =f"{request.build_absolute_uri('/')[:-1]}/likes/{likeId}"
-        like.uuid = likeId
-        like.save()
-        like_serializer = LikeSerializer(like)
-        return Response(status = 201, data = like_serializer.data)
         
 @api_view(["GET"])
 def ApiAuthorLiked(request, author_id):
@@ -472,6 +542,58 @@ def ApiEntry(request, author_id, entry_id):
         
         return Response(status=204)
 
+
+def _parse_entry_fqid(entry_fqid, request):
+    """Parse entry FQID to get (author_id, entry_id) for local entries."""
+    try:
+        decoded = unquote(entry_fqid)
+        parts = decoded.rstrip("/").split("/")
+        if "entries" in parts:
+            idx = parts.index("entries")
+            if idx + 1 < len(parts):
+                entry_id = parts[idx + 1]
+                if "authors" in parts:
+                    aidx = parts.index("authors")
+                    if aidx + 1 < len(parts):
+                        author_id = int(parts[aidx + 1])
+                        return author_id, entry_id
+    except (ValueError, IndexError):
+        pass
+    return None, None
+
+
+def _parse_author_fqid(author_fqid):
+    """Parse author FQID to get local author id."""
+    try:
+        decoded = unquote(author_fqid)
+        parts = decoded.rstrip("/").split("/")
+        if "authors" in parts:
+            idx = parts.index("authors")
+            if idx + 1 < len(parts):
+                return int(parts[idx + 1])
+    except (ValueError, IndexError):
+        pass
+    return None
+
+
+@api_view(['GET'])
+def ApiEntryByFqid(request, entry_fqid):
+    """GET [local]: Retrieve entry by FQID. URL: /api/entries/{ENTRY_FQID}"""
+    author_id, entry_id = _parse_entry_fqid(entry_fqid, request)
+    if author_id is None:
+        return Response({"detail": "Not found"}, status=404)
+    return ApiEntry(request, author_id, entry_id)
+
+
+@api_view(['GET'])
+def ApiAuthorByFqid(request, author_fqid):
+    """GET [remote]: Retrieve author by FQID. URL: /api/authors/{AUTHOR_FQID}"""
+    author_id = _parse_author_fqid(author_fqid)
+    if author_id is None:
+        return Response({"detail": "Not found"}, status=404)
+    return ApiAuthor(request, author_id)
+
+
 @api_view(['GET'])
 def ApiEntryImage(request, author_id=None, entry_id=None, entry_fqid=None):
     """
@@ -545,6 +667,39 @@ def ApiEntryComments(request, author_id, entry_id):
         "count": comments.count(),
         "src": serializer.data
     })
+
+
+@api_view(['GET'])
+def ApiEntryCommentsByFqid(request, entry_fqid):
+    """GET [local, remote]: Comments on entry by FQID. URL: /api/entries/{ENTRY_FQID}/comments/"""
+    author_id, entry_id = _parse_entry_fqid(entry_fqid, request)
+    if author_id is None:
+        return Response({"detail": "Not found"}, status=404)
+    return ApiEntryComments(request, author_id, entry_id)
+
+
+@api_view(['GET'])
+def ApiCommentLikes(request, author_id, entry_id, comment_fqid):
+    """GET [local, remote]: Likes on a comment. URL: .../comments/{COMMENT_FQID}/likes"""
+    entry = get_object_or_404(Entry, id=entry_id, author_id=author_id)
+    logged_in_id = request.session.get("author_id")
+    if not check_visibility(entry, logged_in_id):
+        return Response({"detail": "Forbidden"}, status=403)
+    comment_id = unquote(comment_fqid)
+    page_number = max(1, int(request.GET.get("page_number", 1))) if request.GET.get("page_number", "1").isdigit() else 1
+    size = max(1, int(request.GET.get("size", 5))) if request.GET.get("size", "5").isdigit() else 5
+    likes = Like.objects.filter(object=comment_id).order_by("-published")
+    count = likes.count()
+    start = (page_number - 1) * size
+    src = likes[start : start + size]
+    link = request.build_absolute_uri()
+    obj_url = comment_id if not link.endswith("/likes") else link[:-5].rstrip("/")
+    likes_data = LikesSerializer(
+        {"page_number": page_number, "size": size, "count": count, "src": src},
+        context={"link": link, "object": obj_url}
+    )
+    return Response(likes_data.data)
+
 
 @api_view(["POST"])
 def ApiAddComment(request, author_id, entry_id):

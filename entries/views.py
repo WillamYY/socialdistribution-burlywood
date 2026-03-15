@@ -10,6 +10,7 @@ from django.views.decorators.http import require_POST
 from django.db.models import Count, Q
 from .models import Entry
 from core.models import Author
+from core.services import maybe_sync_github_for_stream
 from interactions.models import Like, Comment
 
 def check_visibility(entry, viewer_id):
@@ -200,9 +201,13 @@ def stream_view(request):
     US#28: Most recent version (we fetch from DB - always current).
     US#29: Deleted entries excluded (hard-deleted, so not in DB).
     US#31: Sorted with most recent entries first.
+    GitHub activity is auto-synced when stream is viewed (throttled).
     """
     if not request.session.get("author_id"):
         return redirect("/app/login")
+
+    # Auto-sync GitHub activity so new pushes/events show up without user action (User Story #5)
+    maybe_sync_github_for_stream()
 
     viewer = get_object_or_404(Author, id=request.session["author_id"])
 
@@ -320,9 +325,13 @@ def view_my_entries(request):
     """
     Displays a list of entries created by the currently logged-in author, 
     ordered by publication date (newest first).
+    GitHub activity is auto-synced when this page is viewed (same 10s throttle as stream).
     """
     if not request.session.get("author_id"): 
         return redirect("/app/login")
+
+    maybe_sync_github_for_stream()
+
     author = Author.objects.get(id=request.session["author_id"])
 
     # Get all entries by this author, ordered by newest first
