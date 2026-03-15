@@ -1,7 +1,10 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from .models import Author, FollowRequest, AuthorRequest
+from entries.models import Entry
+from interactions.models import Like, Comment
 from django.contrib.auth.hashers import check_password
+from django.urls import reverse, resolve, Resolver404
 
 def SignUpView(request):
     """
@@ -190,6 +193,22 @@ def ProfileDisplay(request, id):
         is_following = author in me.following.all()
         request_sent = FollowRequest.objects.filter(requester=me, target=author).exists()
 
+
+    user_fqid = None
+    if logged_in_id:
+        user_fqid = f"{request.build_absolute_uri('/')[:-1]}/api/authors/{logged_in_id}"
+    public_entries = Entry.objects.filter(author = author, visibility="PUBLIC")
+    base_url = request.build_absolute_uri('/')[:-1]
+    for entry in public_entries:
+        entry_url = f"{base_url}/api/authors/{entry.author.id}/entries/{entry.id}"
+        entry.like_count = Like.objects.filter(object=entry_url).count()
+        entry.comment_count = Comment.objects.filter(entry=entry_url).count()
+
+        if user_fqid:
+            entry.liked_by_user = Like.objects.filter(object=entry_url, author=user_fqid).exists()
+        else:
+            entry.liked_by_user = False
+
     context = {
         "author": author,
         "followers_count": author.followers.count(),
@@ -197,6 +216,7 @@ def ProfileDisplay(request, id):
         "is_following": is_following,
         "request_sent": request_sent,
         "logged_in_id": logged_in_id,
+        "public_entries": public_entries
     }
     return render(request, "profileview.html", context)
 
@@ -221,7 +241,26 @@ def follow_author(request, author_id):
             # Create a follow request 
             FollowRequest.objects.create(requester=me, target=target)
             messages.success(request, f"Follow request sent to {target.username}!", extra_tags='follow')
-    return redirect(f'/app/user/{author_id}/')
+    
+    referer = request.META.get('HTTP_REFERER')
+    if referer:
+        try:
+            base_url = request.build_absolute_uri('/')[:-1]
+            # Resolve the URL to see which view function it points to
+            match = resolve(referer.replace(base_url, ""))
+            
+            # Update the return URL only if came from a LIST view (i.e. stream, my-entries, etc.)
+            list_views = ["ProfileDisplay", "connections"]
+            
+            if match.url_name in list_views:
+                request.session['last_feed_url'] = referer
+        except (Resolver404, ValueError):
+            # If the URL doesn't match, don't update the session
+            pass
+
+    # Default to ProfileDisplay if don't are not logged in
+    return_url = request.session.get('last_feed_url', f'/app/user/{author_id}/')
+    return redirect(return_url)
 
 def unfollow_author(request, author_id):
     """
@@ -236,7 +275,25 @@ def unfollow_author(request, author_id):
     if target != me:
         me.following.remove(target)
         messages.success(request, f"You unfollowed {target.username}.", extra_tags='follow')
-    return redirect(f'/app/user/{author_id}/')
+
+    referer = request.META.get('HTTP_REFERER')
+    if referer:
+        try:
+            base_url = request.build_absolute_uri('/')[:-1]
+            # Resolve the URL to see which view function it points to
+            match = resolve(referer.replace(base_url, ""))
+            
+            # Update the return URL only if came from a LIST view (i.e. stream, my-entries, etc.)
+            list_views = ["ProfileDisplay", "connections"]
+            
+            if match.url_name in list_views:
+                request.session['last_feed_url'] = referer
+        except (Resolver404, ValueError):
+            # If the URL doesn't match, don't update the session
+            pass
+
+    return_url = request.session.get('last_feed_url', f'/app/user/{author_id}/')
+    return redirect(return_url)
 
 def view_follow_requests(request):
     """
@@ -282,6 +339,9 @@ def connections(request):
 
     # From https://stackoverflow.com/questions/4523282/django-in-not-in-query by Harph
     followers = author.followers.exclude(id__in=author.following.values_list("id", flat=True))
+    for follower in followers:
+        follower.request_sent = FollowRequest.objects.filter(requester=author, target=follower).exists()
+        
     followings = author.following.exclude(id__in=author.followers.values_list("id", flat=True))
     friends = author.friends()
 

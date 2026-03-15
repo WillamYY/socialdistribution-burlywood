@@ -1,10 +1,12 @@
 {% load static %}
+{% load entry_extras %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <title>{{ author.username }}'s Profile</title>
     <link rel="stylesheet" href="{% static 'core/styles.css' %}">
+    <link rel="stylesheet" href="{% static 'entries/styles.css' %}">
     <style>
         .profile-card {
             text-align: center;
@@ -40,6 +42,43 @@
             font-size: 14px;
             color: #6b7280;
         }
+        .entry__container {
+            margin-top: 1em;
+            border: none;
+            box-shadow: 0.1rem 0.1rem 1rem rgba(0, 0, 0, 0.5);
+            border-radius: 1em;
+            overflow-y: auto;
+            height: 30em;
+            display: flex;
+            flex-flow: column nowrap;
+            align-items: center;
+        }
+
+        .h2__container {
+            position: sticky;
+            top: 0;
+            width: 100%;
+            margin-top: 0;
+            padding: 1em;
+            background-color: var(--primary);
+            color: white;
+            z-index: 3;
+        }
+
+        .entry__section {
+            border: none;
+            margin: 2em;
+            padding: 1em;
+            border-radius: 1em;
+            background-color: green;
+        }
+
+        .entry-card {
+            margin: 1em;
+            width: 90%;
+        }
+
+        .liked .icon { color: #ed4956; }
     </style>
 </head>
 <body>
@@ -92,6 +131,57 @@
                 <a href="{% url 'view_entries' author.id %}" class="follow-btn view-entries">View Entries</a>
             {% endif %}
         </div>
+        <section class="entry__container">
+            <h2 class="h2__container">Public entries</h2>
+            {% for entry in public_entries %}
+                <div class="entry-card clickable" data-url="{% url 'get_entry' entry.id %}">
+                    <div class="entry-header">
+                        <h2 class="entry-title">{{ entry.title }}</h2>
+                    </div>
+                    
+                    <p class="entry-by">Published: {{ entry.published|date:"M d, Y" }}</p>
+
+                    {% if entry.description %}
+                        <p class="entry-description">{{ entry.description }}</p>
+                    {% endif %}
+
+                    <div class="entry-content">
+                        {% if "image" in entry.contentType %}
+                            <img src="{% url 'api:ApiEntryImage' author_id=entry.author.id entry_id=entry.id %}" class="entry-image">
+                        {% elif entry.contentType == "text/markdown" %}
+                            <div class="entry-markdown">{{ entry.content|safe }}</div>
+                        {% else %}
+                            <div class="entry-plain-text">{{ entry.content|linebreaks }}</div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="interaction-row" onclick="event.stopPropagation();">
+                        {% if request.session.author_id %}
+                        <form method="POST" action="{% url 'interactions:add_like' entry.id %}">
+                            {% csrf_token %}
+                            <button type="submit" class="stat-item {% if entry.liked_by_user %}liked{% endif %}">
+                                <span class="icon">{% if entry.liked_by_user %}❤️{% else %}🤍{% endif %}</span>
+                                <span class="count">{{ entry.like_count|default:0 }}</span>
+                            </button>
+                        </form>
+                        {% else %}
+                        <div class="stat-item">
+                            <span class="icon">🤍</span>
+                            <span class="count">{{ entry.like_count|default:0 }}</span>
+                        </div>
+                        {% endif %}
+
+                        <div class="stat-item clickable" data-url="{% url 'get_entry' entry.id %}">
+                            <span class="icon">💬</span>
+                            <span class="count">
+                                {% if entry.comment_count != None %}{{ entry.comment_count }}{% else %}{{ entry.fetched_comments|length|default:0 }}{% endif %}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        </section>
     </div>
+    <script src="{% static 'entries/js/main.js' %}"></script>
 </body>
 </html>
