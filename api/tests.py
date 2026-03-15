@@ -791,6 +791,38 @@ class EntryAPITest(APITestCase):
         self.assertIn("src", response.data)
         self.assertEqual(len(response.data["src"]), 3)
 
+    def test_get_deleted_entry(self):
+        """
+        US #78: As a node admin, I want deleted entries stay in the database and only be removed from the UI and API, so I can see what was deleted.
+        """
+        entry = Entry.objects.create(author=self.author, title="Delete Me", visibility="PUBLIC")
+        entry_url1 = reverse("api:ApiEntry", kwargs={"author_id": self.author.id, "entry_id": entry.id})
+        entry_url2 = reverse("api:ApiEntries", kwargs={"author_id": self.author.id})
+        entry_url3 = reverse("api:browse_public_entries")
+
+        # Log in as the author
+        session = self.client.session
+        session['author_id'] = self.author.id
+        session.save()
+        self.client.delete(entry_url1)
+        
+        response1 = self.client.get(entry_url1)
+        self.assertEqual(response1.status_code, 404)
+
+        # only the image entry should remain since it was not deleted
+        response2 = self.client.get(entry_url2)
+        self.assertEqual(response2.data["count"], 1)
+        self.assertEqual(len(response2.data["src"]), 1)
+        self.assertNotIn(str(entry.id), response2.data["src"][0]["id"])
+
+        response3 = self.client.get(entry_url3)
+        self.assertEqual(response3.data["count"], 1)
+        self.assertEqual(len(response3.data["src"]), 1)
+        self.assertNotIn(str(entry.id), response2.data["src"][0]["id"])
+
+        # entry is still in the database
+        self.assertTrue(Entry.objects.filter(id = entry.id).exists())
+
 class CommentApiTest(TestCase):
     """
     Tests for all comment-related API endpoints.
