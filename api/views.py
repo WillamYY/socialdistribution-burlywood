@@ -350,7 +350,7 @@ def ApiAuthorLiked(request, author_id):
         size = 5
     author_fqid = "/".join(request.build_absolute_uri().split("/")[:-1])
 
-    likes_tmp = Like.objects.filter(author = author_fqid).order_by("-published")
+    likes_tmp = Like.objects.filter(author = author_fqid).order_by("-published", "id")
     logged_in_id = request.session.get("author_id")
     # only deal with local for now
     likes = []
@@ -399,7 +399,7 @@ def ApiAuthorLikedLocal(request, author_fqid):
     else:
         size = 5
 
-    likes_tmp = Like.objects.filter(author = author_fqid).order_by("-published")
+    likes_tmp = Like.objects.filter(author = author_fqid).order_by("-published", "id")
     logged_in_id = request.session.get("author_id")
     likes = []
     for like in likes_tmp:
@@ -651,11 +651,14 @@ def ApiEntryComments(request, author_id, entry_id):
     if not check_visibility(entry, logged_in_id):
         return Response(status=403)
 
-    entry_fqid = request.build_absolute_uri(
+    api_entry_fqid = request.build_absolute_uri(
         f"/api/authors/{author_id}/entries/{entry_id}/"
     )
+    app_entry_fqid = request.build_absolute_uri(
+        f"/app/entry/{entry_id}/"
+    )
 
-    comments = Comment.objects.filter(entry=entry_fqid).order_by("-published")
+    comments = Comment.objects.filter(entry__in=[api_entry_fqid, app_entry_fqid]).order_by("-published", "-id")
 
     serializer = CommentSerializer(comments, many=True)
 
