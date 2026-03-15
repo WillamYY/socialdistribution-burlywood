@@ -1,28 +1,213 @@
-{% extends 'base.html' %}
+{% load static %}
 
-{% block content %}
-<section id="followers">
-    <h2>Followers</h2>
-    <ul>
-        {% for follower in followers %}
-        <li>{{ follower.username }}</li>
-        {% endfor %}
-    </ul>
-</section>
-<section id="following">
-    <h2>Following</h2>
-    <ul>
-        {% for following in followings %}
-        <li>{{ following.username }}</li>
-        {% endfor %}
-    </ul>
-</section>
-<section id="friends">
-    <h2>Friends</h2>
-    <ul>
-        {% for friend in friends %}
-        <li>{{ friend.username }}</li>
-        {% endfor %}
-    </ul>
-</section>
-{% endblock %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>My connections</title>
+    <link rel="stylesheet" href="{% static 'core/styles.css' %}">
+    <style>
+        * {
+            box-sizing: content-box;
+        }
+        section.connections__section {
+            margin-top: 3em;
+            display: flex;
+            flex-flow: row nowrap;
+            justify-content: space-around;
+            gap: 3em;
+            padding-left: 4em;
+            padding-right: 4em;
+        }
+
+        h2.connections__h2 {
+            position: sticky;
+            flex-shrink: 0;
+            top: 0;
+            margin: 0;
+            padding: 1em;
+            background-color: var(--primary);
+            color: white;
+        }
+
+        section.connections__container ul {
+            flex: 1;
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+
+        section.connections__container {
+            flex: 1 1 30%;
+            display: flex;
+            flex-flow: column nowrap;
+            justify-content: center;
+            border: none;
+            box-shadow: 0 0 1em rgba(0, 0, 0, 0.2);
+            border-radius: 1.5em;
+            height: 30em;
+            align-items: stretch;
+            overflow: hidden;
+        }
+
+        .connections__container ul {
+            overflow-y: scroll;
+        }
+
+        .offscreen {
+            position: absolute;
+            left: -10000px;
+        }
+
+        section.profile-card {
+            display: grid;
+            grid-template-columns: 1fr 3fr;
+            flex-flow: row nowrap;
+            border-bottom: 1px solid black;
+        }
+
+        section.connections__container ul li:last-child section.profile-card {
+            border-bottom: none;
+        }
+
+        div.profile-picture-container {
+            padding: 1em;
+        }
+
+        .profile-picture {
+            width: 100%;
+            border-radius: 50%;
+        }
+
+        .profile-information {
+            display: grid;
+            grid-template-columns: 60% 40%;
+            align-items: center;
+        }
+
+        .profile-information h3 {
+            margin-left: 0.5em;
+            font-size: clamp(1em, 1.1vw, 2em);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-right: 1em;
+        }
+
+        .profile-information .button-container {
+            margin-right: 1em;
+            display: flex;
+            flex-flow: column nowrap;
+            gap: 1em;
+        }
+
+        .profile-information button:hover {
+            cursor: pointer;
+        }
+
+        .profile-information .button-container a,
+        .request-sent {
+            background-color: blue;
+            color: white;
+            border: none;
+            padding: 0.5em 0.75em;
+            border-radius: 0.5em;
+            font-weight: bold;
+            font-size: clamp(1em, 1.1vw, 2em);
+            text-align: center;
+            text-decoration: none;
+        }
+
+        .profile-information .button-container a.follow { background-color: var(--primary); }
+        .profile-information .button-container a.unfollow { background-color: var(--danger); }
+        .request-sent {
+            background-color: #9ca3af;
+        }
+    </style>
+</head>
+    <body>
+        <nav class="top-nav">
+        <a href="/">Home</a>
+        <a href="/app/stream/">Stream</a>
+        <a href="/app/my-entries/">My Entries</a>
+        <a href="/app/create-entry/">Create Entry</a>
+        {% if request.session.author_id %}
+        <a href="/app/profile/">My Profile</a>
+        <a href="/app/follow-requests/">Follow Requests</a>
+        <a href="/app/logout/">Logout</a>
+        {% else %}
+        <a href="/app/login/">Login</a>
+        <a href="/app/signup/">Sign Up</a>
+        {% endif %}
+    </nav>
+    <section class="connections__section">
+        <h2 class="offscreen">My Connections</h2>
+        <section class="connections__container" id="followers">
+            <h2 class="connections__h2">Followers</h2>
+            <ul>
+                {% for follower in followers %}
+                <li>
+                    <section class="profile-card">
+                        <div class="profile-picture-container">
+                            <img class="profile-picture" src="{% if follower.picture %}{{ follower.picture.url }}{% else %}{% static 'images/default_profile.jpg' %}{% endif %}">
+                        </div>
+                        <div class="profile-information">
+                            <h3 title="{{ follower.username }}">{{ follower.username }}</h3>
+                            <div class="button-container">
+                                <a href="{% url 'ProfileDisplay' follower.id %}">View</a>
+                                {% if follower.request_sent %}
+                                <button class="follow-btn request-sent" disabled>Sent</button>
+                                {% else %}
+                                <a href="{% url 'FollowAuthor' follower.id %}" class="follow-btn follow">Follow</a>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </section>
+                </li>
+                {% endfor %}
+            </ul>
+        </section>
+        <section class="connections__container" id="following">
+            <h2 class="connections__h2">Following</h2>
+            <ul>
+                {% for following in followings %}
+                <li>
+                    <section class="profile-card">
+                        <div class="profile-picture-container">
+                            <img class="profile-picture" src="{% if following.picture %}{{ following.picture.url }}{% else %}{% static 'images/default_profile.jpg' %}{% endif %}">
+                        </div>
+                        <div class="profile-information">
+                            <h3 title="{{ following.username }}">{{ following.username }}</h3>
+                            <div class="button-container">
+                                <a href="{% url 'ProfileDisplay' following.id %}">View</a>
+                                <a href="{% url 'UnfollowAuthor' following.id %}" class="follow-btn unfollow">Unfollow</a>
+                            </div>
+                        </div>
+                    </section>
+                </li>
+                {% endfor %}
+            </ul>
+        </section>
+        <section class="connections__container" id="friends">
+            <h2 class="connections__h2">Friends</h2>
+            <ul>
+                {% for friend in friends %}
+                <li>
+                    <section class="profile-card">
+                        <div class="profile-picture-container">
+                            <img class="profile-picture" src="{% if friend.picture %}{{ friend.picture.url }}{% else %}{% static 'images/default_profile.jpg' %}{% endif %}">
+                        </div>
+                        <div class="profile-information">
+                            <h3 title="{{ friend.username }}">{{ friend.username }}</h3>
+                            <div class="button-container">
+                                <a href="{% url 'ProfileDisplay' friend.id %}">View</a>
+                                <a href="{% url 'UnfollowAuthor' friend.id %}" class="follow-btn unfollow">Unfriend</a>
+                            </div>
+                        </div>
+                    </section>
+                </li>
+                {% endfor %}
+            </ul>
+        </section>
+    </section>
+    </body>
+</html>

@@ -1,7 +1,10 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from .models import Author, FollowRequest, AuthorRequest
+from entries.models import Entry
+from interactions.models import Like, Comment
 from django.contrib.auth.hashers import check_password
+from django.urls import reverse, resolve, Resolver404
 from .services import sync_author_github_activity
 from .validators import validate_username, validate_password, validate_github_url
 
@@ -44,6 +47,7 @@ def SignUpProcessing(request):
 
         new_author = AuthorRequest(
             username=username,
+            name=username,
             host=f"http://{request.get_host()}/api",
             password=password,
         )
@@ -78,7 +82,7 @@ def login_view(request):
 
                 if next_url:
                     return redirect(next_url)
-                return redirect('/app/profile')  # or NodeDisplay
+                return redirect('/app/profile')
             else:
                 error = "Invalid username or password"
         except Author.DoesNotExist:
@@ -107,19 +111,16 @@ def edit_profile(request):
     if request.method == "POST":
         new_username = (request.POST.get("username") or "").strip()
         github = (request.POST.get("github") or "").strip()
-        # Apply POST data to author for re-display on validation error
         author.name = request.POST.get("name", author.name)
         author.description = request.POST.get("description", author.description)
         author.github = github
 
-        # Validate username format
         if new_username:
             ok, err = validate_username(new_username)
             if not ok:
                 author.username = new_username
                 return render(request, "edit_profile.html", {"author": author, "error": err})
 
-        # Check username change and uniqueness
         if new_username and new_username != author.username:
             if Author.objects.filter(username=new_username).exists():
                 author.username = new_username
@@ -127,7 +128,6 @@ def edit_profile(request):
             author.username = new_username
             request.session["username"] = new_username
 
-        # Validate GitHub URL
         ok, err = validate_github_url(github)
         if not ok:
             return render(request, "edit_profile.html", {"author": author, "error": err})
@@ -139,7 +139,6 @@ def edit_profile(request):
 
         author.save()
 
-        # Auto-sync GitHub activity when profile has a GitHub URL (User Story #5)
         if author.github:
             synced, _ = sync_author_github_activity(author)
             success = "Profile updated successfully!"
@@ -171,7 +170,6 @@ def sync_github_view(request):
 def profile_view(request):
     """
     Displays the profile of the logged-in user.
-    Shows counts for followers, following, and pending follow requests.
     """
     if not request.session.get("author_id"):
         return redirect("/app/login")
@@ -181,8 +179,6 @@ def profile_view(request):
     followers_count = author.followers.exclude(id__in=author.following.values_list("id", flat=True)).count()
     following_count = author.following.exclude(id__in=author.followers.values_list("id", flat=True)).count()
     friends_count = author.friends().count()
-
-    # Count pending follow requests for this author
     pending_requests_count = FollowRequest.objects.filter(target=author).count()
 
     return render(request, "profile.html", {
@@ -196,7 +192,6 @@ def profile_view(request):
 def ProfileDisplay(request, id):
     """
     Displays the profile of another user.
-    Checks if the logged-in user is following them or has sent a follow request.
     """
     author = get_object_or_404(Author, pk=id)
     logged_in_id = request.session.get("author_id")
@@ -208,6 +203,20 @@ def ProfileDisplay(request, id):
         is_following = author in me.following.all()
         request_sent = FollowRequest.objects.filter(requester=me, target=author).exists()
 
+    user_fqid = None
+    if logged_in_id:
+        user_fqid = f"{request.build_absolute_uri('/')[:-1]}/api/authors/{logged_in_id}"
+    public_entries = Entry.objects.filter(author=author, visibility="PUBLIC")
+    base_url = request.build_absolute_uri('/')[:-1]
+    for entry in public_entries:
+        entry_url = f"{base_url}/api/authors/{entry.author.id}/entries/{entry.id}"
+        entry.like_count = Like.objects.filter(object=entry_url).count()
+        entry.comment_count = Comment.objects.filter(entry=entry_url).count()
+        if user_fqid:
+            entry.liked_by_user = Like.objects.filter(object=entry_url, author=user_fqid).exists()
+        else:
+            entry.liked_by_user = False
+
     context = {
         "author": author,
         "followers_count": author.followers.count(),
@@ -215,6 +224,7 @@ def ProfileDisplay(request, id):
         "is_following": is_following,
         "request_sent": request_sent,
         "logged_in_id": logged_in_id,
+        "public_entries": public_entries
     }
     return render(request, "profileview.html", context)
 
@@ -229,17 +239,27 @@ def follow_author(request, author_id):
     target = get_object_or_404(Author, id=author_id)
 
     if target != me:
-        # Check if already following
         if target in me.following.all():
             messages.info(request, f"You are already following {target.username}.")
-        # Check if a request already exists
         elif FollowRequest.objects.filter(requester=me, target=target).exists():
             messages.info(request, "Follow request already sent.")
         else:
-            # Create a follow request 
             FollowRequest.objects.create(requester=me, target=target)
             messages.success(request, f"Follow request sent to {target.username}!", extra_tags='follow')
-    return redirect(f'/app/user/{author_id}/')
+
+    referer = request.META.get('HTTP_REFERER')
+    if referer:
+        try:
+            base_url = request.build_absolute_uri('/')[:-1]
+            match = resolve(referer.replace(base_url, ""))
+            list_views = ["ProfileDisplay", "connections"]
+            if match.url_name in list_views:
+                request.session['last_feed_url'] = referer
+        except (Resolver404, ValueError):
+            pass
+
+    return_url = request.session.get('last_feed_url', f'/app/user/{author_id}/')
+    return redirect(return_url)
 
 def unfollow_author(request, author_id):
     """
@@ -254,7 +274,20 @@ def unfollow_author(request, author_id):
     if target != me:
         me.following.remove(target)
         messages.success(request, f"You unfollowed {target.username}.", extra_tags='follow')
-    return redirect(f'/app/user/{author_id}/')
+
+    referer = request.META.get('HTTP_REFERER')
+    if referer:
+        try:
+            base_url = request.build_absolute_uri('/')[:-1]
+            match = resolve(referer.replace(base_url, ""))
+            list_views = ["ProfileDisplay", "connections"]
+            if match.url_name in list_views:
+                request.session['last_feed_url'] = referer
+        except (Resolver404, ValueError):
+            pass
+
+    return_url = request.session.get('last_feed_url', f'/app/user/{author_id}/')
+    return redirect(return_url)
 
 def view_follow_requests(request):
     """
@@ -265,7 +298,7 @@ def view_follow_requests(request):
         return redirect('/app/login')
 
     author = get_object_or_404(Author, id=author_id)
-    requests = FollowRequest.objects.filter(target=author)  # Requests sent to this author
+    requests = FollowRequest.objects.filter(target=author)
 
     return render(request, 'follow_request.html', {
         'author': author,
@@ -275,7 +308,6 @@ def view_follow_requests(request):
 def approve_follow(request, req_id):
     """
     Approves a follow request.
-    Adds requester to followers of target author and deletes the request.
     """
     follow_request = get_object_or_404(FollowRequest, id=req_id)
     follow_request.target.followers.add(follow_request.requester)
@@ -298,8 +330,10 @@ def connections(request):
         return redirect('/app/login')
     author = get_object_or_404(Author, id=author_id)
 
-    # From https://stackoverflow.com/questions/4523282/django-in-not-in-query by Harph
     followers = author.followers.exclude(id__in=author.following.values_list("id", flat=True))
+    for follower in followers:
+        follower.request_sent = FollowRequest.objects.filter(requester=author, target=follower).exists()
+
     followings = author.following.exclude(id__in=author.followers.values_list("id", flat=True))
     friends = author.friends()
 

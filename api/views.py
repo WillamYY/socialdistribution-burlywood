@@ -1,5 +1,6 @@
 # Create your views here.
 import base64
+from email.mime import base
 import uuid
 from urllib.parse import unquote
 from django.http import HttpResponse, HttpResponseForbidden
@@ -162,10 +163,10 @@ def ApiAuthorAndEntryLikes(request,author_id,entry_id):
         return Response({"detail": "Forbidden"}, status=403)
     
     # getting the URL of the object requested
-    liked_obj = "/".join(request.build_absolute_uri().split("/")[:-1])
+    liked_obj = request.build_absolute_uri(f"/api/authors/{author_id}/entries/{entry.id}/")
 
     # getting all the likes whose object is the given liked object, ordered by publish date
-    likes = Like.objects.filter(object = liked_obj).order_by("-published")
+    likes = Like.objects.filter(object__contains=str(entry_id)).order_by("-published", "-id")
 
     count = likes.count()
     # should only get 5 likes per entry
@@ -210,7 +211,7 @@ def ApiEntryLikes(request, entry_fqid):
         return Response({"detail": "Forbidden"}, status=403)
     
     # getting local authors only, order by publish date
-    likes = Like.objects.filter(object = entry_fqid).order_by("-published")
+    likes = Like.objects.filter(object__contains=str(entry_id)).order_by("-published", "-id")
 
     count = likes.count()
     # should only get 5 likes per entry
@@ -594,12 +595,14 @@ def ApiAuthorByFqid(request, author_fqid):
 
 
 @api_view(['GET'])
-def ApiEntryImage(request, author_id=None, entry_id=None):
+def ApiEntryImage(request, author_id=None, entry_id=None, entry_fqid=None):
     """
     Returns the raw image data for an entry.
     Allows Markdown to link to images.
     Supports both hierarchical and FQID style URLs.
     """
+    if entry_id is None and entry_fqid is not None:
+        entry_id = entry_fqid.rstrip("/").split("/")[-1]
     # Get the entry
     entry = get_object_or_404(Entry, id=entry_id)
 
@@ -640,19 +643,17 @@ def ApiEntryImage(request, author_id=None, entry_id=None):
 def ApiEntryComments(request, author_id, entry_id):
     """
     Returns comments for an entry
-    GET /api/authors/{author_id}/entries/{entry_id}/comments/
+    GET /api/authors/{author_id}/entries/{entry_id}/comments
     """
-
     entry = get_object_or_404(Entry, id=entry_id, author_id=author_id)
 
-    # Check the visibility for the logged-in user
     logged_in_id = request.session.get("author_id")
     if not check_visibility(entry, logged_in_id):
-        return Response({"detail": "Forbidden"}, status=403)
-        
-    # Build FQID of the entry like your site uses
-    base = request.build_absolute_uri('/')[:-1]
-    entry_fqid = f"{base}/app/entry/{entry.id}/"
+        return Response(status=403)
+
+    entry_fqid = request.build_absolute_uri(
+        f"/api/authors/{author_id}/entries/{entry_id}/"
+    )
 
     comments = Comment.objects.filter(entry=entry_fqid).order_by("-published")
 
@@ -661,7 +662,7 @@ def ApiEntryComments(request, author_id, entry_id):
     return Response({
         "type": "comments",
         "id": request.build_absolute_uri(),
-        "page": 1,
+        "page_number": 1,
         "size": comments.count(),
         "count": comments.count(),
         "src": serializer.data
@@ -714,14 +715,15 @@ def ApiAddComment(request, author_id, entry_id):
     if not check_visibility(entry, logged_in_id):
         return Response({"detail": "Forbidden from commenting on this entry."}, status=403)
 
-    author_url = request.data.get("author")
+    author_data = request.data.get("author")
+    author_url = author_data["id"] if isinstance(author_data, dict) else author_data
     comment_text = request.data.get("comment")
 
-    if not author_url or not comment_text:
-        return Response({"error": "Missing fields"}, status=400)
+    entry_fqid = request.build_absolute_uri(
+        f"/api/authors/{author_id}/entries/{entry_id}/"
+    )
 
     base = request.build_absolute_uri('/')[:-1]
-    entry_fqid = f"{base}/app/entry/{entry.id}/"
 
     new_comment = Comment.objects.create(
         id=f"{base}/comments/{uuid.uuid4()}",

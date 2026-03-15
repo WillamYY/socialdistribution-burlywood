@@ -1,4 +1,5 @@
 import base64
+from email.mime import base
 import markdown
 import bleach
 from django.shortcuts import render, redirect, get_object_or_404
@@ -232,14 +233,14 @@ def stream_view(request):
     base_url = request.build_absolute_uri('/')[:-1]
 
     for entry in entries:
-        entry_url = f"{base_url}/app/entry/{entry.id}/"
+        entry_url = f"{base_url}/api/authors/{entry.author.id}/entries/{entry.id}"
         
         # Fetch the count of interactions
         entry.comment_count = Comment.objects.filter(entry=entry_url).count()
         entry.like_count = Like.objects.filter(object=entry_url).count()
         
         if "author_id" in request.session:
-            user_fqid = f"{base_url}/authors/{request.session['author_id']}"
+            user_fqid = f"{base_url}/api/authors/{request.session['author_id']}"
             entry.liked_by_user = Like.objects.filter(object=entry_url, author=user_fqid).exists()
         
     return render(
@@ -335,11 +336,12 @@ def view_my_entries(request):
 
     # Get all entries by this author, ordered by newest first
     entries = Entry.objects.filter(author=author).exclude(visibility="DELETED").order_by("-published")
-    user_fqid = f"{request.build_absolute_uri('/')[:-1]}/authors/{author.id}"
+    user_fqid = f"{request.build_absolute_uri('/')[:-1]}/api/authors/{author.id}"
 
     # Manually attach Like/Comment data for interactions
     for entry in entries:
-        entry_url = f"{request.build_absolute_uri('/')[:-1]}/app/entry/{entry.id}/"
+        base = request.build_absolute_uri('/')[:-1]
+        entry_url = f"{base}/api/authors/{entry.author.id}/entries/{entry.id}"
         
         # entry likes
         entry.like_count = Like.objects.filter(object=entry_url).count()
@@ -358,6 +360,15 @@ def view_my_entries(request):
         }
 
         for comment in entry.fetched_comments:
+            # extract author id from URL
+            author_id = comment.author.rstrip("/").split("/")[-1]
+
+            try:
+                author = Author.objects.get(id=author_id)
+                comment.author_name = author.name
+            except Author.DoesNotExist:
+                comment.author_name = comment.author  # fallback
+
             comment_uuid = comment.id.rstrip("/").split("/")[-1]
 
             comment.like_count = Like.objects.filter(
@@ -392,15 +403,15 @@ def view_entries(request, author_id):
             entries = entries.filter(visibility='PUBLIC')
         
     entries_list = list(entries)
+    base = request.build_absolute_uri('/')[:-1]
 
     user_fqid = None
     if logged_in_id:
-        user_fqid = f"{request.build_absolute_uri('/')[:-1]}/authors/{logged_in_id}"
+        user_fqid = f"{request.build_absolute_uri('/')[:-1]}/api/authors/{logged_in_id}"
 
     # Manually attach Like/Comment data for the interactions
     for entry in entries_list:
-        entry_url = f"{request.build_absolute_uri('/')[:-1]}/app/entry/{entry.id}/"
-        
+        entry_url = f"{base}/api/authors/{entry.author.id}/entries/{entry.id}"
         entry.like_count = Like.objects.filter(object=entry_url).count()
         entry.fetched_comments = Comment.objects.filter(entry=entry_url).order_by('published')
         
@@ -428,17 +439,16 @@ def get_entry(request, entry_id):
         return HttpResponse(status=404)
     
     base_url = request.build_absolute_uri('/')[:-1]
-    entry_url = f"{base_url}/app/entry/{entry.id}/"
+    entry_url = f"{base_url}/api/authors/{entry.author.id}/entries/{entry.id}"
     logged_in_id = request.session.get("author_id")
     referer = request.META.get('HTTP_REFERER')
-    
     if referer:
         try:
             # Resolve the URL to see which view function it points to
             match = resolve(referer.replace(base_url, ""))
             
             # Update the return URL only if came from a LIST view (i.e. stream, my-entries, etc.)
-            list_views = ['stream', 'view_my_entries', 'view_entries']
+            list_views = ['stream', 'view_my_entries', 'view_entries', "ProfileDisplay"]
             
             if match.url_name in list_views:
                 request.session['last_feed_url'] = referer
@@ -455,18 +465,27 @@ def get_entry(request, entry_id):
 
     # Check if the logged-in user liked the this entry
     if logged_in_id:
-        user_fqid = f"{base_url}/authors/{logged_in_id}"
+        user_fqid = f"{base_url}/api/authors/{logged_in_id}"
         entry.liked_by_user = Like.objects.filter(object=entry_url, author=user_fqid).exists()
     else:
         entry.liked_by_user = False
 
     # Fetch data for each comment
     for comment in entry.fetched_comments:
-        comment_url = comment.id 
+        # extract author id from FQID
+        author_id = comment.author.rstrip("/").split("/")[-1]
+
+        try:
+            author = Author.objects.get(id=author_id)
+            comment.author_name = author.username
+        except Author.DoesNotExist:
+            comment.author_name = comment.author
+
+        comment_url = comment.id
         comment.like_count = Like.objects.filter(object=comment_url).count()
-        
+
         if logged_in_id:
-            user_fqid = f"{base_url}/authors/{logged_in_id}"
+            user_fqid = f"{base_url}/api/authors/{logged_in_id}"
             comment.liked_by_user = Like.objects.filter(object=comment_url, author=user_fqid).exists()
 
     # Check the visibility for the logged-in user

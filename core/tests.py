@@ -218,6 +218,70 @@ class EditProfileAPITestCase(TestCase):
         self.assertEqual(response.status_code, 302)  # redirect to login
         self.assertIn("/login", response.url)
 
+class FollowerFollowingFriendsTestCase(TestCase):
+    """
+    User story #55: As an author, my node will know about my followers, who I am following, and my friends, so that I don't have to keep track of it myself.
+    """
+    def test_follower_following_friend(self):
+        self.author1 = Author.objects.create(username='author1', password='pass1')
+        self.author2 = Author.objects.create(username='author2', password='pass2')
+
+        # initially no one is following each other
+        self.assertEqual(self.author1.followers.count(), 0)
+        self.assertEqual(self.author2.followers.count(), 0)
+        
+        # author 2 follows author 1
+        self.author1.followers.add(self.author2)
+        self.assertEqual(self.author1.followers.count(), 1)
+        self.assertEqual(self.author2.followers.count(), 0)
+
+        # author 1 follows author 2
+        self.author2.followers.add(self.author1)
+        self.assertEqual(self.author1.followers.count(), 1)
+        self.assertEqual(self.author1.followers.count(), 1)
+        self.assertEqual(self.author1.friends().count(), 1)
+        self.assertEqual(self.author2.friends().count(), 1)
+
+class ProfileViewTestCase(TestCase):
+    def test_get_profile_entries(self):
+        """
+        User story #6: As an author, I want my profile page to show my public entries (most recent first), so they can decide if they want to follow me.
+        """
+        # creates a generic author
+        self.author = Author.objects.create(
+            username='author1',
+            password='pass1',
+            description='Initial description'
+        )
+        self.client = Client()
+        self.url = reverse('EditProfileView')
+
+        # author creates entries of 4 types of visibility
+        entry1 = Entry(title = "public entry" ,description = "public entry", contentType = "text/plain",content = "public entry",author = self.author, visibility = "PUBLIC")
+        entry1.save()
+        entry2 = Entry(title = "unlisted entry" ,description = "unlisted entry", contentType = "text/plain",content = "unlisted entry",author = self.author, visibility = "UNLISTED")
+        entry2.save()
+        entry3 = Entry(title = "friends entry" ,description = "friends entry", contentType = "text/plain",content = "friends entry",author = self.author, visibility = "FRIENDS")
+        entry3.save()
+        entry4 = Entry(title = "deleted entry" ,description = "deleted entry", contentType = "text/plain",content = "deleted entry",author = self.author, visibility = "DELETED")
+        entry4.save()
+
+        profile_url = reverse('ProfileDisplay', kwargs={'id': self.author.id})
+
+        # Not logged in, a generic reader
+        session = self.client.session
+        session['author_id'] = None
+        session.save()
+
+        response = self.client.get(profile_url)
+        self.assertContains(response, f"<h2 class=\"entry-title\">{entry1.title}</h2>")
+        self.assertNotContains(response, f"<h2 class=\"entry-title\">{entry2.title}</h2>")
+        self.assertNotContains(response, f"<h2 class=\"entry-title\">{entry3.title}</h2>")
+        self.assertNotContains(response, f"<h2 class=\"entry-title\">{entry4.title}</h2>")
+
+        # test database only gets the one entry
+        self.assertEqual(Entry.objects.filter(author = self.author, visibility="PUBLIC").count(), 1)
+
 """
 Creates the test for the admin user stories
 """
