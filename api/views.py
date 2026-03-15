@@ -165,7 +165,7 @@ def ApiAuthorAndEntryLikes(request,author_id,entry_id):
     liked_obj = request.build_absolute_uri(f"/api/authors/{author_id}/entries/{entry.id}/")
 
     # getting all the likes whose object is the given liked object, ordered by publish date
-    likes = Like.objects.filter(object__contains=str(entry_id)).order_by("-published")
+    likes = Like.objects.filter(object__contains=str(entry_id)).order_by("-published", "-id")
 
     count = likes.count()
     # should only get 5 likes per entry
@@ -210,7 +210,7 @@ def ApiEntryLikes(request, entry_fqid):
         return Response({"detail": "Forbidden"}, status=403)
     
     # getting local authors only, order by publish date
-    likes = Like.objects.filter(object__contains=str(entry_id)).order_by("-published")
+    likes = Like.objects.filter(object__contains=str(entry_id)).order_by("-published", "-id")
 
     count = likes.count()
     # should only get 5 likes per entry
@@ -473,12 +473,14 @@ def ApiEntry(request, author_id, entry_id):
         return Response(status=204)
 
 @api_view(['GET'])
-def ApiEntryImage(request, author_id=None, entry_id=None):
+def ApiEntryImage(request, author_id=None, entry_id=None, entry_fqid=None):
     """
     Returns the raw image data for an entry.
     Allows Markdown to link to images.
     Supports both hierarchical and FQID style URLs.
     """
+    if entry_id is None and entry_fqid is not None:
+        entry_id = entry_fqid.rstrip("/").split("/")[-1]
     # Get the entry
     entry = get_object_or_404(Entry, id=entry_id)
 
@@ -519,20 +521,19 @@ def ApiEntryImage(request, author_id=None, entry_id=None):
 def ApiEntryComments(request, author_id, entry_id):
     """
     Returns comments for an entry
-    GET /api/authors/{author_id}/entries/{entry_id}/comments/
+    GET /api/authors/{author_id}/entries/{entry_id}/comments
     """
-
     entry = get_object_or_404(Entry, id=entry_id, author_id=author_id)
 
-    # Check the visibility for the logged-in user
     logged_in_id = request.session.get("author_id")
     if not check_visibility(entry, logged_in_id):
-        return Response({"detail": "Forbidden"}, status=403)
-        
-    # Build FQID of the entry like your site uses
-    entry_fqid = request.build_absolute_uri(f"/api/authors/{author_id}/entries/{entry_id}/")
+        return Response(status=403)
 
-    comments = Comment.objects.filter(entry__contains=str(entry_id)).order_by("-published")
+    entry_fqid = request.build_absolute_uri(
+        f"/api/authors/{author_id}/entries/{entry_id}/"
+    )
+
+    comments = Comment.objects.filter(entry=entry_fqid).order_by("-published")
 
     serializer = CommentSerializer(comments, many=True)
 

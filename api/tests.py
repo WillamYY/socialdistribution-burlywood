@@ -1,3 +1,5 @@
+from urllib import response
+
 from django.test import TestCase, Client, RequestFactory
 from django.urls import reverse
 from django.shortcuts import render
@@ -762,7 +764,8 @@ class EntryAPITest(APITestCase):
         self.assertEqual(text_response.status_code, status.HTTP_400_BAD_REQUEST)
 
         # Global image endpoint
-        global_url = reverse("api:ApiEntryImageGlobal", kwargs={"entry_id": self.image_entry.id})
+        entry_fqid = f"http://testserver/api/authors/{self.author.id}/entries/{self.image_entry.id}"
+        global_url = reverse("api:ApiEntryImageGlobal", kwargs={"entry_fqid": entry_fqid})
         global_response = self.client.get(global_url)
 
         # Check the response and MIME type
@@ -805,7 +808,7 @@ class CommentApiTest(TestCase):
             visibility="PUBLIC"
         )
 
-        self.entry_url = f"http://testserver/app/entry/{self.entry.id}/"
+        self.entry_url = f"http://testserver/api/authors/{self.author.id}/entries/{self.entry.id}/"
 
     """
     As an author, I want to comment on entries that I can access,
@@ -837,7 +840,7 @@ class CommentApiTest(TestCase):
         )
 
         response = self.client.get(
-            f"/api/authors/{self.author.id}/entries/{self.entry.id}/comments/"
+            f"/api/authors/{self.author.id}/entries/{self.entry.id}/comments"
         )
 
         self.assertEqual(response.status_code, 200)
@@ -856,11 +859,13 @@ class CommentApiTest(TestCase):
         )
 
         response = self.client.get(
-            f"/api/authors/{self.author.id}/entries/{self.entry.id}/comments/"
+            f"/api/authors/{self.author.id}/entries/{self.entry.id}/comments"
         )
 
-        comment_data = response.data["src"][0]
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data["src"]), 1)
 
+        comment_data = response.data["src"][0]
         self.assertIn("type", comment_data)
         self.assertIn("author", comment_data)
         self.assertIn("comment", comment_data)
