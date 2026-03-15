@@ -2,7 +2,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from .models import Author, FollowRequest, AuthorRequest
 from entries.models import Entry
-from interactions.models import Like
+from interactions.models import Like, Comment
 from django.contrib.auth.hashers import check_password
 from django.urls import reverse, resolve, Resolver404
 
@@ -202,6 +202,7 @@ def ProfileDisplay(request, id):
     for entry in public_entries:
         entry_url = f"{base_url}/api/authors/{entry.author.id}/entries/{entry.id}"
         entry.like_count = Like.objects.filter(object=entry_url).count()
+        entry.comment_count = Comment.objects.filter(entry=entry_url).count()
 
         if user_fqid:
             entry.liked_by_user = Like.objects.filter(object=entry_url, author=user_fqid).exists()
