@@ -2,6 +2,7 @@
 import base64
 from email.mime import base
 import uuid
+import requests
 from django.http import HttpResponse, HttpResponseForbidden
 from django.shortcuts import render,get_object_or_404
 from django.urls import path
@@ -13,7 +14,7 @@ from interactions.models import Like, Comment
 from .serializers import LikesSerializer, LikeSerializer, EntrySerializer, EntriesSerializer, CommentSerializer
 
 # Create your views here.
-def check_visibility(entry, viewer_id):
+def check_visibility(entry, viewer_id, is_list=False):
     """
     Helper function to verify if a user can see an entry.
     """
@@ -21,9 +22,23 @@ def check_visibility(entry, viewer_id):
     if entry.visibility == "DELETED":
         return False
     # Anyone with the link can see Public and Unlisted
-    if entry.visibility in ["PUBLIC", "UNLISTED"]:
+    if entry.visibility == "PUBLIC":
         return True
-    # If not logged in, cannot see anything other than PUBLIC/UNLISTED
+    if entry.visibility == "UNLISTED":
+        if not is_list:
+            # Direct link access
+            return True
+        else:
+            # If from list, only the author or a follower can see it in a feed
+            if not viewer_id:
+                return False
+            if str(entry.author.id) == str(viewer_id):
+                return True
+            if entry.author.followers.filter(id=viewer_id).exists():
+                return True
+            return False
+
+    # If not logged in, cannot see anything else
     if not viewer_id:
         return False
         
@@ -42,6 +57,54 @@ def check_visibility(entry, viewer_id):
             return False
             
     return False
+
+def is_remote_fqid(fqid, request):
+    """
+    Helper function to check if a given FQID belongs to a remote node.
+    """
+    current_host = request.get_host()
+    return current_host not in fqid and fqid.startswith("http")
+
+def fetch_remote_json(remote_url):
+    """
+    Helper function to safely fetch JSON from a remote node.
+    """
+    try:
+        # Specify to accept JSON only
+        response = requests.get(remote_url, headers={'Accept': 'application/json'}, timeout=5)
+        if response.status_code == 200:
+            # Fetched the JSON object successfully
+            return Response(response.json(), status=200)
+        elif response.status_code == 404:
+            # Remote resource not found
+            return Response({"detail": "Remote resource not found."}, status=404)
+        else:
+            return Response({"detail": f"Remote node error: {response.status_code}"}, status=response.status_code)
+    except requests.exceptions.RequestException as e:
+        return Response({"detail": f"Error connecting to remote node: {str(e)}"}, status=502)
+
+def fetch_remote_image(remote_url):
+    """
+    Helper function to safely fetch binary image data from a remote node.
+    """
+    try:
+        response = requests.get(remote_url, timeout=5)    
+        if response.status_code == 200:
+            # Fetch the type of file
+            content_type = response.headers.get('Content-Type', '').lower()
+            # Check if image 
+            if content_type.startswith('image/'):
+                # Pass the binary data and the exact format back to the browser
+                return HttpResponse(response.content, content_type=content_type)
+            else:
+                # Image not found
+                return HttpResponse("Remote node did not return valid image data.", status=404)         
+        elif response.status_code == 404:
+            return HttpResponse("Remote image not found.", status=404)
+        else:
+            return HttpResponseForbidden(f"Remote node error: {response.status_code}", status=response.status_code)
+    except requests.exceptions.RequestException as e:
+        return HttpResponse(f"Error connecting to remote node: {str(e)}", status=502)
 
 @api_view(['GET'])
 def ApiAuthors(request):
@@ -366,6 +429,9 @@ def ApiSingleLikeLocal(request, like_url):
 # Returns a paginated list of entries for a specific author
 @api_view(['GET', 'POST'])
 def ApiEntries(request, author_id):
+    """
+    URL ://service/api/authors/{AUTHOR_SERIAL}/entries/
+    """
     # Ensure the author exists before trying to fetch their entries
     author = get_object_or_404(Author, pk=author_id)
     
@@ -379,7 +445,7 @@ def ApiEntries(request, author_id):
         all_entries = Entry.objects.filter(author=author).exclude(visibility="DELETED").order_by('-published')
         
         # Query the entries by checking visibility for logged-in user
-        visible_entries = [e for e in all_entries if check_visibility(e, logged_in_id)]
+        visible_entries = [e for e in all_entries if check_visibility(e, logged_in_id, is_list=True)]
         
         # Paginate the queryset
         start = (page - 1) * size
@@ -399,6 +465,16 @@ def ApiEntries(request, author_id):
         return Response(serializer.data)
     
     elif request.method == 'POST':
+        # Ensure the logged in user is the author
+        if str(request.session.get("author_id")) != str(author_id):
+            return Response({"detail": "Forbidden: You cannot post as another author."}, status=403)
+
+        # Ensure the visibility is set properly
+        allowed_visibility = {"PUBLIC", "FRIENDS", "UNLISTED", "DELETED"}
+        visibility = request.data.get("visibility", "PUBLIC")
+        if visibility not in allowed_visibility:
+            return Response({"detail": "Invalid visibility."}, status=400)
+
         # Create a new entry from the incoming JSON object
         new_entry = Entry.objects.create(
             author=author,
@@ -416,6 +492,9 @@ def ApiEntries(request, author_id):
 # Returns a single specific entry
 @api_view(['GET', 'PUT', 'DELETE'])
 def ApiEntry(request, author_id, entry_id):
+    """
+    URL: ://service/api/authors/{AUTHOR_SERIAL}/entries/{ENTRY_SERIAL}
+    """
     # Try to get the entry first
     # None if not found; avoid 404 immediately due to PUT-create behavior
     entry = Entry.objects.filter(pk=entry_id, author_id=author_id).first()
@@ -438,11 +517,18 @@ def ApiEntry(request, author_id, entry_id):
         # Retrieve the logged-in author's ID from the session
         session_author_id = request.session.get("author_id")
 
+        # Ensure only the author can edit the entry
         if str(session_author_id) != str(author_id):
             return Response(
                 {"detail": "You do not have permission to modify this entry."}, 
                 status=403
             )
+        
+        # Ensure the visibility is set properly
+        allowed_visibility = {"PUBLIC", "FRIENDS", "UNLISTED", "DELETED"}
+        visibility = request.data.get("visibility", "PUBLIC")
+        if visibility not in allowed_visibility:
+            return Response({"detail": "Invalid visibility."}, status=400)
         
         author = get_object_or_404(Author, pk=author_id)
         # If entry DNE, create it with the provided entry id
@@ -462,6 +548,10 @@ def ApiEntry(request, author_id, entry_id):
         return Response(serializer.data, status=200)
     
     elif request.method == 'DELETE':
+        # Ensure a non-deleted entry first
+        if not entry:
+            return Response({"detail": "Not found."}, status=404)
+
         # Security check for deletion
         if str(request.session.get("author_id")) != str(author_id):
             return Response({"detail": "Forbidden"}, status=403)
@@ -473,20 +563,64 @@ def ApiEntry(request, author_id, entry_id):
         return Response(status=204)
 
 @api_view(['GET'])
+def ApiEntryGlobal(request, entry_fqid):
+    """
+    Global entry endpoint with entry FQID.
+    URL: /api/entries/<path:entry_fqid>/
+    """
+    # Clean up the trailing slash
+    entry_fqid = entry_fqid.rstrip('/')
+
+    # Proxy if remote
+    if is_remote_fqid(entry_fqid, request):
+        return fetch_remote_json(entry_fqid)
+
+    # Handle if local
+    try:
+        entry_id = entry_fqid.split('/')[-1]
+        entry = Entry.objects.get(id=entry_id)
+    except (Entry.DoesNotExist, ValueError):
+        return Response({"detail": "Not found."}, status=404)
+
+    # Check visibility
+    logged_in_id = request.session.get("author_id")
+    if not check_visibility(entry, logged_in_id):
+            return Response({"detail": "Forbidden"}, status=403)
+
+    # Serialize and return
+    serializer = EntrySerializer(entry, context={'request': request})
+    return Response(serializer.data, status=200)
+    
+@api_view(['GET'])
 def ApiEntryImage(request, author_id=None, entry_id=None, entry_fqid=None):
     """
     Returns the raw image data for an entry.
     Allows Markdown to link to images.
-    Supports both hierarchical and FQID style URLs.
+    URL: ://service/api/authors/{AUTHOR_SERIAL}/entries/{ENTRY_SERIAL}/image
+    URL: ://service/api/entries/{ENTRY_FQID}/image
     """
-    if entry_id is None and entry_fqid is not None:
-        entry_id = entry_fqid.rstrip("/").split("/")[-1]
-    # Get the entry
-    entry = get_object_or_404(Entry, id=entry_id)
+    # Proxy if remote
+    if entry_fqid is not None:
+        entry_fqid = entry_fqid.rstrip("/")
+
+        # If a remote URL, proxy the request to the other node
+        if is_remote_fqid(entry_fqid, request):
+            # Fetch from remote node's image endpoint
+            remote_image_url = f"{entry_fqid}/image"
+            return fetch_remote_image(remote_image_url)
+        
+        # If a local URL, simply extract the entry ID
+        entry_id = entry_fqid.split("/")[-1]
+
+    # Handle if local
+    if author_id is not None:
+        entry = get_object_or_404(Entry, id=entry_id, author_id=author_id)
+    else:
+        entry = get_object_or_404(Entry, id=entry_id)
 
     # Check if base64 data, implying an image
     if ";base64" not in entry.contentType:
-        return HttpResponse("This entry is not an image.", status=400)
+        return HttpResponse("This entry is not an image.", status=404)
     
     # Not found if entry is DELETED
     if entry.visibility == "DELETED":
@@ -560,8 +694,7 @@ def ApiAddComment(request, author_id, entry_id):
     if not check_visibility(entry, logged_in_id):
         return Response({"detail": "Forbidden from commenting on this entry."}, status=403)
 
-    author_data = request.data.get("author")
-    author_url = author_data["id"] if isinstance(author_data, dict) else author_data
+    author_url = request.build_absolute_uri(f"/api/authors/{logged_in_id}/")
     comment_text = request.data.get("comment")
 
     entry_fqid = request.build_absolute_uri(
