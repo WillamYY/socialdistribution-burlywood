@@ -617,6 +617,11 @@ class EntryAPITest(APITestCase):
             content=f"data:image/png;base64,{self.tiny_png_b64}",
             visibility="PUBLIC"
         )
+
+        # Log in as the author
+        session = self.client.session
+        session["author_id"] = self.author.id
+        session.save()
     
     def test_create_entry(self):
         """
@@ -761,7 +766,7 @@ class EntryAPITest(APITestCase):
             "entry_id": text_entry.id
         })
         text_response = self.client.get(text_image_url)
-        self.assertEqual(text_response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(text_response.status_code, 404)
 
         # Global image endpoint
         entry_fqid = f"http://testserver/api/authors/{self.author.id}/entries/{self.image_entry.id}"
@@ -771,6 +776,33 @@ class EntryAPITest(APITestCase):
         # Check the response and MIME type
         self.assertEqual(global_response.status_code, status.HTTP_200_OK)
         self.assertTrue(global_response["Content-Type"].startswith("image/png"))
+    
+    def test_get_image_via_fqid_path(self):
+        """
+        Verify the proxy logic handles a full URL path in the entry_fqid.
+        """
+        # Construct a local FQID
+        fqid = f"http://testserver/api/authors/{self.author.id}/entries/{self.image_entry.id}"
+
+        # Request via the Global Proxy URL pattern: /api/entries/<path:entry_fqid>/image
+        url = reverse('api:ApiEntryImageGlobal', kwargs={'entry_fqid': fqid})
+        
+        response = self.client.get(url)
+        
+        # Should resolve locally and return binary data
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "image/png")
+        self.assertEqual(response.content, base64.b64decode(self.tiny_png_b64))
+
+    def test_proxy_404_on_invalid_fqid(self):
+        """
+        Ensure it returns 404 if the FQID refers to a non-existent local entry.
+        """
+        bad_fqid = "http://testserver/api/authors/1/entries/00000000-0000-0000-0000-000000000000"
+        url = reverse('api:ApiEntryImageGlobal', kwargs={'entry_fqid': bad_fqid})
+        
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 404)
 
     def test_get_entries_pagination(self):
         """

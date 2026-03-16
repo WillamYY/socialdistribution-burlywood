@@ -13,7 +13,7 @@ from core.models import Author
 from core.services import maybe_sync_github_for_stream
 from interactions.models import Like, Comment
 
-def check_visibility(entry, viewer_id):
+def check_visibility(entry, viewer_id, is_list=False):
     """
     Helper function to verify if a user can see an entry.
     """
@@ -21,9 +21,23 @@ def check_visibility(entry, viewer_id):
     if entry.visibility == "DELETED":
         return False
     # Anyone with the link can see Public and Unlisted
-    if entry.visibility in ["PUBLIC", "UNLISTED"]:
+    if entry.visibility == "PUBLIC":
         return True
-    # If not logged in, cannot see anything other than PUBLIC/UNLISTED
+    if entry.visibility == "UNLISTED":
+        if not is_list:
+            # Direct link access
+            return True
+        else:
+            # If from list, only the author or a follower can see it in a feed
+            if not viewer_id:
+                return False
+            if str(entry.author.id) == str(viewer_id):
+                return True
+            if entry.author.followers.filter(id=viewer_id).exists():
+                return True
+            return False
+
+    # If not logged in, cannot see anything else
     if not viewer_id:
         return False
         

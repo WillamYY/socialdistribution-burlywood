@@ -1,17 +1,21 @@
 # Entries and Image API Documentation
 
-This document covers the API implementation and expected behavior for **Entries, Markdown, and Image** user stories, referencing GitHub issues. The following content in this document is mainly generated via the generative AI: Gemini 3 Pro, Google, 2026-03-01, https://gemini.google.com/u/0/app/48a83dd17d81fcf7?pageId=none
+This document covers the API implementation and expected behavior for **Entries and Visibility** user stories, referencing GitHub issues. The following content in this document is mainly generated via the generative AI: Gemini 3 Flash, Google, 2026-03-15, https://gemini.google.com/u/0/app/48a83dd17d81fcf7?pageId=none
 
 ### User Stories Covered
 * **#6**: As an author, I want my profile page to show my public entries (most recent first), so they can decide if they want to follow me.
 * **#10**: As an author, I want to make entries.
 * **#12**: As an author, I want to edit my entries locally.
+* **#14**: As an author, entries I make can be in simple plain text.
+* **#15**: As an author, entries I make can be in CommonMark.
 * **#16**: As an author, entries I create can be images.
 * **#17**: As an author, I want to delete my own entries locally.
 * **#18**: As an author, CommonMark entries can link to images.
 * **#21**: As an author, I want to be able to use my web-browser to manage/author my entries.
 * **#22**: As an author, other authors cannot modify my entries.
-* **#36**: As an author, I want to be able to make my entries "friends-only," so that I don't have to worry about people I don't know seeing them.
+* **#34**: As an author, I want to be able to make my entries public, so that everyone can see them.
+* **#35**: As an author, I want to be able to make my entries unlisted, so that my followers see them, and anyone with the link can also see them.
+* **#36**: As an author, I want to be able to make my entries friends-only.
 * **#40**: As an author, I want everyone to be able to see my public and unlisted entries, if they have a link to it.
 * **#41**: As an author, I don't want anyone who isn't a friend to be able to see my friends-only entries and images.
 * **#42**: As an author, I don't want anyone except the node admin to see my deleted entries.
@@ -33,7 +37,7 @@ To provide a user-friendly, browser-based management system for authors to creat
 * **Management (`/app/my-entries/`):** A dashboard to view, edit, or delete existing content.
 * **Viewing (`/app/stream/`):** A human-readable feed of posts from the author and their friends.
 
-**How it works:** Relies on `request.session['author_id']` to manage state and permissions. It uses Django Templates to render database content into sanitized HTML, automatically handling Markdown and image embedding.
+**How it works:** Relies on `request.session['author_id']` to manage state and permissions. It uses Django Templates to render database content into sanitized HTML, automatically handling Markdown and image embedding. 
 
 ---
 
@@ -231,6 +235,7 @@ To provide a user-friendly, browser-based management system for authors to creat
   Returns only PUBLIC entries.  
   Remote/federated inbox entries will be merged after inbox implementation.  
   Do not use if you need entries visible only to friends or followers.
+  Do not use this as a substitute for the 'Stream' or 'Inbox'. This endpoint is for discovery of global public content, not for viewing private interactions or friend updates
 
 ### Request Parameters
 
@@ -261,6 +266,7 @@ To provide a user-friendly, browser-based management system for authors to creat
   ]
 }
 ```
+
 ---
 
 ## Image Proxy API
@@ -271,14 +277,53 @@ To provide a user-friendly, browser-based management system for authors to creat
 
 * **When to use it:** Use this to render an image entry directly inside an HTML `<img>` tag, or to embed images within a CommonMark entry.
 * **How to use it:** Place this URL in the `src` attribute of an image tag. It decodes the base64 content on the fly.
-* **Why to use it:** It returns raw binary data with the correct `Content-Type` header (e.g., `image/png`). It automates base64 decoding so the frontend client doesn't have to parse JSON just to display a picture.
+* **Why to use it:** It returns raw binary data with the correct `Content-Type` header (for example, `image/png`). It automates base64 decoding so the frontend client does not need to parse JSON just to display a picture.
 
 ### Expected Status Codes
 
 * **`200 OK`**: Successfully returns the decoded binary image file.
-* **`400 Bad Request`**: The target entry exists but its `contentType` is not an image (e.g., `text/plain`).
-* **`403 Forbidden`**: The image is attached to a `FRIENDS` only post, and the requester is a stranger (**US #41**).
-* **`404 Not Found`**: The entry is `DELETED` or does not exist.
+* **`403 Forbidden`**: The image belongs to a `FRIENDS` entry and the requester is not allowed to view it.
+* **`404 Not Found`**: The entry does not exist, is `DELETED`, or is not an image entry.
+* **`500 Internal Server Error`**: The image content exists but could not be decoded.
+
+---
+
+## Markdown Support
+
+**Relevant User Stories:** #15, #18, #21
+
+* **When to use it:** For entries whose `contentType` is `text/markdown`.
+* **How it works in the web UI:** Markdown is rendered into safe HTML for browser display.
+* **How it works in the API:** The API stores and returns markdown content as entry content. Clients can render it appropriately.
+* **Why to use it:** Supports rich text authoring while still allowing safe browser-based viewing.
+
+### Example
+
+```json
+{
+    "title": "Markdown Example",
+    "description": "Testing markdown",
+    "contentType": "text/markdown",
+    "content": "# Hello\n\nThis is **bold** and this is ![an image](http://node/api/authors/123/entries/456/image)",
+    "visibility": "PUBLIC"
+}
+```
+
+This supports:
+
+* CommonMark entries
+* Image links inside markdown
+* Browser authoring and viewing
+
+---
+## Access Control Summary
+
+| Visibility | Who can see it? | Relevant Story | API Behavior |
+| --- | --- | --- | --- |
+| **PUBLIC** | Everyone (even unauthenticated) | **#34** | Returned in all GET requests. |
+| **FRIENDS** | Local Friends only | **#36, #41** | `403 Forbidden` if not a friend. |
+| **UNLISTED** | Anyone with the link | **#35, #40** | Hidden from feeds, but `200 OK` via FQID. |
+| **DELETED** | Node Admin only | **#42, #78** | `404 Not Found` for all users. |
 
 ---
 
@@ -312,3 +357,9 @@ To provide a user-friendly, browser-based management system for authors to creat
 | `visibility` | `string` | `"PUBLIC"` | Access level (`PUBLIC`, `FRIENDS`, `UNLISTED`). Evaluated by the server to restrict viewing. |
 
 ---
+
+## Notes / Current Implementation Details
+* `DELETED` entries remain in the database to support **US #78**, but they are hidden from normal UI and API reads.
+* `UNLISTED` entries are visible through direct links, which is important for **US #40** and **US #44**.
+* `PUT` currently supports both updating an existing entry and creating a new one with a specific ID, but in the current implementation it returns `200 OK` for both cases.
+* `GET /api/entries/public/` currently returns **local public entries only**.

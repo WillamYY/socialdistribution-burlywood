@@ -213,13 +213,24 @@ class EntryWebUITests(TestCase):
         """
         User Story #14: As an author, entries I make can be in simple plain text.
         """
+        session = self.client.session
+        session['author_id'] = self.author_a.id
+        session.save()
+
         url = reverse('api:ApiEntries', kwargs={'author_id': self.author_a.id})
-        data = {"contentType": "text/plain", "content": "## Not a Header"}
-        self.client.post(url, data, format='json')
-        
-        entry = Entry.objects.get(content="## Not a Header")
+        data = {
+            "title": "Plain Text Test",
+            "contentType": "text/plain",
+            "content": "## Not a Header",
+            "visibility": "PUBLIC",
+        }
+
+        response = self.client.post(url, data)
+        self.assertIn(response.status_code, [200, 201])
+
+        entry = Entry.objects.get(title="Plain Text Test")
         self.assertEqual(entry.contentType, "text/plain")
-        # Check if it's not converted to <h2> in the DB
+        self.assertEqual(entry.content, "## Not a Header")
         self.assertNotIn("<h2>", entry.content)
     
     def test_security_author_isolation(self):
@@ -252,6 +263,86 @@ class EntryWebUITests(TestCase):
         self.public_entry.refresh_from_db()
         self.assertNotEqual(self.public_entry.title, "Hacked Title")
     
+    def test_browser_manage_entries_flow(self):
+        """
+        User Story #21: As an author, I want to be able to use my web-browser to manage/author my entries.
+        ChatGPT, OpenAI, 2026-03-15, https://chatgpt.com/share/69b78062-384c-8011-b02b-fa8e5afeb9ab
+        """
+        session = self.client.session
+        session["author_id"] = self.author_a.id
+        session.save()
+
+        # Create through browser view
+        create_url = reverse("create_entry")
+        create_data = {
+            "title": "Browser Created",
+            "description": "created in web UI",
+            "contentType": "text/plain",
+            "content": "hello from browser",
+            "visibility": "PUBLIC",
+        }
+        response = self.client.post(create_url, create_data)
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(Entry.objects.filter(title="Browser Created", author=self.author_a).exists())
+
+        entry = Entry.objects.get(title="Browser Created", author=self.author_a)
+        self.assertEqual(entry.content, "hello from browser")
+
+        # Edit through browser view
+        edit_url = reverse("edit_entry", kwargs={"entry_id": entry.id})
+        edit_data = {
+            "title": "Browser Edited",
+            "description": "edited in web UI",
+            "contentType": "text/plain",
+            "content": "updated from browser",
+            "visibility": "UNLISTED",
+        }
+        response = self.client.post(edit_url, edit_data)
+        self.assertEqual(response.status_code, 302)
+
+        entry.refresh_from_db()
+        self.assertEqual(entry.title, "Browser Edited")
+        self.assertEqual(entry.content, "updated from browser")
+        self.assertEqual(entry.visibility, "UNLISTED")
+
+        # Delete through browser view
+        delete_url = reverse("delete_entry", kwargs={"entry_id": entry.id})
+        response = self.client.post(delete_url)
+        self.assertEqual(response.status_code, 302)
+
+        entry.refresh_from_db()
+        self.assertEqual(entry.visibility, "DELETED")
+
+    def test_markdown_entry_can_link_to_images(self):
+        """
+        User Story #18: As an author, entries I create that are in CommonMark can link to images.
+        ChatGPT, OpenAI, 2026-03-15, https://chatgpt.com/share/69b78062-384c-8011-b02b-fa8e5afeb9ab
+        """
+        raw_markdown = 'Here is an image ![tiny](/media/hosted_images/test.png)'
+        rendered = render_safe_markdown(raw_markdown)
+
+        entry = Entry.objects.create(
+            author=self.author_a,
+            title="Markdown Image Link",
+            description="markdown image",
+            contentType="text/markdown",
+            content=rendered,
+            content_raw=raw_markdown,
+            visibility="PUBLIC",
+        )
+
+        session = self.client.session
+        session["author_id"] = self.author_a.id
+        session.save()
+
+        url = reverse("get_entry", kwargs={"entry_id": entry.id})
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "<img")
+        self.assertContains(response, 'src="/media/hosted_images/test.png"', html=False)
+        self.assertContains(response, 'alt="tiny"', html=False)
+        
     def test_get_entry_public_deleted_access(self):
         """
         User Story #91: As an author, entries I create should always be visible to me until they are deleted.

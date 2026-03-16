@@ -25,6 +25,7 @@ class Entry(models.Model):
         ("PUBLIC", "Public"),
         ("FRIENDS", "Friends Only"),
         ("UNLISTED", "Unlisted"),
+        ("DELETED", "Deleted"),
     ]
     visibility = models.CharField(max_length=20, choices=VISIBILITY_CHOICES, default="PUBLIC")
 
