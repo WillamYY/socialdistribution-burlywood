@@ -1,10 +1,13 @@
 from django.test import TestCase, Client
 from django.urls import reverse
-from core.models import Author, FollowRequest
+from core.models import Author, FollowRequest, HostedImage
+from core.admin import HostedImageAdmin
 from interactions.models import Like, Comment
 from entries.models import Entry
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.contrib.postgres.fields import ArrayField
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.contrib.admin.sites import AdminSite
 import uuid
 
 class UnfollowAPITestCase(TestCase):
@@ -357,3 +360,42 @@ class AdminUserStoryTestCase(TestCase):
         # Ensures no likes have arrayfields
         for field in Like._meta.get_fields():
             self.assertFalse(isinstance(field,ArrayField))
+    
+    def test_hosted_image_generates_markdown_link_and_is_registered_in_admin(self):
+        """
+        User Story #65: As a node admin, images can be hosted on my node, 
+        so that my users can use them in their CommonMark entries.
+
+        ChatGPT, OpenAI, 2026-03-15, https://chatgpt.com/share/69b78062-384c-8011-b02b-fa8e5afeb9ab
+        """
+        image_file = SimpleUploadedFile(
+            "tiny.png",
+            (
+                b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01"
+                b"\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde\x00"
+                b"\x00\x00\x0cIDAT\x08\x99c\xf8\xff\xff?\x00\x05\xfe"
+                b"\x02\xfeA\xdd\x8d\xb1\x00\x00\x00\x00IEND\xaeB`\x82"
+            ),
+            content_type="image/png",
+        )
+
+        hosted = HostedImage.objects.create(
+            title="Tiny Test Image",
+            image=image_file,
+        )
+
+        # Model behavior
+        link = hosted.get_markdown_link()
+        self.assertEqual(str(hosted), "Tiny Test Image")
+        self.assertIn("![Tiny Test Image](", link)
+        self.assertIn("/media/hosted_images/", link)
+        self.assertTrue(link.endswith(".png)"))
+
+        # Admin configuration behavior
+        admin_obj = HostedImageAdmin(HostedImage, AdminSite())
+        self.assertIn("title", admin_obj.list_display)
+        self.assertIn("uploaded_at", admin_obj.list_display)
+        self.assertIn("image", admin_obj.list_display)
+        self.assertIn("get_markdown_link", admin_obj.list_display)
+        self.assertIn("get_markdown_link", admin_obj.readonly_fields)
+        self.assertIn("title", admin_obj.search_fields)
