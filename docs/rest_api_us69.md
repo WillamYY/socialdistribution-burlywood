@@ -140,4 +140,5 @@ Returns likes on a specific comment. Supports `page_number` and `size` query par
 
 
 ## Citation
-- For documentation and Tests cases, used genAI for formatting help.
+- For documentation and some error fixing, used genAI for formatting help.
+Prompt- "Help me clean the formatting for this document and make it look tidy"
