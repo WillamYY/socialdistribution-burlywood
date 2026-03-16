@@ -81,7 +81,9 @@
                 <input type="file" name="picture">
 
                 <label>GitHub URL</label>
-                <input name="github" value="{{ author.github }}" type="url" placeholder="https://github.com/username">
+                <input name="github" id="github-input" value="{{ author.github }}" type="url"
+                       placeholder="https://github.com/username">
+                <span id="github-error" class="field-error" style="display:none; color: var(--danger); font-size: 0.9em;"></span>
 
                 <input type="submit" value="Save Changes">
             </form>
@@ -91,5 +93,39 @@
             </p>
         </div>
     </div>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            var input = document.getElementById('github-input');
+            var errEl = document.getElementById('github-error');
+            var githubRe = /^https?:\/\/(www\.)?github\.com\/[a-zA-Z0-9_-]+\/?$/i;
+
+            function validate() {
+                var val = (input.value || '').trim();
+                if (!val) {
+                    errEl.style.display = 'none';
+                    input.style.borderColor = '';
+                    return true;
+                }
+                if (githubRe.test(val)) {
+                    errEl.style.display = 'none';
+                    errEl.textContent = '';
+                    input.style.borderColor = '';
+                    return true;
+                }
+                errEl.textContent = 'Please enter a valid GitHub profile URL (e.g. https://github.com/username)';
+                errEl.style.display = 'block';
+                input.style.borderColor = 'var(--danger)';
+                return false;
+            }
+
+            input.addEventListener('blur', validate);
+            input.addEventListener('input', function() {
+                if (errEl.style.display === 'block') validate();
+            });
+            document.querySelector('form').addEventListener('submit', function(e) {
+                if (!validate()) e.preventDefault();
+            });
+        });
+    </script>
 </body>
 </html>

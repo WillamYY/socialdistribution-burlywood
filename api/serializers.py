@@ -1,15 +1,14 @@
 from rest_framework import serializers
-from .models import Author
+from core.models import Author
 from entries.models import Entry
 from interactions.models import Like, Comment
-from .models import Author as APIAuthor
 
 """
 Serializes author objects
 """
 class AuthorSerializer(serializers.ModelSerializer):
     type = serializers.CharField(default = "author") # Sets the type to author in the response
-    displayName = serializers.CharField(source = "name") # Maps the displayName field to the name field in the database
+    displayName = serializers.SerializerMethodField() # Maps the displayName field to the name field in the database
     profileImage = serializers.URLField(source = "picture") # Maps the profileImage field to the picture field in the database
     id = serializers.SerializerMethodField() # Turns the interger id into a url
 
@@ -24,6 +23,17 @@ class AuthorSerializer(serializers.ModelSerializer):
     # Defines how to create the id
     def get_id(self,obj):
         return f"{obj.host}authors/{obj.id}"
+    
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        if not data["host"]:
+            data["host"] = "http://127.0.0.1:8000/"
+        return data
+    
+    def get_displayName(self, obj):
+        if obj.name:
+            return obj.name
+        return obj.username
 
 """
 Serializes a singular like
@@ -42,13 +52,39 @@ class LikeSerializer(serializers.ModelSerializer):
     # Turns ID into URL
     def get_id(self, obj):
         author = self.get_author(obj)
-        return f"{author["id"]}/liked/{obj.id}"
+        # ensure uuid exists
+        like_uuid = obj.uuid if obj.uuid else obj.id.split("/")[-1]
+        return f"{author['id']}/liked/{like_uuid}"
     
+    def get_displayName(self, obj):
+        return obj.name if obj.name else obj.username
+
     # Serializes the author
     def get_author(self, obj):
-        author_id = obj.author.split("/")[-1]
-        author_obj = APIAuthor.objects.get(id = int(author_id))
-        return AuthorSerializer(author_obj).data
+        author_id = obj.author.rstrip("/").split("/")[-1]
+
+        author_obj = Author.objects.filter(id=int(author_id)).first()
+
+        if not author_obj:
+            return {
+                "type": "author",
+                "id": obj.author,
+                "host": "",
+                "displayName": "Unknown",
+                "github": "",
+                "profileImage": "",
+                "web": ""
+            }
+
+        data = AuthorSerializer(author_obj).data
+
+        if not data.get("displayName"):
+            data["displayName"] = author_obj.username
+
+        if not data.get("host"):
+            data["host"] = "http://127.0.0.1:8000/"
+
+        return data
 
 """
 Creates the serializer for multiple likes

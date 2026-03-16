@@ -1,7 +1,14 @@
 from django.test import TestCase, Client
 from django.urls import reverse
-from core.models import Author, FollowRequest
+from core.models import Author, FollowRequest, HostedImage
+from core.admin import HostedImageAdmin
+from interactions.models import Like, Comment
+from entries.models import Entry
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.contrib.postgres.fields import ArrayField
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.contrib.admin.sites import AdminSite
+import uuid
 
 class UnfollowAPITestCase(TestCase):
     """
@@ -213,3 +220,210 @@ class EditProfileAPITestCase(TestCase):
         response = self.client.post(self.url, {"name": "Fail"})
         self.assertEqual(response.status_code, 302)  # redirect to login
         self.assertIn("/login", response.url)
+
+class FollowerFollowingFriendsTestCase(TestCase):
+    """
+    User story #55: As an author, my node will know about my followers, who I am following, and my friends, so that I don't have to keep track of it myself.
+    """
+    def test_follower_following_friend(self):
+        self.author1 = Author.objects.create(username='author1', password='pass1')
+        self.author2 = Author.objects.create(username='author2', password='pass2')
+
+        # initially no one is following each other
+        self.assertEqual(self.author1.followers.count(), 0)
+        self.assertEqual(self.author2.followers.count(), 0)
+        
+        # author 2 follows author 1
+        self.author1.followers.add(self.author2)
+        self.assertEqual(self.author1.followers.count(), 1)
+        self.assertEqual(self.author2.followers.count(), 0)
+
+        # author 1 follows author 2
+        self.author2.followers.add(self.author1)
+        self.assertEqual(self.author1.followers.count(), 1)
+        self.assertEqual(self.author1.followers.count(), 1)
+        self.assertEqual(self.author1.friends().count(), 1)
+        self.assertEqual(self.author2.friends().count(), 1)
+
+class ProfileViewTestCase(TestCase):
+    def test_get_profile_entries(self):
+        """
+        User story #6: As an author, I want my profile page to show my public entries (most recent first), so they can decide if they want to follow me.
+        """
+        # creates a generic author
+        self.author = Author.objects.create(
+            username='author1',
+            password='pass1',
+            description='Initial description'
+        )
+        self.client = Client()
+        self.url = reverse('EditProfileView')
+
+        # author creates entries of 4 types of visibility
+        entry1 = Entry(title = "public entry" ,description = "public entry", contentType = "text/plain",content = "public entry",author = self.author, visibility = "PUBLIC")
+        entry1.save()
+        entry2 = Entry(title = "unlisted entry" ,description = "unlisted entry", contentType = "text/plain",content = "unlisted entry",author = self.author, visibility = "UNLISTED")
+        entry2.save()
+        entry3 = Entry(title = "friends entry" ,description = "friends entry", contentType = "text/plain",content = "friends entry",author = self.author, visibility = "FRIENDS")
+        entry3.save()
+        entry4 = Entry(title = "deleted entry" ,description = "deleted entry", contentType = "text/plain",content = "deleted entry",author = self.author, visibility = "DELETED")
+        entry4.save()
+
+        profile_url = reverse('ProfileDisplay', kwargs={'id': self.author.id})
+
+        # Not logged in, a generic reader
+        session = self.client.session
+        session['author_id'] = None
+        session.save()
+
+        response = self.client.get(profile_url)
+        self.assertContains(response, f"<h2 class=\"entry-title\">{entry1.title}</h2>")
+        self.assertNotContains(response, f"<h2 class=\"entry-title\">{entry2.title}</h2>")
+        self.assertNotContains(response, f"<h2 class=\"entry-title\">{entry3.title}</h2>")
+        self.assertNotContains(response, f"<h2 class=\"entry-title\">{entry4.title}</h2>")
+
+        # test database only gets the one entry
+        self.assertEqual(Entry.objects.filter(author = self.author, visibility="PUBLIC").count(), 1)
+
+"""
+Creates the test for the admin user stories
+"""
+class AdminUserStoryTestCase(TestCase):
+    """
+    Tests using SQL queries on database
+    User Story #75
+    """
+    def test_sql_queries(self):
+        # Tries sql queries on the Authors
+        author1 = Author(username = "John",name = "John Doe",description = "This is John Doe's Account",host = "http://localhost:8000/api/",web = "http://localhost:8000/user/1")
+        author1.save()
+        author2 = Author(username = "Jane",name = "Jane Doe",description = "This is Jane Doe's Account",host = "http://localhost:8000/api/",web = "http://localhost:8000/user/2")
+        author2.save()
+        self.assertEqual(list(Author.objects.raw("SELECT * FROM core_author")),[author1,author2])
+        self.assertEqual(Author.objects.raw("SELECT description, id FROM core_author WHERE username = 'Jane'")[0].description,"This is Jane Doe's Account")
+
+        # SQL queries on Follow Request
+        followRequest1 = FollowRequest(requester = author1,target = author2)
+        followRequest1.save()
+        followRequest2 = FollowRequest(requester = author2,target = author1)
+        followRequest2.save()
+        self.assertEqual(list(FollowRequest.objects.raw("SELECT * FROM core_followrequest")),[followRequest1,followRequest2])
+        self.assertEqual(FollowRequest.objects.raw(f"SELECT requester_id, id FROM core_followrequest WHERE target_id = 2")[0].requester_id,1)
+
+        # SQL queries on Entries
+        entry1 = Entry(title = "John's Post",description = "This is the first entry",contentType = "text/plain",content = "NUMBER 1!",author = author1, visibility = "PUBLIC")
+        entry1.save()
+        entry2 = Entry(title = "Jane's Post",description = "This is the second entry",contentType = "text/plain",content = "NUMBER 2!",author = author2, visibility = "PRIVATE")
+        entry2.save()
+        self.assertEqual(list(Entry.objects.raw("SELECT * FROM entries_entry")),[entry1, entry2])
+        self.assertEqual(Entry.objects.raw("SELECT title, id FROM entries_entry WHERE content = 'NUMBER 2!'")[0].title,"Jane's Post")
+
+        # SQL queries on Like
+        firstUUID = uuid.uuid4()
+        entry1Id = f"http://localhost:8000/api/authors/{entry1.author.id}/entries/{entry1.id}/"
+        like1 = Like(author = author1.web,object = entry1Id, id = "http://localhost:8000/likes/" + str(firstUUID), uuid = firstUUID)
+        like1.save()
+        secondUUID = uuid.uuid4()
+        entry2Id = f"http://localhost:8000/api/authors/{entry2.author.id}/entries/{entry2.id}/"
+        like2 = Like(author = author2.web,object = entry2Id, id = "http://localhost:8000/likes/" + str(secondUUID), uuid = secondUUID)
+        like2.save()
+        self.assertEqual(list(Like.objects.raw("SELECT * from interactions_like")),[like1,like2])
+        self.assertEqual(Like.objects.raw(f"SELECT * FROM interactions_like WHERE id = %s",["http://localhost:8000/likes/" + str(firstUUID)])[0].uuid, firstUUID)
+
+        # SQL queries on comments (Reuses the uuid's from like)
+        comment1Id = f"http://localhost:8000/api/comments/{firstUUID}"
+        comment1 = Comment(author = author1.web,entry = entry1Id, id = comment1Id, comment = "HELLO",contentType = "text/plain")
+        comment1.save()
+        comment2Id = f"http://localhost:8000/api/comments/{secondUUID}"
+        comment2 = Comment(author = author2.web,entry = entry2Id, id = comment2Id, comment = "GOODBYE",contentType = "text/plain")
+        comment2.save()
+        self.assertEqual(list(Comment.objects.raw("SELECT * from interactions_comment")),[comment1,comment2])
+        self.assertEqual(Comment.objects.raw(f"SELECT * FROM interactions_comment WHERE author = %s",[author1.web])[0].comment, "HELLO")
+
+    """
+    Checks that arrays are not stored in database fields
+    User Story #75
+    """
+    def test_array_database_field(self):
+        # Ensures no authors have arrayfields
+        for field in Author._meta.get_fields():
+            self.assertFalse(isinstance(field,ArrayField))
+        # Ensures no follow request have arrayfields
+        for field in FollowRequest._meta.get_fields():
+            self.assertFalse(isinstance(field,ArrayField))
+        # Ensures no entires have arrayfields
+        for field in Entry._meta.get_fields():
+            self.assertFalse(isinstance(field,ArrayField))
+        # Ensures no comments have arrayfields
+        for field in Comment._meta.get_fields():
+            self.assertFalse(isinstance(field,ArrayField))
+        # Ensures no likes have arrayfields
+        for field in Like._meta.get_fields():
+            self.assertFalse(isinstance(field,ArrayField))
+    
+    def test_hosted_image_generates_markdown_link_and_is_registered_in_admin(self):
+        """
+        User Story #65: As a node admin, images can be hosted on my node, 
+        so that my users can use them in their CommonMark entries.
+
+        ChatGPT, OpenAI, 2026-03-15, https://chatgpt.com/share/69b78062-384c-8011-b02b-fa8e5afeb9ab
+        """
+        image_file = SimpleUploadedFile(
+            "tiny.png",
+            (
+                b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01"
+                b"\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde\x00"
+                b"\x00\x00\x0cIDAT\x08\x99c\xf8\xff\xff?\x00\x05\xfe"
+                b"\x02\xfeA\xdd\x8d\xb1\x00\x00\x00\x00IEND\xaeB`\x82"
+            ),
+            content_type="image/png",
+        )
+
+        hosted = HostedImage.objects.create(
+            title="Tiny Test Image",
+            image=image_file,
+        )
+
+        # Model behavior
+        link = hosted.get_markdown_link()
+        self.assertEqual(str(hosted), "Tiny Test Image")
+        self.assertIn("![Tiny Test Image](", link)
+        self.assertIn("/media/hosted_images/", link)
+        self.assertTrue(link.endswith(".png)"))
+
+        # Admin configuration behavior
+        admin_obj = HostedImageAdmin(HostedImage, AdminSite())
+        self.assertIn("title", admin_obj.list_display)
+        self.assertIn("uploaded_at", admin_obj.list_display)
+        self.assertIn("image", admin_obj.list_display)
+        self.assertIn("get_markdown_link", admin_obj.list_display)
+        self.assertIn("get_markdown_link", admin_obj.readonly_fields)
+        self.assertIn("title", admin_obj.search_fields)
+
+
+class SameOriginSecurityMiddlewareTestCase(TestCase):
+    """
+    Tests for User Story #79: UI only communicates with node's web server.
+    Verifies security headers are set to prevent XSS.
+    """
+
+    def test_csp_header_present(self):
+        """Content-Security-Policy restricts connect-src to 'self'."""
+        response = self.client.get("/")
+        self.assertIn("Content-Security-Policy", response)
+        self.assertIn("connect-src 'self'", response["Content-Security-Policy"])
+
+    def test_x_content_type_options(self):
+        """X-Content-Type-Options prevents MIME sniffing."""
+        response = self.client.get("/")
+        self.assertEqual(response.get("X-Content-Type-Options"), "nosniff")
+
+    def test_x_frame_options(self):
+        """X-Frame-Options prevents clickjacking."""
+        response = self.client.get("/")
+        self.assertEqual(response.get("X-Frame-Options"), "SAMEORIGIN")
+
+    def test_referrer_policy(self):
+        """Referrer-Policy limits referrer leakage."""
+        response = self.client.get("/")
+        self.assertIsNotNone(response.get("Referrer-Policy"))

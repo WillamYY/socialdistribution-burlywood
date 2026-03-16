@@ -194,6 +194,52 @@
     margin: 10px 0;
 }
 
+.entry-card.clickable {
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.entry-card.clickable:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 12px rgba(0,0,0,0.1);
+    border-color: var(--link-blue);
+}
+
+.entry-card.clickable a, 
+.entry-card.clickable button, 
+.entry-card.clickable textarea {
+    position: relative;
+    z-index: 2;
+}
+
+/* Interactions Specifics*/
+.interaction-row {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 10px 0;
+    border-top: 1px solid var(--border-light);
+}
+
+.stat-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: none;
+    border: none;
+    color: var(--text-body);
+    font-size: 0.9rem;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 12px;
+    transition: background 0.2s;
+}
+
+.stat-item:hover { background: var(--bg-muted); }
+.liked .icon { color: #ed4956; }
+.icon { font-size: 1.1rem; }
+.count { font-weight: 600; }
+
 /* Markdown Specifics */
 .entry-markdown h1,  .entry-markdown h2, .entry-markdown h3 {
     margin-top: 5px;

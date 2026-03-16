@@ -25,10 +25,10 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("app/", include("core.urls")),
     path("app/", include("entries.urls")),
-    # API routes
-    path("api/", include(("api.urls", "api"), namespace="api")),
-    path("api/", include("entries.api_urls")),
+    # API routes: core first (following, followers, friends), then entries (stream), then api (rest + author FQID)
     path("", include("core.api_urls")),
+    path("api/", include("entries.api_urls")),
+    path("api/", include(("api.urls", "api"), namespace="api")),
 ]
 
 if settings.DEBUG:

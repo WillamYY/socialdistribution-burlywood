@@ -1,48 +1,101 @@
-{% extends 'base.html' %}
+{% extends 'entries/base.html' %}
+{% load entry_extras %}
 
-{% load static %}
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
-</head>
-<body>
-    {% block content %}
+{% block title %}{{ entry.title }}{% endblock %}
+
+{% block content %}
+<div class="page-container">
+    <div style="width: 100%; max-width: var(--max-width); margin-bottom: 15px;">
+        <a href="{{ return_url }}" class="edit-link">← Back</a>
+    </div>
+
     {% if allowed %}
-    <header>
-        <h1>{{ entry.title }}</h1>
-        <h2>By: {{entry.author}}</h2>
-        <h3>Published: {{entry.published}}</h3>
-        <h3>{{entry.description}}</h3>
-    </header>
-    <main>
-        <article>
-            {{entry.content|safe}}
-        </article>
-        <!-- <form method="POST" action="button"> -->
-            <!-- add like functionality here -->
-            <!-- <label class="offscreen" for=""></label>
-            <input type="submit" name="" id="">
-        </form> -->
-        <a href="{% url 'view_entries' entry.author.id %}">Back</a>
-        <!-- <section>
-            <h2>Comments:</h2>
-            {% for comment in entry.comments %} -->
-            <!-- add comments functionality here -->
+    <div class="entry-card">
+        <div class="entry-header">
+            <h1 class="entry-title">{{ entry.title }}</h1>
+            <span class="badge-visibility">{{ entry.visibility }}</span>
+        </div>
+        <p class="entry-by">by <strong>{{ entry.author.username }}</strong> on {{ entry.published|date:"F j, Y" }}</p>
+        
+        {% if entry.description %}
+            <p class="entry-description">{{ entry.description }}</p>
+        {% endif %}
+
+        <div class="entry-content" style="margin-top: 20px; border-top: 1px solid var(--border-light); padding-top: 20px;">
+            {% if "image" in entry.contentType %}
+                <img src="{% url 'api:ApiEntryImage' author_id=entry.author.id entry_id=entry.id %}" class="entry-image">
+            {% elif entry.contentType == "text/markdown" %}
+                <div class="entry-markdown">{{ entry.content|safe }}</div>
+            {% else %}
+                <div class="entry-plain-text">{{ entry.content|linebreaks }}</div>
+            {% endif %}
+        </div>
+
+        <div class="interaction-row" onclick="event.stopPropagation();">
+            {% if request.session.author_id %}
+            <form method="POST" action="{% url 'interactions:add_like' entry.id %}">
+                {% csrf_token %}
+                <button type="submit" class="stat-item {% if entry.liked_by_user %}liked{% endif %}">
+                    <span class="icon">{% if entry.liked_by_user %}❤️{% else %}🤍{% endif %}</span>
+                    <span class="count">{{ entry.like_count|default:0 }}</span>
+                </button>
+            </form>
+            {% else %}
+                <div class="stat-item">
+                    <span class="icon">🤍</span>
+                    <span class="count">{{ entry.like_count|default:0 }}</span>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="card" style="margin-top: -10px;">
+        <h3>Comments ({{ entry.fetched_comments|length }})</h3>
+        <div class="comments-section">
+            {% for comment in entry.fetched_comments %}
+                <div class="comment" style="padding: 15px 0; border-bottom: 1px solid var(--border-light);">
+                    <strong>{{ comment.author_name }}</strong> 
+                    <small class="entry-date">{{ comment.published|date:"M d, Y" }}</small>
+                    <p style="margin: 8px 0;">{{ comment.comment }}</p>
+
+                    <div class="interaction-row" style="padding: 5px 0; border: none;" onclick="event.stopPropagation();">
+                        {% if request.session.author_id %}
+                        <form method="POST" action="{% url 'interactions:add_comment_like' comment.id|extract_uuid %}">
+                            {% csrf_token %}
+                            <button type="submit" class="stat-item {% if comment.liked_by_user %}liked{% endif %}">
+                                <span class="icon" style="font-size: 1rem;">
+                                    {% if comment.liked_by_user %}❤️{% else %}🤍{% endif %}
+                                </span>
+                                <span class="count">{{ comment.like_count|default:0 }}</span>
+                            </button>
+                        </form>
+                        {% else %}
+                            <div class="stat-item">
+                                <span class="icon" style="font-size: 1rem;">🤍</span>
+                                <span class="count">{{ comment.like_count|default:0 }}</span>
+                            </div>
+                        {% endif %}
+                    </div>
+            {% empty %}
+                <p class="text-muted">No comments yet. Start the conversation!</p>
             {% endfor %}
-        <!-- </section> -->
-    </main>
+            
+            {% if request.session.author_id %}
+            <form method="POST" action="{% url 'interactions:add_comment' entry.id %}" style="margin-top: 25px;">
+                {% csrf_token %}
+                <div class="form-group">
+                    <textarea name="comment" rows="3" class="form-control" placeholder="Write a comment..." required></textarea>
+                </div>
+                <button type="submit" class="btn-save" style="margin-top: 10px;">Post Comment</button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
     {% else %}
-    <header>
-        <h1>Entry unavailable</h1>
-    </header>
-    <main>
-        <h2>This entry is only available to those who are friends with the author.</h2>
-        <a href="{% url 'view_entries' entry.author.id %}">Back</a>
-    </main>
+    <div class="card">
+        <h1>Entry Unavailable</h1>
+        <p>This content is restricted to friends only. Please send a follow request to the author to view this post.</p>
+    </div>
     {% endif %}
-    {% endblock %}
-</body>
-</html>
+</div>
+{% endblock %}

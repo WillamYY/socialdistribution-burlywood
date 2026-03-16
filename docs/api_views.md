@@ -15,6 +15,7 @@ Following/Friends (#48, #50, #51, #52, #53, #54)
 * **#52** Unfollow authors I am following
 * **#53** Mutual following makes us friends
 * **#54** Unfriend authors by unfollowing
+* **#55** Keep track of my followers, followings, and friends
 
 # Common Notes
 

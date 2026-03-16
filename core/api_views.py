@@ -2,7 +2,31 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
 from django.shortcuts import get_object_or_404
+from urllib.parse import unquote
 from core.models import Author, FollowRequest
+
+
+def _author_to_json(author, request=None):
+    """Build author JSON for API responses (User Story #69)."""
+    host = author.host or 'http://127.0.0.1:8000/api/'
+    if not host.endswith('/'):
+        host = host + '/'
+    author_id = host + 'authors/' + str(author.id)
+    web = author.web or f"http://127.0.0.1:8000/app/user/{author.id}/"
+    try:
+        profile_img = author.picture_url or (author.picture.url if author.picture else None)
+    except (ValueError, AttributeError):
+        profile_img = None
+    return {
+        "type": "author",
+        "id": author_id,
+        "host": host,
+        "displayName": author.name or author.username,
+        "github": author.github or "",
+        "profileImage": profile_img,
+        "web": web,
+    }
+
 
 @api_view(['GET'])
 def api_list_following(request, author_id):
@@ -15,18 +39,7 @@ def api_list_following(request, author_id):
     if str(author_id) != request.GET.get('auth_id', str(author_id)):
         return Response({"detail": "Forbidden"}, status=status.HTTP_403_FORBIDDEN)
 
-    following_list = [
-        {
-    "type": "author",
-    "id": f"http://127.0.0.1:8000/api/authors/{a.id}",
-    "host": "http://127.0.0.1:8000/api/",
-    "displayName": a.name or a.username,
-    "github": a.github,
-    "profileImage": a.picture.url if a.picture else None,
-    "web": f"http://127.0.0.1:8000/authors/{a.id}",
-}
-        for a in me.following.all()
-    ]
+    following_list = [_author_to_json(a, request) for a in me.following.all()]
     return Response({"following": following_list})
 
 @api_view(['DELETE'])
@@ -121,6 +134,89 @@ def api_follow_author(request, author_id):
     # Create follow request
     FollowRequest.objects.create(requester=me, target=target)
     return Response({"detail": f"Follow request sent to {target.username}"}, status=status.HTTP_201_CREATED)
+
+
+# --- Followers API (User Story #69 - RESTful interface) ---
+
+@api_view(['GET'])
+def api_list_followers(request, author_id):
+    """
+    GET [local, remote]: List authors who follow AUTHOR_SERIAL.
+    URL: /api/authors/{AUTHOR_SERIAL}/followers/
+    """
+    author = get_object_or_404(Author, id=author_id)
+    followers = author.followers.all()
+    follower_list = [_author_to_json(a, request) for a in followers]
+    return Response({"type": "followers", "followers": follower_list})
+
+
+def _extract_local_author_id_from_fqid(fqid, request):
+    """
+    Extract local author id from FQID if this node owns it.
+    Returns (id, True) if local, else (None, False).
+    """
+    try:
+        decoded = unquote(fqid)
+        # Check if FQID points to our node
+        our_base = request.build_absolute_uri('/api/').rstrip('/')
+        if our_base in decoded or '127.0.0.1' in decoded or 'localhost' in decoded:
+            # Extract id: .../authors/123 or .../authors/123/
+            parts = decoded.rstrip('/').split('/')
+            if 'authors' in parts:
+                idx = parts.index('authors')
+                if idx + 1 < len(parts):
+                    return int(parts[idx + 1]), True
+    except (ValueError, IndexError):
+        pass
+    return None, False
+
+
+@api_view(['GET', 'PUT', 'DELETE'])
+def api_follower_detail(request, author_id, foreign_author_fqid):
+    """
+    GET [local, remote]: Check if FOREIGN_AUTHOR_FQID is a follower of AUTHOR_SERIAL.
+    PUT [local]: Accept follow request (add as follower).
+    DELETE [local]: Deny/remove follower.
+    URL: /api/authors/{AUTHOR_SERIAL}/followers/{FOREIGN_AUTHOR_FQID}/
+    """
+    author = get_object_or_404(Author, id=author_id)
+    foreign_id, is_local = _extract_local_author_id_from_fqid(foreign_author_fqid, request)
+
+    if not is_local or foreign_id is None:
+        return Response({"detail": "Foreign author not found on this node"}, status=404)
+
+    try:
+        foreign_author = Author.objects.get(id=foreign_id)
+    except Author.DoesNotExist:
+        return Response({"detail": "Author not found"}, status=404)
+
+    if request.method == 'GET':
+        if author.followers.filter(id=foreign_author.id).exists():
+            return Response(_author_to_json(foreign_author, request))
+        return Response({"detail": "Not a follower"}, status=404)
+
+    # PUT and DELETE require auth
+    if str(author_id) != request.GET.get('auth_id') and str(author_id) != str(request.session.get('author_id')):
+        return Response({"detail": "Forbidden"}, status=status.HTTP_403_FORBIDDEN)
+
+    if request.method == 'PUT':
+        # Accept follow request: add foreign_author to author's followers
+        follow_req = FollowRequest.objects.filter(requester=foreign_author, target=author).first()
+        if not follow_req:
+            return Response({"detail": "No matching follow request"}, status=404)
+        author.followers.add(foreign_author)
+        follow_req.delete()
+        return Response(_author_to_json(foreign_author, request))
+
+    if request.method == 'DELETE':
+        # Deny/remove: remove from followers, delete any pending request
+        FollowRequest.objects.filter(requester=foreign_author, target=author).delete()
+        if author.followers.filter(id=foreign_author.id).exists():
+            author.followers.remove(foreign_author)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    return Response(status=405)
+
 
 @api_view(['GET', 'PUT'])
 def api_edit_profile(request, author_id):

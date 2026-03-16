@@ -9,17 +9,20 @@
     <hr>
 
     {% for entry in entries %}
-        <div class="entry-card" style="border: 1px solid #ddd; padding: 15px; margin-bottom: 20px; border-radius: 8px;">
+        <div class="entry-card clickable" data-url="{% url 'get_entry' entry.id %}">
+            
             <div class="entry-header">
                 <h2 class="entry-title">{{ entry.title }}</h2>
                 <span class="badge-visibility">{{ entry.visibility }}</span>
             </div>
 
-            <p class="entry-description">{{ entry.description }}</p>
+            {% if entry.description %}
+                <p class="entry-description">{{ entry.description }}</p>
+            {% endif %}
 
             <div class="entry-content">
                 {% if "image" in entry.contentType %}
-                    <img src="{% url 'api:ApiEntryImage' author_id=entry.author.id entry_id=entry.id %}" style="max-width:100%;">
+                    <img src="{% url 'api:ApiEntryImage' author_id=entry.author.id entry_id=entry.id %}" class="entry-image">
                 {% elif entry.contentType == "text/markdown" %}
                     <div class="entry-markdown">{{ entry.content|safe }}</div>
                 {% else %}
@@ -27,7 +30,31 @@
                 {% endif %}
             </div>
 
-            <div class="entry-footer" style="margin-top: 10px;">
+            <div class="interaction-row" onclick="event.stopPropagation();">
+                {% if request.session.author_id %}
+                <form method="POST" action="{% url 'interactions:add_like' entry.id %}">
+                    {% csrf_token %}
+                    <button type="submit" class="stat-item {% if entry.liked_by_user %}liked{% endif %}">
+                        <span class="icon">{% if entry.liked_by_user %}❤️{% else %}🤍{% endif %}</span>
+                        <span class="count">{{ entry.like_count|default:0 }}</span>
+                    </button>
+                </form>
+                {% else %}
+                <div class="stat-item">
+                    <span class="icon">🤍</span>
+                    <span class="count">{{ entry.like_count|default:0 }}</span>
+                </div>
+                {% endif %}
+
+                <div class="stat-item clickable" data-url="{% url 'get_entry' entry.id %}">
+                    <span class="icon">💬</span>
+                    <span class="count">
+                        {% if entry.comment_count != None %}{{ entry.comment_count }}{% else %}{{ entry.fetched_comments|length|default:0 }}{% endif %}
+                    </span>
+                </div>
+            </div>
+
+            <div class="entry-footer" onclick="event.stopPropagation();" style="margin-top: 10px; border-top: none; padding-top: 0;">
                 <div class="footer-edit-delete-actions">
                     <a href="{% url 'edit_entry' entry.id %}" class="edit-link">Edit</a>
                     <form action="{% url 'delete_entry' entry.id %}" method="POST" style="display:inline;">
@@ -37,61 +64,7 @@
                 </div>
                 <span class="entry-date">Published: {{ entry.published|date:"M d, Y H:i" }}</span>
             </div>
-
-            <div class="interaction-bar" style="margin-top: 15px; display: flex; align-items: center; gap: 10px;">
-                <strong>Likes: {{ entry.like_count|default:0 }}</strong>
-                {% if request.session.author_id %}
-                <form method="POST" action="{% url 'interactions:add_like' entry.id %}" style="display:inline;">
-                    {% csrf_token %}
-                    <button type="submit" class="btn-like" style="cursor: pointer;">
-                        {% if entry.liked_by_user %}
-                            ❤️ Unlike
-                        {% else %}
-                            🤍 Like
-                        {% endif %}
-                    </button>
-                </form>
-                {% endif %}
-            </div>
-
-            <div class="comments-section" style="margin-top: 15px; border-top: 1px solid #eee; padding-top: 10px;">
-                <h4>Comments</h4>
-                
-                {% for comment in entry.fetched_comments %}
-                    <div class="comment" style="margin-bottom: 8px;">
-                        <strong>{{ comment.author }}</strong>
-                        <small>({{ comment.published|date:"M d, Y" }})</small>
-                        <p style="margin: 2px 0;">{{ comment.comment }}</p>
-
-                        <span>👍 {{ comment.like_count }}</span>
-
-                        {% if request.session.author_id %}
-                        <form method="POST"
-                            action="{% url 'interactions:add_comment_like' comment.id|extract_uuid %}"
-                            style="display:inline;">
-                            {% csrf_token %}
-                            <button type="submit">
-                                {% if comment.liked_by_user %}
-                                    ❤️ Unlike
-                                {% else %}
-                                    🤍 Like
-                                {% endif %}
-                            </button>
-                        </form>
-                        {% endif %}
-                    </div>
-                {% empty %}
-                    <p>No comments yet.</p>
-                {% endfor %}
-
-                {% if request.session.author_id %}
-                <form method="POST" action="{% url 'interactions:add_comment' entry.id %}" style="margin-top: 10px;">
-                    {% csrf_token %}
-                    <textarea name="comment" rows="2" placeholder="Write a comment..." required style="width: 100%;"></textarea>
-                    <button type="submit" style="margin-top: 5px;">Post Comment</button>
-                </form>
-                {% endif %}
-            </div>
+            
         </div>
     {% empty %}
         <div class="empty-state">
