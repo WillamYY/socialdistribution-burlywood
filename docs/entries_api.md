@@ -21,6 +21,7 @@ This document covers the API implementation and expected behavior for **Entries 
 * **#42**: As an author, I don't want anyone except the node admin to see my deleted entries.
 * **#44**: As a reader, I can get a link to a public or unlisted entry, so I can send it to my friends over email, discord, slack, etc.
 * **#46**: As an author, I should be able to browse the public entries of everyone, so that I can see what's going on beyond authors I follow. Note: this should include all local public entries and all public entries received in any inbox.
+* **#65**: As a node admin, images can be hosted on my node, so that my users can use them in their CommonMark entries.
 * **#78**: As a node admin, I want deleted entries stay in the database and only be removed from the UI and API, so I can see what was deleted.
 * **#91**: As an author, entries I create should always be visible to me until they are deleted.
 
@@ -34,33 +35,109 @@ This document covers the API implementation and expected behavior for **Entries 
 To provide a user-friendly, browser-based management system for authors to create, edit, and delete their entries without using technical API tools.
 
 * **Creation (`/app/create-entry/`):** A dedicated form for authoring new posts.
-* **Management (`/app/my-entries/`):** A dashboard to view, edit, or delete existing content.
-* **Viewing (`/app/stream/`):** A human-readable feed of posts from the author and their friends.
+* **Management (`/app/my-entries/`):** A dashboard to view the logged-in author’s entries and access edit or delete actions.
+* **Editing (`/app/edit/{ENTRY_ID}/`):** A browser form that allows the owner of an entry to update its title, description, content, visibility, and image content.
+* **Deletion (`/app/delete/{ENTRY_ID}/`):** A browser action that soft-deletes an entry.
+* **Viewing (`/app/author/{AUTHOR_ID}/entries/` and `/app/entry/{ENTRY_ID}/`):** Human-readable pages for browsing an author’s entries or viewing a single entry.
 
-**How it works:** Relies on `request.session['author_id']` to manage state and permissions. It uses Django Templates to render database content into sanitized HTML, automatically handling Markdown and image embedding. 
+**How it works:** Relies on `request.session['author_id']` to manage state and permissions. It uses Django templates to render database content into sanitized HTML, including Markdown rendering and image embedding.
+
+**Behavior supporting US #21:**
+A local author can create, edit, and delete entries entirely through browser forms. These pages are session-protected, so only the entry owner can edit or delete their own content. This allows authoring without needing to manually use JSON APIs.
+
+---
+
+## Entry Visibility Rules
+
+The system currently supports these visibility values:
+
+* **`PUBLIC`** — visible to everyone.
+* **`UNLISTED`** — not shown in general public browsing, but visible to followers in author-entry lists and to anyone who has the direct link.
+* **`FRIENDS`** — visible only to the entry owner and mutual followers ("friends").
+* **`DELETED`** — soft-deleted; remains in the database but is removed from normal UI and API responses.
+
+This supports:
+
+* **US #34**
+* **US #35**
+* **US #36**
+* **US #40**
+* **US #41**
+* **US #42**
+* **US #78**
+* **US #91**
+
+### Visibility Behavior Details
+
+* **PUBLIC**
+
+  * Appears in author-entry lists.
+  * Appears in the public browse endpoint.
+  * Can be opened directly by link.
+  * Supports profile-page browsing by strangers.
+
+* **UNLISTED**
+
+  * Does not appear in the public browse endpoint.
+  * Appears in author-entry lists for the owner and followers.
+  * Can be opened directly by anyone who has the link.
+  * Supports the “share by URL” requirement.
+
+* **FRIENDS**
+
+  * Appears only to the owner and mutual followers.
+  * Does not appear to strangers or simple followers.
+  * Direct-link access is still restricted by friendship rules.
+
+* **DELETED**
+
+  * Does not appear in author-entry lists.
+  * Does not appear in the public browse endpoint.
+  * Single-entry APIs and web pages treat it as unavailable.
+  * Still remains in the database as a soft-deleted row.
 
 ---
 
 ## Get Author Entries (Paginated)
 
 **URL:** `GET /api/authors/{AUTHOR_SERIAL}/entries/`
-**Relevant User Stories:** #41, #91
+**Relevant User Stories:** #6, #35, #36, #41, #91
 
 * **When to use it:** When a client needs to retrieve a feed of recent entries published by a specific author.
 * **How to use it:** Send a GET request. You can optionally append `?page=1&size=5` to paginate the results.
-* *Unauthenticated:* Returns only `PUBLIC` entries (**US #6, US #34**).
-* *Authenticated as Author:* Returns all non-deleted entries (**US #91**).
-* *Authenticated as Follower:* Returns `PUBLIC` + `UNLISTED` (**US #35, US #40**).
-* *Authenticated as Friend:* Returns all entries, enforcing **US #41** and **US #36**.
 
+* **Unauthenticated:** Returns only `PUBLIC` entries.
 
-* **Why to use it:** It correctly implements the project's pagination requirements and filters visibility based on the requester's relationship to the author.
-* **Why Not to use it:** Do not use this if you are a remote node trying to pull entries. Remote nodes become aware of local entries via the local node pushing to their inbox, not by pulling from this endpoint.
+* **Authenticated as Author:** Returns all non-deleted entries created by that author.
+
+* **Authenticated as Follower:** Returns `PUBLIC` + `UNLISTED`.
+
+* **Authenticated as Friend:** Returns `PUBLIC` + `UNLISTED` + `FRIENDS`.
+
+* **Why to use it:** It correctly implements pagination and filters entries based on the requester’s relationship to the author.
+
+* **Why Not to use it:** Do not use this endpoint to retrieve a single entry by direct link. Use the single-entry endpoint instead.
+
+### Story Behavior Notes
+
+**US #6:**
+This endpoint supports profile-style entry browsing. When someone visits an author’s entries, they receive only the entries they are allowed to see, and the entries are returned **most recent first**. For strangers, that means public entries only. This helps readers decide whether they want to follow the author.
+
+**US #35:**
+Unlisted entries are visible in this list to followers and to the owner, but not to strangers.
+
+**US #36 / #41:**
+Friends-only entries appear only for the owner and mutual followers. They are not included for strangers or non-friend followers.
+
+**US #91:**
+The owner can always retrieve all of their own non-deleted entries through this endpoint.
 
 ### Expected Status Codes
 
-* **`200 OK`**: Successfully retrieved and filtered the paginated list of entries.
-### Response Examples
+* **`200 OK`**: Successfully retrieved the filtered paginated list of entries.
+* **`404 Not Found`**: The target author does not exist.
+
+### Response Example
 
 **Example 1: First page of public entries**
 
@@ -97,33 +174,82 @@ To provide a user-friendly, browser-based management system for authors to creat
 ### A. Get Single Entry
 
 **URL 1 (Local):** `GET /api/authors/{AUTHOR_SERIAL}/entries/{ENTRY_SERIAL}`
-**URL 2 (FQID):** `GET /api/entries/{ENTRY_FQID}`
-**Relevant User Stories:** #41, #44, #91
+**URL 2 (FQID):** `GET /api/entries/{ENTRY_FQID}/`
+**Relevant User Stories:** #40, #41, #44, #91
 
 * **When to use it:** To view the full details of a specific entry, including its comments and likes.
 * **How to use it:** Send a GET request. For URL 2, the `ENTRY_FQID` must be URL-encoded.
-* **Why to use it:** It returns a deeply nested object with all metadata required to render a single post page.
+* **Why to use it:** It returns a single entry object and applies visibility checks based on the requester.
+
+### Direct-link behavior
+
+* **`PUBLIC`** entries are accessible.
+* **`UNLISTED`** entries are accessible to anyone with the link.
+* **`FRIENDS`** entries are accessible only to the owner or a friend.
+* **`DELETED`** entries are hidden.
+
+### Story Behavior Notes
+
+**US #40:**
+If someone has a direct URL to a public or unlisted entry, they can access it through the single-entry endpoint.
+
+**US #41:**
+Friends-only entries are not available to strangers even if the stranger has the direct link.
+
+**US #44:**
+This endpoint is part of the “shareable link” behavior. A public or unlisted entry has a stable URL that can be sent to others through email, Discord, Slack, or similar tools.
+
+**US #91:**
+The owner can always access their own non-deleted entries directly, even when visibility is not public.
 
 ### Expected Status Codes
 
 * **`200 OK`**: Successfully retrieved the entry.
-* **`403 Forbidden`**: The entry is `FRIENDS` only, and the requester is a stranger/unauthorized (**US #41**).
-* **`404 Not Found`**: The entry does not exist, or its visibility is set to `DELETED` (**US #42**).
+* **`403 Forbidden`**: The requester is not allowed to view the entry.
+* **`404 Not Found`**: The entry does not exist, or its visibility is set to `DELETED`.
+
+---
 
 ### B. Create Entry (Auto-generated ID)
 
 **URL:** `POST /api/authors/{AUTHOR_SERIAL}/entries/`
 **Relevant User Stories:** #10, #14, #15, #16
 
-* **When to use it:** When a local author is creating a brand new post and wants the server to assign it a unique ID.
+* **When to use it:** When a local author is creating a brand new entry and wants the server to assign it a unique ID.
 * **How to use it:** Send a POST request with the entry details in the body. Must be authenticated locally as the author.
-* **Why to use it:** Standard way for the frontend to create posts without needing to generate UUIDs client-side.
+* **Why to use it:** Standard way for the frontend to create entries without generating UUIDs client-side.
+
+### Supported Content Types
+
+Typical supported values include:
+
+* `text/plain`
+* `text/markdown`
+* `image/png;base64`
+* `image/jpeg;base64`
+
+### Story Behavior Notes
+
+**US #10:**
+This is the main API for creating a new entry.
+
+**US #14:**
+If `contentType` is `text/plain`, the entry is treated as plain text content.
+
+**US #15:**
+If `contentType` is `text/markdown`, the entry is treated as CommonMark/Markdown content.
+
+**US #16:**
+If `contentType` is an image base64 type such as `image/png;base64` or `image/jpeg;base64`, the entry is treated as an image entry.
 
 ### Expected Status Codes
 
 * **`201 Created`**: The entry was successfully generated and saved.
 * **`400 Bad Request`**: Missing required fields in the JSON payload.
 * **`403 Forbidden`**: The requester is not logged in or is not the target author.
+* **`404 Not Found`**: The target author does not exist.
+
+---
 
 ### C. Update / Create Entry (Specific ID)
 
@@ -132,27 +258,54 @@ To provide a user-friendly, browser-based management system for authors to creat
 
 * **When to use it:** When a local author is editing an existing post, or when a remote node is pushing an entry to a local inbox.
 * **How to use it:** Send a PUT request with the full entry object. Must be authenticated locally.
-* **Why to use it:** It allows idempotent creation and updating of entries.
+* **Why to use it:** It allows idempotent updating, and also supports create-with-specified-ID behavior.
+
+### Story Behavior Notes
+
+**US #12:**
+This endpoint allows an author to edit their own entry content, description, title, and visibility.
+
+**US #22:**
+This endpoint is owner-protected. Another author cannot update someone else’s entry.
 
 ### Expected Status Codes
 
-* **`200 OK`**: An existing entry was successfully updated.
-* **`201 Created`**: A new entry was successfully created using the provided UUID.
-* **`403 Forbidden`**: The `session['author_id']` does not match the `AUTHOR_SERIAL`. Other authors cannot impersonate or modify this entry (**US #22**).
+* **`200 OK`**: The entry was successfully updated.
+  **Note:** In the current implementation, this is also the response when a new entry is created through `PUT`.
+* **`400 Bad Request`**: Invalid request body, such as unsupported visibility.
+* **`403 Forbidden`**: The requester is not allowed to modify this entry.
+* **`404 Not Found`**: The target author does not exist.
+
+---
 
 ### D. Delete Entry
 
 **URL:** `DELETE /api/authors/{AUTHOR_SERIAL}/entries/{ENTRY_SERIAL}`
-**Relevant User Stories:** #17
+**Relevant User Stories:** #17, #22, #42, #78
 
 * **When to use it:** When an author wants to remove their own entry.
 * **How to use it:** Send a DELETE request. Must be authenticated locally.
-* **Why to use it:** Performs a soft-delete, changing the visibility to `DELETED` so it no longer appears in feeds.
+* **Why to use it:** Performs a soft-delete by changing the visibility to `DELETED`, so it no longer appears in feeds or normal entry APIs.
+
+### Story Behavior Notes
+
+**US #17:**
+Authors can delete their own entries.
+
+**US #22:**
+Authors cannot delete entries belonging to someone else.
+
+**US #42:**
+Once deleted, the entry is hidden from ordinary readers and normal entry APIs.
+
+**US #78:**
+Deletion is implemented as a **soft delete**, not a hard delete. The entry remains in the database, but it is removed from normal API/UI access.
 
 ### Expected Status Codes
 
-* **`204 No Content`**: The entry was successfully soft-deleted (**US #78**).
-* **`403 Forbidden`**: The requester is attempting to delete an entry belonging to another author (**US #22**).
+* **`204 No Content`**: The entry was successfully soft-deleted.
+* **`403 Forbidden`**: The requester is attempting to delete an entry belonging to another author.
+* **`404 Not Found`**: The entry does not exist.
 
 ### Request / Response Examples
 
@@ -236,11 +389,21 @@ To provide a user-friendly, browser-based management system for authors to creat
   Remote/federated inbox entries will be merged after inbox implementation.  
   Do not use if you need entries visible only to friends or followers.
   Do not use this as a substitute for the 'Stream' or 'Inbox'. This endpoint is for discovery of global public content, not for viewing private interactions or friend updates
+  Note: in the current implementation, this endpoint returns **local public entries only**. Public entries received from remote inboxes are not yet merged here.
+
+### Story Behavior Notes
+
+**US #46:**
+This endpoint supports browsing the public posts of the local node beyond only authors the viewer follows. It is suitable for a public feed or explore page.
 
 ### Request Parameters
 
 * `page`: integer, default 1 — Page number for pagination.  
 * `size`: integer, default 5 — Number of entries per page.
+
+### Expected Status Codes
+
+* **`200 OK`**: Successfully retrieved the paginated list of public entries.
 
 ### Response Example
 
@@ -273,11 +436,25 @@ To provide a user-friendly, browser-based management system for authors to creat
 
 **URL 1:** `GET /api/authors/{AUTHOR_SERIAL}/entries/{ENTRY_SERIAL}/image`
 **URL 2:** `GET /api/entries/{ENTRY_FQID}/image`
-**Relevant User Stories:** #16, #18, #41
+**Relevant User Stories:** #16, #18, #41, #65
 
 * **When to use it:** Use this to render an image entry directly inside an HTML `<img>` tag, or to embed images within a CommonMark entry.
 * **How to use it:** Place this URL in the `src` attribute of an image tag. It decodes the base64 content on the fly.
 * **Why to use it:** It returns raw binary data with the correct `Content-Type` header (for example, `image/png`). It automates base64 decoding so the frontend client does not need to parse JSON just to display a picture.
+
+### Story Behavior Notes
+
+**US #16:**
+Image entries are stored as base64 content in an entry and exposed through this endpoint as real image bytes.
+
+**US #18:**
+Markdown entries can link to image-entry URLs from this endpoint, which allows images to appear inside CommonMark-rendered content.
+
+**US #41:**
+If the image belongs to a friends-only entry, the image endpoint applies the same visibility restrictions and prevents strangers from accessing it.
+
+**US #65:**
+This node can host images locally as image entries. Authors can upload images through the web interface or create image entries through the API using base64 image content. Those images are then served from this node through the image endpoint, so they can be reused in CommonMark entries with stable local URLs.
 
 ### Expected Status Codes
 
@@ -297,6 +474,20 @@ To provide a user-friendly, browser-based management system for authors to creat
 * **How it works in the API:** The API stores and returns markdown content as entry content. Clients can render it appropriately.
 * **Why to use it:** Supports rich text authoring while still allowing safe browser-based viewing.
 
+### Story Behavior Notes
+
+**US #15:**
+Markdown entries are supported as a distinct content type from plain text entries. This allows authors to write formatted posts using CommonMark syntax.
+
+**US #18:**
+Markdown content can include image links, and those links can point to image-entry endpoints.
+
+**US #21:**
+In the web UI, markdown can be authored in the browser and rendered safely for display.
+
+**US #65:**
+Node-hosted images can be referenced from Markdown using the local image-entry endpoint, which lets users embed images stored on their own node.
+
 ### Example
 
 ```json
@@ -314,6 +505,74 @@ This supports:
 * CommonMark entries
 * Image links inside markdown
 * Browser authoring and viewing
+
+---
+
+## Shareable Link Behavior
+
+**Relevant User Stories:** #40, #44
+
+Entries support shareable URLs in both web-facing and API-facing forms.
+
+### Web link
+
+A reader can open a human-readable page such as:
+
+```text
+/app/entry/{ENTRY_ID}/
+```
+
+### API link
+
+A reader or client can open the API form such as:
+
+```text
+/api/authors/{AUTHOR_ID}/entries/{ENTRY_ID}
+```
+
+or
+
+```text
+/api/entries/{ENTRY_FQID}/
+```
+
+### Story Behavior Notes
+
+**US #40:**
+Public and unlisted entries are accessible if someone has the direct link.
+
+**US #44:**
+These stable URLs can be shared externally in email, Discord, Slack, or similar tools.
+
+**Restriction:**
+Friends-only entries are not made public just because the link is shared. The server still checks visibility rules.
+
+---
+
+## Soft Delete Behavior
+
+**Relevant User Stories:** #42, #78, #91
+
+Deletion is implemented using a visibility change to `DELETED`.
+
+### What that means
+
+* The entry is **not removed from the database**.
+* The entry disappears from author-entry lists.
+* The entry disappears from public browse results.
+* Single-entry reads treat the entry as unavailable.
+* The owner no longer sees it through normal entry APIs after deletion.
+
+### Story Behavior Notes
+
+**US #42:**
+Deleted entries are hidden from ordinary readers and APIs.
+
+**US #78:**
+Deleted entries remain stored in the database for administrative purposes.
+
+**US #91:**
+Entries remain visible to their owner until they are deleted. After deletion, they are no longer returned through normal entry APIs.
 
 ---
 ## Access Control Summary
@@ -360,6 +619,6 @@ This supports:
 
 ## Notes / Current Implementation Details
 * `DELETED` entries remain in the database to support **US #78**, but they are hidden from normal UI and API reads.
-* `UNLISTED` entries are visible through direct links, which is important for **US #40** and **US #44**.
+* `UNLISTED` entries are visible through direct links, which is important for **US #35**, **US #40**, and **US #44**.
 * `PUT` currently supports both updating an existing entry and creating a new one with a specific ID, but in the current implementation it returns `200 OK` for both cases.
 * `GET /api/entries/public/` currently returns **local public entries only**.
