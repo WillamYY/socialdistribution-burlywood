@@ -149,6 +149,9 @@ def ApiAuthors(request):
 
 # Single author API endpoint
 @api_view(['GET','PUT'])
+def HandleApiAuthor(request, id):
+    return ApiAuthor(request, id)
+
 def ApiAuthor(request,id):
     if request.method == "GET":
         author = get_object_or_404(Author,pk=id) # Gets the author
@@ -319,7 +322,9 @@ def _inbox_handle_follow(request, author_id):
     except (ValueError, IndexError):
         actor = None
     if not actor:
-        return Response({"detail": "Actor author not found on this node"}, status=400)
+        return Response({"detail": "Actor author not found on this node"}, status=404)
+    if actor.id == author_id:
+        return Response({"detail": "Author cannot follow themselves"}, status=400)
     if FollowRequest.objects.filter(requester=actor, target=target).exists():
         return Response({"detail": "Follow request already sent"}, status=409)
     if actor.following.filter(id=target.id).exists():
@@ -347,7 +352,7 @@ def _inbox_handle_comment(request, author_id):
     if not comment_text or not author_url:
         return Response({"detail": "Missing author or comment"}, status=400)
     base = request.build_absolute_uri("/")[:-1]
-    entry_fqid = f"{base}/app/entry/{entry.id}/"
+    entry_fqid = f"{base}/api/authors/{author_id}/entries/{entry.id}"
     Comment.objects.create(
         id=f"{base}/comments/{uuid.uuid4()}",
         author=author_url,
@@ -713,7 +718,6 @@ def ApiAuthorByFqid(request, author_fqid):
         return Response({"detail": "Not found"}, status=404)
     return ApiAuthor(request, author_id)
 
-
 @api_view(['GET'])
 def ApiEntryImage(request, author_id=None, entry_id=None, entry_fqid=None):
     """
@@ -775,6 +779,9 @@ def ApiEntryImage(request, author_id=None, entry_id=None, entry_fqid=None):
         return HttpResponse(f"Failed to decode image: {str(e)}", status=500)
     
 @api_view(["GET"])
+def HandleApiEntryComments(request, author_id, entry_id):
+    return ApiEntryComments(request, author_id, entry_id)
+
 def ApiEntryComments(request, author_id, entry_id):
     """
     Returns comments for an entry
