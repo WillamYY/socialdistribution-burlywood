@@ -29,4 +29,36 @@ document.addEventListener("DOMContentLoaded", function() {
             }
         });
     });
+
+    // Entry form toggle behavior
+    const select = document.getElementById("contentTypeSelect");
+    const textSection = document.getElementById("textSection");
+    const imageSection = document.getElementById("imageSection");
+    const textInput = document.getElementById("textContentInput");
+    const imageInput = document.getElementById("imageInput");
+
+    if (select && textSection && imageSection) {
+        function toggleSections() {
+            const value = select.value || "";
+            const isImage = value === "image" || value.startsWith("image/");
+
+            textSection.style.display = isImage ? "none" : "";
+            imageSection.style.display = isImage ? "" : "none";
+
+            if (textInput) {
+                textInput.disabled = isImage;
+            }
+
+            if (imageInput) {
+                imageInput.disabled = !isImage;
+                imageInput.required = isImage;
+                if (!isImage) {
+                    imageInput.value = "";
+                }
+            }
+        }
+
+        toggleSections();
+        select.addEventListener("change", toggleSections);
+    }
 });
