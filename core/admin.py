@@ -1,6 +1,6 @@
 # core/admin.py
 from django.contrib import admin
-from .models import Author, AuthorRequest, HostedImage
+from .models import Author, AuthorRequest, HostedImage, Node
 
 @admin.register(Author)
 class AuthorAdmin(admin.ModelAdmin):
