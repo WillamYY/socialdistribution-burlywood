@@ -41,3 +41,5 @@ class HostedImageAdmin(admin.ModelAdmin):
     list_display = ('title', 'uploaded_at', 'image', 'get_markdown_link')
     readonly_fields = ('get_markdown_link',)
     search_fields = ('title',)
+
+@admin.register(Node)
