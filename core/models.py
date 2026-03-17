@@ -72,3 +72,12 @@ class HostedImage(models.Model):
     def get_markdown_link(self):
         # A handy property to show the admin exactly what to copy/paste
         return f"![{self.title}](/media/{self.image.name})"
+
+"""
+Creates a class that handles which other nodes exist
+"""
+class Node(models.Model):
+    id = models.AutoField(primary_key = True)
+    url = models.URLField(unique = True)
+    username = models.CharField(max_length = 30, default = "")
+    password = models.CharField(max_length = 30, default = "")

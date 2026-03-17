@@ -1,6 +1,10 @@
 # core/admin.py
+from django import forms
 from django.contrib import admin
-from .models import Author, AuthorRequest, HostedImage
+from django.core.exceptions import ValidationError
+from .models import Author, AuthorRequest, HostedImage, Node
+from .validators import validate_username, validate_password
+import re
 
 @admin.register(Author)
 class AuthorAdmin(admin.ModelAdmin):
@@ -41,3 +45,35 @@ class HostedImageAdmin(admin.ModelAdmin):
     list_display = ('title', 'uploaded_at', 'image', 'get_markdown_link')
     readonly_fields = ('get_markdown_link',)
     search_fields = ('title',)
+
+"""
+Creates the form that validates input
+"""
+class NodeAdminForm(forms.ModelForm):
+    class Meta:
+        model = Node
+        fields = ["url","username","password"]
+    """
+    Validates and ensures a proper password
+    """
+    def clean_password(self):
+        password = self.cleaned_data.get("password")
+        ok, error = validate_password(password)
+        if not ok:
+            raise ValidationError(error)
+        return password
+    """
+    Validates the url
+    """
+    def clean_url(self):
+        url = self.cleaned_data.get("url")
+        reMatch = re.search(f"^https?://[^/]+/$",url)
+        if reMatch:
+            return url
+        else:
+            raise ValidationError("Please enter valid host")
+
+@admin.register(Node)
+class NodeAdmin(admin.ModelAdmin):
+    list_display = ('url','username')
+    form = NodeAdminForm
