@@ -1,6 +1,10 @@
 # core/admin.py
+from django import forms
 from django.contrib import admin
+from django.core.exceptions import ValidationError
 from .models import Author, AuthorRequest, HostedImage, Node
+from .validators import validate_username, validate_password
+import re
 
 @admin.register(Author)
 class AuthorAdmin(admin.ModelAdmin):
@@ -42,4 +46,24 @@ class HostedImageAdmin(admin.ModelAdmin):
     readonly_fields = ('get_markdown_link',)
     search_fields = ('title',)
 
-admin.site.register(Node)
+"""
+Creates the form that validates input
+"""
+class NodeAdminForm(forms.ModelForm):
+    class Meta:
+        model = Node
+        fields = ["url","username","password"]
+    """
+    Validates and ensures a proper password
+    """
+    def clean_password(self):
+        password = self.cleaned_data.get("password")
+        ok, error = validate_password(password)
+        if not ok:
+            raise ValidationError(error)
+        return password
+        
+@admin.register(Node)
+class NodeAdmin(admin.ModelAdmin):
+    list_display = ('url','username')
+    form = NodeAdminForm
