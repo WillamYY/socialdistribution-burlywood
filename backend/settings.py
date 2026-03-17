@@ -84,6 +84,11 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
+"""
+The following code was taken from CMPUT 404 Heroku lab
+https://uofa-cmput404.github.io/labsignments/heroku.html#phase-two-heroku
+Taken on March 17, 2026
+"""
 if os.environ.get("DATABASE_URL") != None:
     # Running on Heroku
     DATABASES = {
@@ -101,7 +106,9 @@ else:
             "NAME": BASE_DIR / "db.sqlite3",
         }
     }
-
+"""
+End citation
+"""
 
 # Password validation
 # https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators
