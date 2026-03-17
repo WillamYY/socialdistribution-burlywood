@@ -42,4 +42,4 @@ class HostedImageAdmin(admin.ModelAdmin):
     readonly_fields = ('get_markdown_link',)
     search_fields = ('title',)
 
-@admin.register(Node)
+admin.register(Node)
