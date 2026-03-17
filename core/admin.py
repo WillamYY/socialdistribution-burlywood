@@ -62,7 +62,17 @@ class NodeAdminForm(forms.ModelForm):
         if not ok:
             raise ValidationError(error)
         return password
-        
+    """
+    Validates the url
+    """
+    def clean_url(self):
+        url = self.cleaned_data.get("url")
+        reMatch = re.search(f"^https?://[^/]+/$",url)
+        if reMatch:
+            return url
+        else:
+            raise ValidationError("Please enter valid host")
+
 @admin.register(Node)
 class NodeAdmin(admin.ModelAdmin):
     list_display = ('url','username')

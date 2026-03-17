@@ -78,6 +78,6 @@ Creates a class that handles which other nodes exist
 """
 class Node(models.Model):
     id = models.AutoField(primary_key = True)
-    url = models.URLField()
+    url = models.URLField(unique = True)
     username = models.CharField(max_length = 30, default = "")
     password = models.CharField(max_length = 30, default = "")
