@@ -16,5 +16,7 @@ urlpatterns = [
     path('follow-requests/', views.view_follow_requests, name='view_follow_requests'),
     path('follow-requests/approve/<int:req_id>/', views.approve_follow, name='ApproveFollow'),
     path('follow-requests/deny/<int:req_id>/', views.deny_follow, name='DenyFollow'),
-    path("connections/", views.connections, name="connections")
+    path("connections/", views.connections, name="connections"),
+    #### URLS FOR REMOTE NODES
+    path("user/<path:fqid>", views.RemoteProfileDisplay,name="RemoteProfileDisplay")
 ]

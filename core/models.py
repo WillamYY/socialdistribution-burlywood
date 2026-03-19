@@ -81,3 +81,4 @@ class Node(models.Model):
     url = models.URLField(unique = True)
     username = models.CharField(max_length = 30, default = "")
     password = models.CharField(max_length = 30, default = "")
+    is_active = models.BooleanField(default=True)

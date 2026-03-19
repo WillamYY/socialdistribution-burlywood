@@ -25,7 +25,7 @@ class AuthorRequestAdmin(admin.ModelAdmin):
             newAuthor = Author(id = authorInfo.id,username = authorInfo.username,name = authorInfo.name,github = authorInfo.github, picture = authorInfo.picture,picture_url =authorInfo.picture_url,host = authorInfo.host)
             newAuthor.set_password(authorInfo.password)
             newAuthor.save()
-            web = f"{newAuthor.host[:len(newAuthor.host) - len("api/")]}/authors/{newAuthor.id}"
+            web = f"{newAuthor.host[:len(newAuthor.host) - len("api/")]}/app/user/{newAuthor.id}"
             newAuthor.web = web
             newAuthor.save()
             # Deletes the old author
@@ -52,7 +52,7 @@ Creates the form that validates input
 class NodeAdminForm(forms.ModelForm):
     class Meta:
         model = Node
-        fields = ["url","username","password"]
+        fields = ["url","username","password","is_active"]
     """
     Validates and ensures a proper password
     """
