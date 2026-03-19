@@ -1,6 +1,6 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
-from .models import Author, FollowRequest, AuthorRequest, Node
+from .models import Author, FollowRequest, AuthorRequest, IncomingNode
 from entries.models import Entry
 from interactions.models import Like, Comment
 from django.contrib.auth.hashers import check_password
@@ -9,7 +9,8 @@ from .services import sync_author_github_activity
 from .validators import validate_username, validate_password, validate_github_url
 import requests
 import json
-from api.serializers import AuthorSerializer
+from api.serializers import EntrySerializer
+import re
 
 def SignUpView(request):
     """
@@ -66,7 +67,7 @@ def NodeDisplay(request):
     node_authors = Author.objects.all()
     other_node_authors = []
     # Gets authors from other nodes
-    for node in Node.objects.all():
+    for node in IncomingNode.objects.all():
         request = requests.get(node.url + "/api/authors/")
         # Only proceeds if request was success
         if request.status_code == 200:
@@ -398,10 +399,17 @@ def RemoteProfileDisplay(request, fqid):
             entry.liked_by_user = False
     """
     index = fqid.index("/api/authors/")
-    request = requests.get(fqid[:index] + "/api/authors/" + fqid)
-    request.raise_for_status()
-    author = json.loads(request.text)
-    print(author)
+    authorInfo = requests.get(fqid[:index] + "/api/authors/" + fqid)
+    authorInfo.raise_for_status()
+    author = json.loads(authorInfo.text)
+    # Gets the authors id
+    id = re.search("/api/authors/([^/]*)/?",fqid).group(1)
+    entryInfo = requests.get(fqid[:index] + "/api/authors/" + id + "/entries/")
+    entryInfo.raise_for_status()
+    entries = EntrySerializer(data=entryInfo.json()["src"],many = True)
+    if not entries.is_valid():
+        print(entries.errors)
+        return render(request, "error.html",{"errormessage":"Improper format"}) 
     context = {
         "author": author,
         "followers_count": 0,
@@ -409,6 +417,6 @@ def RemoteProfileDisplay(request, fqid):
         "is_following": False,
         "request_sent": False,
         "logged_in_id": logged_in_id,
-        "public_entries": []
+        "public_entries": entryInfo.json().get("src", [])
     }
     return render(request, "remoteprofileview.html", context) 
