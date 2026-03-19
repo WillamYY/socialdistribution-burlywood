@@ -32,6 +32,17 @@
 <div class="form-group" id="textSection">
     <label>Text Content</label>
     <textarea name="content" id="textContentInput" rows="6" class="form-control">{% if entry.contentType and 'text' in entry.contentType %}{% if entry.content_raw %}{{ entry.content_raw }}{% else %}{{ entry.content }}{% endif %}{% endif %}</textarea>
+
+    <div id="markdownHelpBox" class="markdown-helper" style="display: none;">
+        <p class="markdown-helper-text">
+            Markdown image format: <code>![alt text](url)</code>
+        </p>
+        <div id="markdownHintBox" class="markdown-hint" style="display: none;"></div>
+        <div id="markdownPreviewBox" class="markdown-preview" style="display: none;">
+            <p class="markdown-preview-title">Preview for Images</p>
+            <div id="markdownPreviewContent" class="entry-markdown"></div>
+        </div>
+    </div>
 </div>
 
 <div class="form-group" id="imageSection" style="display: none;">

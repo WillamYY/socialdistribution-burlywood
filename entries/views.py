@@ -1,5 +1,5 @@
 import base64
-from email.mime import base
+import re
 import markdown
 import bleach
 from django.shortcuts import render, redirect, get_object_or_404
@@ -56,6 +56,38 @@ def check_visibility(entry, viewer_id, is_list=False):
             return False
             
     return False
+
+def validate_markdown_image_syntax(text_content):
+    """
+    Helper function to detect broken Markdown image syntax.
+
+    Return:
+    None if no error, else an error string message.
+    """
+    # Check if user probably wants to use Markdown image syntax
+    if not text_content or "![" not in text_content:
+        return None
+        
+    # If image marker ![ exists, but no proper ( after it
+    if re.search(r'!\[[^\]]*\](?!\()', text_content):
+        return (
+            "Invalid Markdown image syntax. Use the format: ![alt text](url)"
+        )
+
+    # If not enclose the URL with )
+    if re.search(r'!\[[^\]]*\]\([^)]*$', text_content):
+        return (
+            "Markdown image link is not enclosed with ')'. Use the format: ![alt text](url)"
+        )
+
+    # If no image URL in ()
+    if re.search(r'!\[[^\]]*\]\(\s*\)', text_content):
+        return (
+            "Markdown image URL cannot be empty. Use the format: ![alt text](url)"
+        )
+
+    # Otherwise valid syntax
+    return None 
 
 def render_safe_markdown(text_content):
     """
@@ -118,6 +150,9 @@ def update_entry_from_request(request, entry):
 
             # Check for text type
             if contentType == "text/markdown":
+                markdown_error = validate_markdown_image_syntax(text_content)
+                if markdown_error:
+                    return False, markdown_error
                 entry.content = render_safe_markdown(text_content)
             else:
                 entry.content = text_content

@@ -4,17 +4,6 @@
 
 {% block content %}
 <div class="page-container">
-{% if messages %}
-        <div class="messages-container" style="width: 100%; margin-bottom: 15px;">
-    {% for message in messages %}
-      {% if 'follow' not in message.tags %}
-                    <div style="padding:12px; border-radius:6px; background:#eef7ff; border-left:4px solid var(--link-blue); color: var(--text-body);">
-          {{ message }}
-        </div>
-      {% endif %}
-    {% endfor %}
-  </div>
-{% endif %}
 
     <div class="card">
         <h1>Edit Entry</h1>

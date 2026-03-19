@@ -313,6 +313,47 @@
     padding: 0;
 }
 
+.markdown-helper {
+    margin-top: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.markdown-helper-text {
+    margin: 0;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+}
+
+.markdown-helper-text code {
+    background: var(--bg-code);
+    padding: 2px 6px;
+    border-radius: 6px;
+}
+
+.markdown-hint {
+    padding: 10px 12px;
+    border-radius: 8px;
+    background-color: #fff4e5;
+    border: 1px solid #f59e0b;
+    color: #92400e;
+    font-size: 0.9rem;
+}
+
+.markdown-preview {
+    border: 1px solid var(--border-main);
+    border-radius: 10px;
+    background: var(--bg-muted);
+    padding: 12px;
+}
+
+.markdown-preview-title {
+    margin: 0 0 10px 0;
+    font-weight: 600;
+    color: var(--text-main);
+}
+
 /* Form Specifics */
 .form-group {
     display: flex;
