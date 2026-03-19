@@ -128,7 +128,7 @@ def ApiAuthors(request):
     # Gets the relevant information from each author
     for author in allAuthors:
         # Gets the authors info
-        authorID = author.host + "authors/" + str(author.id)
+        authorID = author.host + "/authors/" + str(author.id)
         authorInfo = {"type":"author","id": authorID,"host": author.host,"displayName": author.name, "github":author.github, "profileImage":author.picture_url,"web":author.web}
         authors.append(authorInfo)
     # If size is not specified returns all authors
@@ -155,7 +155,7 @@ def HandleApiAuthor(request, id):
 def ApiAuthor(request,id):
     if request.method == "GET":
         author = get_object_or_404(Author,pk=id) # Gets the author
-        authorID = author.host + "authors/" + str(author.id)
+        authorID = author.host + "/authors/" + str(author.id)
         # Creates the information that will be returned
         authorInfo = {"type":"author","id": authorID,"host": author.host,"displayName": author.name, "github":author.github, "profileImage":author.picture_url,"web":author.web}
         return Response(authorInfo)
@@ -167,7 +167,7 @@ def ApiAuthor(request,id):
                 # Creates an author request with the information
                 author = AuthorRequest(id = id,username = request.data.get("displayName"),name = request.data.get("displayName"),github = request.data.get("github"),web = request.data.get("web"), host = request.data.get("host"),picture_url = request.data.get("profileImage"))
                 author.save()
-                authorID = author.host + "authors/" + str(author.id)
+                authorID = author.host + "/authors/" + str(author.id)
                 return Response({"type":"author","id": authorID,"host": author.host,"displayName": author.name, "github":author.github, "profileImage":author.picture_url,"web":author.web},status = 201)
             # If the authors Id is invalid return a 400 respose
             else:
@@ -191,7 +191,7 @@ def ApiAuthor(request,id):
                 author.picture_url = request.data.get("profileImage")
                 author.save()
                 # Turns the authors id into it's string
-                authorID = author.host + "authors/" + str(author.id)
+                authorID = author.host + "/authors/" + str(author.id)
                 return Response({"type":"author","id": authorID,"host": author.host,"displayName": author.name, "github":author.github, "profileImage":author.picture_url,"web":author.web})
             else:
                 return Response(status = 400)

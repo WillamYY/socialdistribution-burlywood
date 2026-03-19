@@ -22,7 +22,7 @@ class AuthorSerializer(serializers.ModelSerializer):
 
     # Defines how to create the id
     def get_id(self,obj):
-        return f"{obj.host}authors/{obj.id}"
+        return f"{obj.host}/authors/{obj.id}"
     
     def to_representation(self, instance):
         data = super().to_representation(instance)

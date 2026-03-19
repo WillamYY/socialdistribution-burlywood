@@ -1,12 +1,16 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
-from .models import Author, FollowRequest, AuthorRequest
+from .models import Author, FollowRequest, AuthorRequest, IncomingNode
 from entries.models import Entry
 from interactions.models import Like, Comment
 from django.contrib.auth.hashers import check_password
 from django.urls import reverse, resolve, Resolver404
 from .services import sync_author_github_activity
 from .validators import validate_username, validate_password, validate_github_url
+import requests
+import json
+from api.serializers import EntrySerializer
+import re
 
 def SignUpView(request):
     """
@@ -61,7 +65,18 @@ def NodeDisplay(request):
     Displays all authors in the node.
     """
     node_authors = Author.objects.all()
-    return render(request, "node.html", {"users": node_authors})
+    other_node_authors = []
+    # Gets authors from other nodes
+    for node in IncomingNode.objects.all():
+        request = requests.get(node.url + "/api/authors/")
+        # Only proceeds if request was success
+        if request.status_code == 200:
+            # Gets all the authors
+            data = json.loads(request.text)
+            if data["type"] == "authors":
+                for author in data["authors"]:
+                    other_node_authors.append(author)
+    return render(request, "node.html", {"users": node_authors,"other_users":other_node_authors})
 
 def login_view(request):
     """
@@ -342,3 +357,66 @@ def connections(request):
         "followings": followings,
         "friends": friends
     })
+
+
+"""
+########
+########
+Duplicate functions for handling users on other nodes below
+########
+#######
+"""
+
+
+
+
+
+def RemoteProfileDisplay(request, fqid):
+    """
+    Displays the profile of another user.
+    """
+    is_following = False
+    request_sent = False
+    logged_in_id = request.session.get("author_id")
+    """
+    if logged_in_id and Author.objects.filter(id=logged_in_id).exists():
+        me = Author.objects.get(id=logged_in_id)
+        is_following = author in me.following.all()
+        request_sent = FollowRequest.objects.filter(requester=me, target=author).exists()
+
+    user_fqid = None
+    if logged_in_id:
+        user_fqid = f"{request.build_absolute_uri('/')[:-1]}/api/authors/{logged_in_id}"
+    public_entries = Entry.objects.filter(author=author, visibility="PUBLIC")
+    base_url = request.build_absolute_uri('/')[:-1]
+    for entry in public_entries:
+        entry_url = f"{base_url}/api/authors/{entry.author.id}/entries/{entry.id}"
+        entry.like_count = Like.objects.filter(object=entry_url).count()
+        entry.comment_count = Comment.objects.filter(entry=entry_url).count()
+        if user_fqid:
+            entry.liked_by_user = Like.objects.filter(object=entry_url, author=user_fqid).exists()
+        else:
+            entry.liked_by_user = False
+    """
+    index = fqid.index("/api/authors/")
+    authorInfo = requests.get(fqid[:index] + "/api/authors/" + fqid)
+    authorInfo.raise_for_status()
+    author = json.loads(authorInfo.text)
+    # Gets the authors id
+    id = re.search("/api/authors/([^/]*)/?",fqid).group(1)
+    entryInfo = requests.get(fqid[:index] + "/api/authors/" + id + "/entries/")
+    entryInfo.raise_for_status()
+    entries = EntrySerializer(data=entryInfo.json()["src"],many = True)
+    if not entries.is_valid():
+        print(entries.errors)
+        return render(request, "error.html",{"errormessage":"Improper format"}) 
+    context = {
+        "author": author,
+        "followers_count": 0,
+        "following_count": 0,
+        "is_following": False,
+        "request_sent": False,
+        "logged_in_id": logged_in_id,
+        "public_entries": entryInfo.json().get("src", [])
+    }
+    return render(request, "remoteprofileview.html", context) 
