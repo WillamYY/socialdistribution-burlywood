@@ -24,7 +24,10 @@ document.addEventListener("DOMContentLoaded", function() {
         el.addEventListener('click', function(event) {
             event.stopPropagation();
             const url = this.dataset.url;
-            if (url && isSameOrigin(url)) {
+            if (!url || typeof url !== 'string') return;
+            if (this.dataset.remote === 'true') {
+                window.open(url, '_blank', 'noopener,noreferrer');
+            } else if (isSameOrigin(url)) {
                 window.location.href = url;
             }
         });

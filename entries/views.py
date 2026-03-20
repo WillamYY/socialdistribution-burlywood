@@ -233,7 +233,7 @@ def stream_view(request):
     # US#26: All PUBLIC entries from any author on the node
     # US#27: UNLISTED from following; FRIENDS from friends only
     # US#29: No DELETED (hard-delete removes from DB)
-    entries = (
+    local_entries = list(
         Entry.objects.filter(
             Q(visibility="PUBLIC")
             | Q(author_id__in=following_ids, visibility="UNLISTED")
@@ -243,10 +243,29 @@ def stream_view(request):
         .order_by("-published")
     )
 
+    # Public entries from IncomingNode (remote nodes we pull from)
+    from core.remote import fetch_remote_public_entries
+    remote_entries = fetch_remote_public_entries()
+
+    # Combine and sort by published (newest first)
+    def _sort_key(e):
+        p = getattr(e, "published", None)
+        if hasattr(p, "isoformat"):
+            return p.isoformat()
+        return str(p) if p else ""
+
+    entries = sorted(
+        local_entries + remote_entries,
+        key=_sort_key,
+        reverse=True,
+    )
+
     # Build the current user's URL
     base_url = request.build_absolute_uri('/')[:-1]
 
     for entry in entries:
+        if getattr(entry, "is_remote", False):
+            continue
         entry_url = f"{base_url}/api/authors/{entry.author.id}/entries/{entry.id}"
         
         # Fetch the count of interactions
