@@ -2,6 +2,7 @@ from rest_framework import serializers
 from core.models import Author
 from entries.models import Entry
 from interactions.models import Like, Comment
+import re
 
 """
 Serializes author objects
@@ -184,7 +185,7 @@ class EntrySerializer(serializers.ModelSerializer):
         likes_url = f"{base_url}likes" 
         
         # Query the database for likes on this entry
-        entry_likes = Like.objects.filter(object=base_url.replace("https","http")) | Like.objects.filter(object=base_url.replace("http","https"))
+        entry_likes = Like.objects.filter(object=base_url.replace)
         
         # Package the data for LikesSerializer
         likes_data = {
