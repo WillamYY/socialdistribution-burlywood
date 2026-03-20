@@ -1,6 +1,6 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
-from .models import Author, FollowRequest, AuthorRequest, IncomingNode, RemoteFollow
+from .models import Author, FollowRequest, AuthorRequest, IncomingNode, RemoteFollow, RemoteFollowRequest
 from entries.models import Entry
 from interactions.models import Like, Comment
 from django.contrib.auth.hashers import check_password
@@ -315,6 +315,7 @@ def unfollow_author(request, author_id):
 def view_follow_requests(request):
     """
     Shows all pending follow requests for the logged-in author.
+    Includes both local (FollowRequest) and remote (RemoteFollowRequest).
     """
     author_id = request.session.get('author_id')
     if not author_id:
@@ -322,10 +323,12 @@ def view_follow_requests(request):
 
     author = get_object_or_404(Author, id=author_id)
     requests = FollowRequest.objects.filter(target=author)
+    remote_requests = RemoteFollowRequest.objects.filter(target=author)
 
     return render(request, 'follow_request.html', {
         'author': author,
-        'requests': requests
+        'requests': requests,
+        'remote_requests': remote_requests,
     })
 
 def approve_follow(request, req_id):
@@ -344,6 +347,23 @@ def deny_follow(request, req_id):
     """
     follow_request = get_object_or_404(FollowRequest, id=req_id)
     follow_request.delete()
+    messages.info(request, "Request denied.", extra_tags='follow')
+    return redirect('view_follow_requests')
+
+
+def approve_remote_follow(request, req_id):
+    """Approves a follow request from a remote actor."""
+    remote_req = get_object_or_404(RemoteFollowRequest, id=req_id, target_id=request.session.get('author_id'))
+    name = remote_req.actor_display_name or "Remote author"
+    remote_req.delete()
+    messages.success(request, f"You approved {name}'s follow request!", extra_tags='follow')
+    return redirect('view_follow_requests')
+
+
+def deny_remote_follow(request, req_id):
+    """Denies a follow request from a remote actor."""
+    remote_req = get_object_or_404(RemoteFollowRequest, id=req_id, target_id=request.session.get('author_id'))
+    remote_req.delete()
     messages.info(request, "Request denied.", extra_tags='follow')
     return redirect('view_follow_requests')
 

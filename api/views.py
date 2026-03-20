@@ -310,26 +310,46 @@ def ApiInbox(request, author_id):
 
 def _inbox_handle_follow(request, author_id):
     """Handle follow request: actor wants to follow object (our author)."""
+    from core.models import RemoteFollowRequest
+
     target = get_object_or_404(Author, id=author_id)
     actor_data = request.data.get("actor") or {}
     actor_id_str = (actor_data.get("id") or "").strip().rstrip("/")
     if not actor_id_str:
         return Response({"detail": "Missing actor"}, status=400)
-    # For local actor: extract id and get Author
-    try:
-        actor_local_id = int(actor_id_str.split("/")[-1])
-        actor = Author.objects.filter(id=actor_local_id).first()
-    except (ValueError, IndexError):
-        actor = None
-    if not actor:
-        return Response({"detail": "Actor author not found on this node"}, status=404)
-    if actor.id == author_id:
-        return Response({"detail": "Author cannot follow themselves"}, status=400)
-    if FollowRequest.objects.filter(requester=actor, target=target).exists():
-        return Response({"detail": "Follow request already sent"}, status=409)
-    if actor.following.filter(id=target.id).exists():
-        return Response({"detail": "Already following"}, status=409)
-    FollowRequest.objects.create(requester=actor, target=target)
+
+    base = request.build_absolute_uri("/")[:-1]
+    is_local_actor = actor_id_str.startswith(base) or (
+        request.get_host() in actor_id_str and "/api/authors/" in actor_id_str
+    )
+
+    if is_local_actor:
+        try:
+            actor_local_id = int(actor_id_str.split("/")[-1])
+            actor = Author.objects.filter(id=actor_local_id).first()
+        except (ValueError, IndexError):
+            actor = None
+        if not actor:
+            return Response({"detail": "Actor author not found on this node"}, status=404)
+        if actor.id == author_id:
+            return Response({"detail": "Author cannot follow themselves"}, status=400)
+        if FollowRequest.objects.filter(requester=actor, target=target).exists():
+            return Response({"detail": "Follow request already sent"}, status=409)
+        if actor.following.filter(id=target.id).exists():
+            return Response({"detail": "Already following"}, status=409)
+        FollowRequest.objects.create(requester=actor, target=target)
+    else:
+        actor_fqid = actor_id_str
+        if actor_fqid.startswith("http://"):
+            actor_fqid = "https" + actor_fqid[4:]
+        actor_display_name = (actor_data.get("displayName") or actor_data.get("username") or "Remote author")[:255]
+        if RemoteFollowRequest.objects.filter(actor_fqid=actor_fqid, target=target).exists():
+            return Response({"detail": "Follow request already sent"}, status=409)
+        RemoteFollowRequest.objects.create(
+            actor_fqid=actor_fqid,
+            actor_display_name=actor_display_name,
+            target=target,
+        )
     return Response({"detail": "Follow request received"}, status=202)
 
 
