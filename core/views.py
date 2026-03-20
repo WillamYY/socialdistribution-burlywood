@@ -409,6 +409,7 @@ def RemoteProfileDisplay(request, fqid):
     public_entries = []
     for entry in entryInfo.json().get("src", []):
         if entry["visibility"] == "PUBLIC":
+            print(entry["likes"])
             entry["like_count"] = entry["likes"]["count"]
             public_entries.append(entry)
     context = {
