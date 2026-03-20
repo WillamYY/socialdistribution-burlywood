@@ -184,9 +184,19 @@ class EntrySerializer(serializers.ModelSerializer):
         
         likes_url = f"{base_url}likes" 
         # Handles both http and http requests
-        path = re.match("(entries/[^/]+)",base_url).group(1)
-        # Query the database for likes on this entry
-        entry_likes = Like.objects.filter(object__endswith=path)
+        search = re.search("entr(?:y|ies)/([^/]+)",base_url)
+        # Prevents crashes
+        if not search:
+            entry_likes = []
+        else:
+            # Handles both the no slash and slash version
+            if search.group(1)[-1] == "/":
+                alt = search.group(1)[:-1]
+            else:
+                alt = search.group(1) + "/"
+            print(search.group(1),alt)
+            # Query the database for likes on this entry
+            entry_likes = Like.objects.filter(object__endswith=search.group(1)) | Like.objects.filter(object__endswith=alt)
         
         # Package the data for LikesSerializer
         likes_data = {
