@@ -184,7 +184,7 @@ class EntrySerializer(serializers.ModelSerializer):
         
         likes_url = f"{base_url}likes" 
         # Handles both http and http requests
-        path = re.match("^https?://[^/]+/(likes/.*)",base_url).group(1)
+        path = re.match("(entries/[^/]+)",base_url).group(1)
         # Query the database for likes on this entry
         entry_likes = Like.objects.filter(object__endswith=path)
         
