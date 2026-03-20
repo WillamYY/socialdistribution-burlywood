@@ -39,7 +39,19 @@
                         </div>
                     </div>
                 {% endfor %}
-            {% else %}
+            {% endif %}
+            {% if remote_requests %}
+                {% for req in remote_requests %}
+                    <div class="request">
+                        <p>{{ req.actor_display_name }} <span class="muted">(remote)</span></p>
+                        <div>
+                            <a href="{% url 'ApproveRemoteFollow' req.id %}" class="button">Approve</a>
+                            <a href="{% url 'DenyRemoteFollow' req.id %}" class="button danger">Deny</a>
+                        </div>
+                    </div>
+                {% endfor %}
+            {% endif %}
+            {% if not requests and not remote_requests %}
                 <p class="muted" style="text-align:center;">No follow requests at the moment.</p>
             {% endif %}
         </div>
