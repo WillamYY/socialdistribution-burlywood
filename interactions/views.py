@@ -43,11 +43,11 @@ def add_remote_like(request, entry_id):
         entryInfo.raise_for_status()
         foreignAuthor = json.loads(entryInfo.text)["author"]["id"]
         # Get author making request
+        entry_id = entry_id.replace("http","https")
         author = get_object_or_404(Author, pk = author_id)
         authorInfo = {"type":"author","id": author.host + "/authors/" + str(author.id),"host": author.host,"displayName": author.name, "github":author.github, "profileImage":author.picture_url,"web":author.web}
         # Post the like to the inbox
         post = requests.post(foreignAuthor + "/inbox",json = {"type": "like","author": authorInfo,"published":datetime.now().isoformat(),"id":"","object":entry_id})
-        print(post.status_code)
 
     return redirect(request.META.get('HTTP_REFERER', '/app/stream/'))
 

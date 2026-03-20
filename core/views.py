@@ -406,10 +406,12 @@ def RemoteProfileDisplay(request, fqid):
     id = re.search("/api/authors/([^/]*)/?",fqid).group(1)
     entryInfo = requests.get(fqid[:index] + "/api/authors/" + id + "/entries/")
     entryInfo.raise_for_status()
-    entries = EntrySerializer(data=entryInfo.json()["src"],many = True)
-    if not entries.is_valid():
-        print(entries.errors)
-        return render(request, "error.html",{"errormessage":"Improper format"}) 
+    public_entries = []
+    for entry in entryInfo.json().get("src", []):
+        if entry["visibility"] == "PUBLIC":
+            print(request.get_host())
+            entry["like_count"] = entry["likes"]["count"]
+            public_entries.append(entry)
     context = {
         "author": author,
         "followers_count": 0,
@@ -417,6 +419,6 @@ def RemoteProfileDisplay(request, fqid):
         "is_following": False,
         "request_sent": False,
         "logged_in_id": logged_in_id,
-        "public_entries": entryInfo.json().get("src", [])
+        "public_entries": public_entries
     }
     return render(request, "remoteprofileview.html", context) 

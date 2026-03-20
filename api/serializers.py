@@ -184,7 +184,7 @@ class EntrySerializer(serializers.ModelSerializer):
         likes_url = f"{base_url}likes" 
         
         # Query the database for likes on this entry
-        entry_likes = Like.objects.filter(object=base_url)
+        entry_likes = Like.objects.filter(object=base_url.replace("https","http")) | Like.objects.filter(object=base_url.replace("http","https"))
         
         # Package the data for LikesSerializer
         likes_data = {
