@@ -371,22 +371,29 @@ def _inbox_handle_entry(request, author_id):
 def _inbox_handle_like(request, author_id):
     """Handle like: existing like logic."""
     obj_url = request.data.get("object")
+    print("obj_url:", obj_url)
     if not obj_url:
         return Response({"detail": "Missing object"}, status=400)
     obj_url = obj_url.rstrip("/")
     entry_id = obj_url.split("/")[-1]
+    print("entry_id:", entry_id)
     try:
         entry = Entry.objects.get(id=entry_id)
     except (Entry.DoesNotExist, ValueError):
         return Response(status=404)
     if entry.visibility == "DELETED":
         return Response(status=404)
+    """
     if entry.author.id != author_id:
         return Response(status=400)
+    """
     author_data = request.data.get("author") or {}
+    print("author_data:", author_data)
     author_url = (author_data.get("id") if isinstance(author_data, dict) else None) or ""
+    print("author_url:", author_url)
     if not author_url:
         return Response(status=400)
+    print("checking duplicate like")
     if Like.objects.filter(author=author_url, object=obj_url.rstrip("/")).exists():
         return Response(status=409)
     like = Like(
