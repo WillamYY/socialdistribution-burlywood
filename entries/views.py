@@ -243,9 +243,13 @@ def stream_view(request):
         .order_by("-published")
     )
 
-    # Public entries from IncomingNode (remote nodes we pull from)
+    # Public entries from IncomingNode; UNLISTED from remote authors we follow
+    from core.models import RemoteFollow
     from core.remote import fetch_remote_public_entries
-    remote_entries = fetch_remote_public_entries()
+    following_remote_fqids = list(
+        RemoteFollow.objects.filter(follower=viewer).values_list("followed_fqid", flat=True)
+    )
+    remote_entries = fetch_remote_public_entries(following_remote_fqids=following_remote_fqids)
 
     # Combine and sort by published (newest first)
     def _sort_key(e):

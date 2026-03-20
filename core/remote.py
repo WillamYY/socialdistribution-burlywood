@@ -46,12 +46,27 @@ def _resolve_entry_fqid(node_base: str, author_num_id: str, eid_raw) -> str:
     return _absolute_remote_url(node_base, s)
 
 
-def fetch_remote_public_entries():
+def _normalize_fqid(s):
+    """Normalize author FQID for comparison."""
+    if not s:
+        return ""
+    s = str(s).strip().rstrip("/")
+    if s.startswith("http://"):
+        s = "https" + s[4:]
+    return s
+
+
+def fetch_remote_public_entries(following_remote_fqids=None):
     """
-    Fetch all public entries from IncomingNode nodes.
+    Fetch public entries from IncomingNode nodes.
+    If following_remote_fqids is provided (set of normalized FQIDs), also includes
+    UNLISTED entries from those authors (same as local stream logic).
     Returns list of SimpleNamespace objects compatible with stream display.
     """
     from core.models import IncomingNode
+
+    following_remote_fqids = following_remote_fqids or set()
+    following_normalized = {_normalize_fqid(f) for f in following_remote_fqids}
 
     all_entries = []
     seen_ids = set()
@@ -76,7 +91,6 @@ def fetch_remote_public_entries():
                 if not author_id_raw:
                     continue
                 author_id_str = str(author_id_raw).strip().rstrip("/")
-
                 if "/api/authors/" in author_id_str:
                     match = re.search(r"/api/authors/([^/]+)/?", author_id_str)
                     author_num_id = match.group(1) if match else author_id_str
@@ -84,6 +98,9 @@ def fetch_remote_public_entries():
                 else:
                     author_num_id = author_id_str
                     node_base = base
+
+                author_fqid = _normalize_fqid(author_id_str if author_id_str.startswith("http") else f"{node_base.rstrip('/')}/api/authors/{author_num_id}")
+                include_unlisted = author_fqid in following_normalized
 
                 entries_url = f"{node_base}/api/authors/{author_num_id}/entries/"
                 try:
@@ -95,7 +112,12 @@ def fetch_remote_public_entries():
                     for item in items:
                         if not isinstance(item, dict):
                             continue
-                        if str(item.get("visibility", "")).upper() != "PUBLIC":
+                        vis = str(item.get("visibility", "")).upper()
+                        if vis == "PUBLIC":
+                            pass
+                        elif vis == "UNLISTED" and include_unlisted:
+                            pass
+                        else:
                             continue
                         eid_raw = item.get("id") or ""
                         eid = _resolve_entry_fqid(node_base, author_num_id, eid_raw)
@@ -118,7 +140,7 @@ def fetch_remote_public_entries():
                             description=item.get("description", ""),
                             content=item.get("content", ""),
                             contentType=item.get("contentType", "text/plain"),
-                            visibility="PUBLIC",
+                            visibility=vis,
                             published=item.get("published", ""),
                             author=SimpleNamespace(
                                 id=author_data.get("id", ""),

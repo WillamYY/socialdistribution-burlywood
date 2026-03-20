@@ -47,6 +47,19 @@ class FollowRequest(models.Model):
     class Meta:
         unique_together = ('requester', 'target')  # prevent duplicate requests
 
+
+class RemoteFollow(models.Model):
+    """
+    Local author following a remote author (by FQID).
+    Same semantics as Author.following for local authors.
+    """
+    follower = models.ForeignKey(Author, on_delete=models.CASCADE, related_name='remote_following')
+    followed_fqid = models.URLField(max_length=500)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('follower', 'followed_fqid')
+
 """
 Creates a class for the request to create a new author
 """

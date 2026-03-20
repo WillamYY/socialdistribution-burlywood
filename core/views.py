@@ -1,6 +1,6 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
-from .models import Author, FollowRequest, AuthorRequest, IncomingNode
+from .models import Author, FollowRequest, AuthorRequest, IncomingNode, RemoteFollow
 from entries.models import Entry
 from interactions.models import Like, Comment
 from django.contrib.auth.hashers import check_password
@@ -68,14 +68,22 @@ def NodeDisplay(request):
     other_node_authors = []
     # Gets authors from other nodes
     for node in IncomingNode.objects.all():
-        request = requests.get(node.url + "/api/authors/")
-        # Only proceeds if request was success
-        if request.status_code == 200:
-            # Gets all the authors
-            data = json.loads(request.text)
-            if data["type"] == "authors":
-                for author in data["authors"]:
-                    other_node_authors.append(author)
+        resp = requests.get(node.url.rstrip("/") + "/api/authors/", timeout=10)
+        if resp.status_code != 200:
+            continue
+        data = resp.json()
+        authors = data.get("authors") or []
+        if not isinstance(authors, list):
+            continue
+        base = node.url.rstrip("/")
+        for author in authors:
+            if not isinstance(author, dict):
+                continue
+            aid = author.get("id")
+            if aid and not str(aid).startswith("http"):
+                author = dict(author)
+                author["id"] = f"{base}/api/authors/{aid}"
+            other_node_authors.append(author)
     return render(request, "node.html", {"users": node_authors,"other_users":other_node_authors})
 
 def login_view(request):
@@ -351,24 +359,105 @@ def connections(request):
 
     followings = author.following.exclude(id__in=author.followers.values_list("id", flat=True))
     friends = author.friends()
+    remote_followings = list(
+        RemoteFollow.objects.filter(follower=author).order_by("created_at")
+    )
 
     return render(request, "connections.html", {
         "followers": followers,
         "followings": followings,
-        "friends": friends
+        "friends": friends,
+        "remote_followings": remote_followings,
     })
 
 
-"""
-########
-########
-Duplicate functions for handling users on other nodes below
-########
-#######
-"""
+def _normalize_fqid(s):
+    """Normalize author FQID for storage/comparison."""
+    if not s:
+        return ""
+    s = str(s).strip().rstrip("/")
+    if s.startswith("http://"):
+        s = "https" + s[4:]
+    return s
 
 
+def follow_remote_author(request, fqid):
+    """
+    Follow a remote author. POSTs Follow to their inbox and stores RemoteFollow locally.
+    Same UI flow as follow_author for local authors.
+    """
+    if not request.session.get("author_id"):
+        return redirect("/app/login")
 
+    me = Author.objects.get(id=request.session["author_id"])
+    normalized = _normalize_fqid(fqid)
+    if not normalized:
+        messages.error(request, "Invalid author.")
+        return redirect(request.META.get("HTTP_REFERER", "/"))
+
+    if RemoteFollow.objects.filter(follower=me, followed_fqid=normalized).exists():
+        messages.info(request, "You are already following this author.")
+    else:
+        RemoteFollow.objects.create(follower=me, followed_fqid=normalized)
+        try:
+            base = request.build_absolute_uri("/")[:-1]
+            author_base = me.host.rstrip("/") if me.host else base
+            if "/api" not in author_base:
+                author_base = f"{author_base.rstrip('/')}/api"
+            actor_id = f"{author_base}/authors/{me.id}"
+            actor_info = {
+                "type": "author",
+                "id": actor_id,
+                "host": author_base,
+                "displayName": me.name or me.username,
+                "github": me.github or "",
+                "profileImage": getattr(me, "picture_url", None) or "",
+                "web": me.web or "",
+            }
+            object_info = {"type": "author", "id": normalized}
+            inbox_url = f"{normalized.rstrip('/')}/inbox"
+            requests.post(
+                inbox_url,
+                json={"type": "follow", "actor": actor_info, "object": object_info},
+                timeout=10,
+            )
+        except Exception:
+            pass
+        messages.success(request, "Follow request sent!", extra_tags="follow")
+
+    referer = request.META.get("HTTP_REFERER")
+    if referer:
+        try:
+            base_url = request.build_absolute_uri("/")[:-1]
+            match = resolve(referer.replace(base_url, ""))
+            if match.url_name in ("ProfileDisplay", "RemoteProfileDisplay", "connections"):
+                request.session["last_feed_url"] = referer
+        except (Resolver404, ValueError):
+            pass
+    return redirect(request.session.get("last_feed_url", referer or "/"))
+
+
+def unfollow_remote_author(request, fqid):
+    """
+    Unfollow a remote author. Same UI flow as unfollow_author for local authors.
+    """
+    if not request.session.get("author_id"):
+        return redirect("/app/login")
+
+    me = Author.objects.get(id=request.session["author_id"])
+    normalized = _normalize_fqid(fqid)
+    RemoteFollow.objects.filter(follower=me, followed_fqid=normalized).delete()
+    messages.success(request, "You unfollowed this author.", extra_tags="follow")
+    referer = request.META.get("HTTP_REFERER")
+    if referer:
+        try:
+            base_url = request.build_absolute_uri("/")[:-1]
+            match = resolve(referer.replace(base_url, ""))
+            if match.url_name in ("ProfileDisplay", "RemoteProfileDisplay", "connections"):
+                request.session["last_feed_url"] = referer
+        except (Resolver404, ValueError):
+            pass
+    return redirect(request.session.get("last_feed_url", referer or "/"))
 
 
 def RemoteProfileDisplay(request, fqid):
@@ -398,6 +487,13 @@ def RemoteProfileDisplay(request, fqid):
         else:
             entry.liked_by_user = False
     """
+    normalized_fqid = _normalize_fqid(fqid)
+    is_following = False
+    if logged_in_id and normalized_fqid:
+        is_following = RemoteFollow.objects.filter(
+            follower_id=logged_in_id, followed_fqid=normalized_fqid
+        ).exists()
+
     index = fqid.index("/api/authors/")
     authorInfo = requests.get(fqid[:index] + "/api/authors/" + fqid)
     authorInfo.raise_for_status()
@@ -416,9 +512,10 @@ def RemoteProfileDisplay(request, fqid):
         "author": author,
         "followers_count": 0,
         "following_count": 0,
-        "is_following": False,
+        "is_following": is_following,
         "request_sent": False,
         "logged_in_id": logged_in_id,
-        "public_entries": public_entries
+        "public_entries": public_entries,
+        "author_fqid": normalized_fqid,
     }
     return render(request, "remoteprofileview.html", context) 
