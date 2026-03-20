@@ -56,17 +56,20 @@ def _normalize_fqid(s):
     return s
 
 
-def fetch_remote_public_entries(following_remote_fqids=None):
+def fetch_remote_public_entries(following_remote_fqids=None, friends_remote_fqids=None, requested_by_fqid=None):
     """
     Fetch public entries from IncomingNode nodes.
-    If following_remote_fqids is provided (set of normalized FQIDs), also includes
-    UNLISTED entries from those authors (same as local stream logic).
+    - following_remote_fqids: also include UNLISTED from these authors.
+    - friends_remote_fqids: also include FRIENDS from these authors (mutual follow).
+    - requested_by_fqid: passed as X-Requested-By header so remote can include FRIENDS.
     Returns list of SimpleNamespace objects compatible with stream display.
     """
     from core.models import IncomingNode
 
-    following_remote_fqids = following_remote_fqids or set()
+    following_remote_fqids = following_remote_fqids or []
+    friends_remote_fqids = friends_remote_fqids or []
     following_normalized = {_normalize_fqid(f) for f in following_remote_fqids}
+    friends_normalized = {_normalize_fqid(f) for f in friends_remote_fqids}
 
     all_entries = []
     seen_ids = set()
@@ -101,10 +104,12 @@ def fetch_remote_public_entries(following_remote_fqids=None):
 
                 author_fqid = _normalize_fqid(author_id_str if author_id_str.startswith("http") else f"{node_base.rstrip('/')}/api/authors/{author_num_id}")
                 include_unlisted = author_fqid in following_normalized
+                include_friends = author_fqid in friends_normalized
 
                 entries_url = f"{node_base}/api/authors/{author_num_id}/entries/"
+                headers = {"X-Requested-By": requested_by_fqid} if (include_friends and requested_by_fqid) else {}
                 try:
-                    entry_resp = requests.get(entries_url, timeout=10)
+                    entry_resp = requests.get(entries_url, headers=headers, timeout=10)
                     if entry_resp.status_code != 200:
                         continue
                     entry_data = entry_resp.json()
@@ -116,6 +121,8 @@ def fetch_remote_public_entries(following_remote_fqids=None):
                         if vis == "PUBLIC":
                             pass
                         elif vis == "UNLISTED" and include_unlisted:
+                            pass
+                        elif vis == "FRIENDS" and include_friends:
                             pass
                         else:
                             continue

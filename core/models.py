@@ -74,6 +74,20 @@ class RemoteFollowRequest(models.Model):
     class Meta:
         unique_together = ('actor_fqid', 'target')
 
+
+class RemoteFollower(models.Model):
+    """
+    Remote actor follows our local author (approved).
+    Friends = mutual follow: we follow them (RemoteFollow) and they follow us (RemoteFollower).
+    """
+    actor_fqid = models.URLField(max_length=500)
+    target = models.ForeignKey(Author, on_delete=models.CASCADE, related_name='remote_followers')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('actor_fqid', 'target')
+
+
 """
 Creates a class for the request to create a new author
 """

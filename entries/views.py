@@ -243,13 +243,24 @@ def stream_view(request):
         .order_by("-published")
     )
 
-    # Public entries from IncomingNode; UNLISTED from remote authors we follow
-    from core.models import RemoteFollow
+    # Public entries from IncomingNode; UNLISTED from following; FRIENDS from remote friends (mutual follow)
+    from core.models import RemoteFollow, RemoteFollower
     from core.remote import fetch_remote_public_entries
     following_remote_fqids = list(
         RemoteFollow.objects.filter(follower=viewer).values_list("followed_fqid", flat=True)
     )
-    remote_entries = fetch_remote_public_entries(following_remote_fqids=following_remote_fqids)
+    # Remote friends = we follow them AND they follow us
+    followers_remote_fqids = set(
+        RemoteFollower.objects.filter(target=viewer).values_list("actor_fqid", flat=True)
+    )
+    friends_remote_fqids = [f for f in following_remote_fqids if f in followers_remote_fqids]
+    base_url_for_fetch = request.build_absolute_uri("/")[:-1]
+    viewer_fqid = f"{base_url_for_fetch}/api/authors/{viewer.id}"
+    remote_entries = fetch_remote_public_entries(
+        following_remote_fqids=following_remote_fqids,
+        friends_remote_fqids=friends_remote_fqids,
+        requested_by_fqid=viewer_fqid,
+    )
 
     # Combine and sort by published (newest first)
     def _sort_key(e):

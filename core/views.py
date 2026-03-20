@@ -1,6 +1,6 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
-from .models import Author, FollowRequest, AuthorRequest, IncomingNode, RemoteFollow, RemoteFollowRequest
+from .models import Author, FollowRequest, AuthorRequest, IncomingNode, RemoteFollow, RemoteFollowRequest, RemoteFollower
 from entries.models import Entry
 from interactions.models import Like, Comment
 from django.contrib.auth.hashers import check_password
@@ -352,10 +352,14 @@ def deny_follow(request, req_id):
 
 
 def approve_remote_follow(request, req_id):
-    """Approves a follow request from a remote actor."""
+    """Approves a follow request from a remote actor. Records RemoteFollower for friends logic."""
     remote_req = get_object_or_404(RemoteFollowRequest, id=req_id, target_id=request.session.get('author_id'))
     name = remote_req.actor_display_name or "Remote author"
+    actor_fqid = remote_req.actor_fqid
+    target = remote_req.target
     remote_req.delete()
+    # Record that this remote actor follows us (for friends = mutual follow logic)
+    RemoteFollower.objects.get_or_create(actor_fqid=actor_fqid, target=target)
     messages.success(request, f"You approved {name}'s follow request!", extra_tags='follow')
     return redirect('view_follow_requests')
 

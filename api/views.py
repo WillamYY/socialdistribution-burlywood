@@ -15,10 +15,24 @@ from interactions.models import Like, Comment
 from .serializers import LikesSerializer, LikeSerializer, EntrySerializer, EntriesSerializer, CommentSerializer
 
 # Create your views here.
-def check_visibility(entry, viewer_id, is_list=False):
+def _normalize_fqid_for_check(s):
+    """Normalize FQID for comparison."""
+    if not s:
+        return ""
+    s = str(s).strip().rstrip("/")
+    if s.startswith("http://"):
+        s = "https" + s[4:]
+    return s
+
+
+def check_visibility(entry, viewer_id, is_list=False, requested_by_fqid=None):
     """
     Helper function to verify if a user can see an entry.
+    viewer_id: local author id (from session).
+    requested_by_fqid: remote author URL (from X-Requested-By header) for server-to-server requests.
     """
+    from core.models import RemoteFollow, RemoteFollower
+
     # Not found if entry is DELETED
     if entry.visibility == "DELETED":
         return False
@@ -31,32 +45,42 @@ def check_visibility(entry, viewer_id, is_list=False):
             return True
         else:
             # If from list, only the author or a follower can see it in a feed
-            if not viewer_id:
-                return False
-            if str(entry.author.id) == str(viewer_id):
-                return True
-            if entry.author.followers.filter(id=viewer_id).exists():
-                return True
+            if viewer_id:
+                if str(entry.author.id) == str(viewer_id):
+                    return True
+                if entry.author.followers.filter(id=viewer_id).exists():
+                    return True
+            if requested_by_fqid:
+                norm = _normalize_fqid_for_check(requested_by_fqid)
+                if norm and RemoteFollower.objects.filter(actor_fqid=norm, target=entry.author).exists():
+                    return True
             return False
 
-    # If not logged in, cannot see anything else
-    if not viewer_id:
+    # For FRIENDS, need either local viewer or remote friend
+    if not viewer_id and not requested_by_fqid:
         return False
-        
+
     # Author can always see their own non-deleted stuff
-    if str(entry.author.id) == str(viewer_id):
+    if viewer_id and str(entry.author.id) == str(viewer_id):
         return True
-        
-    # Friends check for mutual followers
+
+    # Friends check: mutual followers (local) or mutual follow with remote (RemoteFollow + RemoteFollower)
     if entry.visibility == "FRIENDS":
-        try:
-            viewer = Author.objects.get(id=viewer_id)
-            entry_author = Author.objects.get(id=entry.author.id)
-            # Check if the viewer is in entry author's friends list
-            return viewer in entry_author.friends()
-        except Author.DoesNotExist:
+        if viewer_id:
+            try:
+                viewer = Author.objects.get(id=viewer_id)
+                return viewer in entry.author.friends()
+            except Author.DoesNotExist:
+                pass
+        if requested_by_fqid:
+            norm = _normalize_fqid_for_check(requested_by_fqid)
+            if norm:
+                # Remote friend = they follow us AND we follow them
+                they_follow_us = RemoteFollower.objects.filter(actor_fqid=norm, target=entry.author).exists()
+                we_follow_them = RemoteFollow.objects.filter(follower=entry.author, followed_fqid=norm).exists()
+                return they_follow_us and we_follow_them
             return False
-            
+
     return False
 
 def is_remote_fqid(fqid, request):
@@ -542,12 +566,17 @@ def ApiEntries(request, author_id):
         page = int(request.query_params.get('page', 1))
         size = int(request.query_params.get('size', 5))
         logged_in_id = request.session.get("author_id")
-        
+        # X-Requested-By: remote author FQID for server-to-server (e.g. friend fetching FRIENDS entries)
+        requested_by_fqid = (request.META.get("HTTP_X_REQUESTED_BY") or "").strip() or None
+
         # Fetch all non-deleted entries
         all_entries = Entry.objects.filter(author=author).exclude(visibility="DELETED").order_by('-published')
-        
-        # Query the entries by checking visibility for logged-in user
-        visible_entries = [e for e in all_entries if check_visibility(e, logged_in_id, is_list=True)]
+
+        # Query the entries by checking visibility (logged-in user or remote friend)
+        visible_entries = [
+            e for e in all_entries
+            if check_visibility(e, logged_in_id, is_list=True, requested_by_fqid=requested_by_fqid)
+        ]
         
         # Paginate the queryset
         start = (page - 1) * size
