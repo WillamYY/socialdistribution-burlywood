@@ -1,6 +1,6 @@
 from django.test import TestCase, Client
 from django.urls import reverse
-from core.models import Author, FollowRequest, HostedImage
+from core.models import Author, FollowRequest, AdminHostedImage
 from core.admin import HostedImageAdmin
 from interactions.models import Like, Comment
 from entries.models import Entry
@@ -379,7 +379,7 @@ class AdminUserStoryTestCase(TestCase):
             content_type="image/png",
         )
 
-        hosted = HostedImage.objects.create(
+        hosted = AdminHostedImage.objects.create(
             title="Tiny Test Image",
             image=image_file,
         )
@@ -392,7 +392,7 @@ class AdminUserStoryTestCase(TestCase):
         self.assertTrue(link.endswith(".png)"))
 
         # Admin configuration behavior
-        admin_obj = HostedImageAdmin(HostedImage, AdminSite())
+        admin_obj = HostedImageAdmin(AdminHostedImage, AdminSite())
         self.assertIn("title", admin_obj.list_display)
         self.assertIn("uploaded_at", admin_obj.list_display)
         self.assertIn("image", admin_obj.list_display)

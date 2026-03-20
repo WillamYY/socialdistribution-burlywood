@@ -33,28 +33,52 @@
     <label>Text Content</label>
     <textarea name="content" id="textContentInput" rows="6" class="form-control">{% if entry.contentType and 'text' in entry.contentType %}{% if entry.content_raw %}{{ entry.content_raw }}{% else %}{{ entry.content }}{% endif %}{% endif %}</textarea>
 
-    <div id="markdownHelpBox" class="markdown-helper" style="display: none;">
-        <p class="markdown-helper-text">
+    <div id="markdownHelpBox" class="form-markdown-helper" style="display: none;">
+        <p class="form-markdown-helper-text">
             Markdown image format: <code>![alt text](url)</code>
         </p>
 
-        <div class="markdown-insert-tool">
-            <p class="markdown-helper-text">Insert an image into your markdown automatically.</p>
+        <div class="form-markdown-insert-tool">
+            <p class="form-markdown-helper-text">Insert an image into your markdown automatically.</p>
 
-            <div class="markdown-insert-row">
-                <input type="url" id="markdownImageUrlInput" class="form-control" placeholder="https://example.com/image.png">
+            <div class="form-markdown-insert-row">
+                <input type="url" id="markdownImageUrlInput" class="form-control" placeholder="https://example.com/image.png or /api/.../image">
                 <input type="text" id="markdownImageAltInput" class="form-control" placeholder="Alt text (optional)">
             </div>
 
-            <div class="markdown-insert-actions">
-                <button type="button" id="insertMarkdownImageBtn" class="btn-secondary">Insert Image into Content</button>
+            <div class="form-markdown-insert-actions">
+                <button type="button" id="insertMarkdownImageBtn" class="form-btn-secondary">Insert Image into Content</button>
             </div>
         </div>
 
-        <div id="markdownHintBox" class="markdown-hint" style="display: none;"></div>
+        {% if admin_hosted_images %}
+        <details class="form-hosted-image-picker">
+            <summary class="form-hosted-image-summary">Node-hosted images</summary>
 
-        <div id="markdownPreviewBox" class="markdown-preview" style="display: none;">
-            <p class="markdown-preview-title">Preview for Detected Images</p>
+            <div class="form-hosted-image-grid form-hosted-image-grid-compact">
+                {% for admin_hosted_image in admin_hosted_images %}
+                    <div class="form-hosted-image-card form-hosted-image-card-compact">
+                    <img src="{{ admin_hosted_image.absolute_url }}"
+                        alt="{{ admin_hosted_image.title }}"
+                             class="form-hosted-image-thumb form-hosted-image-thumb-compact">
+
+                        <div class="form-hosted-image-meta form-hosted-image-meta-compact">
+                            <p class="form-hosted-image-title">{{ admin_hosted_image.title }}</p>
+                        <input type="text"
+                                   class="form-control form-hosted-image-url form-hosted-image-url-compact"
+                            value="{{ admin_hosted_image.absolute_url }}"
+                            readonly>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </details>
+        {% endif %}
+
+        <div id="markdownHintBox" class="form-markdown-hint" style="display: none;"></div>
+
+        <div id="markdownPreviewBox" class="form-markdown-preview" style="display: none;">
+            <p class="form-markdown-preview-title">Preview for Detected Images</p>
             <div id="markdownPreviewContent" class="entry-markdown"></div>
         </div>
     </div>

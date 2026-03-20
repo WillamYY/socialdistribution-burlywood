@@ -9,7 +9,7 @@ from django.contrib import messages
 from django.views.decorators.http import require_POST
 from django.db.models import Count, Q
 from .models import Entry
-from core.models import Author
+from core.models import Author, AdminHostedImage
 from core.services import maybe_sync_github_for_stream
 from interactions.models import Like, Comment
 
@@ -166,6 +166,24 @@ def update_entry_from_request(request, entry):
 
     return True, None   # Success
 
+def get_admin_hosted_images(request):
+    """
+    Get node-admin hosted images with the absolute URL.
+    """
+    images = []
+    for image in AdminHostedImage.objects.order_by("-uploaded_at"):
+        if image.image and hasattr(image.image, "url"):
+            if image.image.url.startswith(("http://", "https://")):
+                absolute_url = image.image.url
+            else:
+                absolute_url = request.build_absolute_uri(image.image.url)
+
+            images.append({
+                "title": image.title,
+                "absolute_url": absolute_url,
+            })
+    return images
+
 def create_entry(request):
     """
     Handles the creation of a new entry, including processing image uploads and text content.
@@ -186,14 +204,14 @@ def create_entry(request):
         if not success:
             messages.error(request, error_msg)
             # Pass new_entry back to continue
-            return render(request, "entries/create_entry.html", {"entry": new_entry})
+            return render(request, "entries/create_entry.html", {"entry": new_entry, "admin_hosted_images": get_admin_hosted_images(request)})
         
         # If successful, commit it to the database
         new_entry.save()
         return redirect("view_my_entries")
 
     # Show the empty form for GET requests
-    return render(request, "entries/create_entry.html")
+    return render(request, "entries/create_entry.html", {"admin_hosted_images": get_admin_hosted_images(request)})
 
 def edit_entry(request, entry_id):
     """
@@ -213,13 +231,13 @@ def edit_entry(request, entry_id):
         
         if not success:
             messages.error(request, error_msg)
-            return render(request, "entries/edit_entry.html", {"entry": entry})
+            return render(request, "entries/edit_entry.html", {"entry": entry, "admin_hosted_images": get_admin_hosted_images(request)})
         
         # Commit the updates to the database
         entry.save()
         return redirect("view_my_entries")
     
-    return render(request, "entries/edit_entry.html", {"entry": entry})
+    return render(request, "entries/edit_entry.html", {"entry": entry, "admin_hosted_images": get_admin_hosted_images(request)})
 
 @require_POST
 def delete_entry(request, entry_id):
@@ -540,8 +558,16 @@ def get_entry(request, entry_id):
     # Check the visibility for the logged-in user
     allowed = check_visibility(entry, logged_in_id)
 
+    image_api_url = None
+    if ";base64" in entry.contentType and "image" in entry.contentType:
+        image_api_url = reverse("api:ApiEntryImage", kwargs={
+            "author_id": entry.author.id,
+            "entry_id": entry.id,
+        })
+
     return render(request, "entries/entry.html", {
         "entry": entry,
         "allowed": allowed,
         "return_url": return_url,
+        "image_api_url": image_api_url,
     })

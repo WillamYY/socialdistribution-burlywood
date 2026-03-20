@@ -1,6 +1,6 @@
 # core/admin.py
 from django.contrib import admin
-from .models import Author, AuthorRequest, HostedImage
+from .models import Author, AuthorRequest, AdminHostedImage
 
 @admin.register(Author)
 class AuthorAdmin(admin.ModelAdmin):
@@ -35,9 +35,8 @@ class AuthorRequestAdmin(admin.ModelAdmin):
         for authorrequest in authorrequests:
             AuthorRequest.objects.get(pk=authorrequest.id).delete()
 
-@admin.register(HostedImage)
+@admin.register(AdminHostedImage)
 class HostedImageAdmin(admin.ModelAdmin):
     # Displays the title, upload date, and the markdown link in the admin table
-    list_display = ('title', 'uploaded_at', 'image', 'get_markdown_link')
-    readonly_fields = ('get_markdown_link',)
+    list_display = ('title', 'uploaded_at', 'image')
     search_fields = ('title',)
