@@ -55,9 +55,68 @@ document.addEventListener("DOMContentLoaded", function() {
     const markdownHintBox = document.getElementById("markdownHintBox");
     const markdownPreviewBox = document.getElementById("markdownPreviewBox");
     const markdownPreviewContent = document.getElementById("markdownPreviewContent");
+    const markdownImageUrlInput = document.getElementById("markdownImageUrlInput");
+    const markdownImageAltInput = document.getElementById("markdownImageAltInput");
+    const insertMarkdownImageBtn = document.getElementById("insertMarkdownImageBtn");
 
     // Ensure essential form elements exist before initializing logic
     if (select && textSection && imageSection) {
+        /**
+         * Record cursor position and insert text there.
+         */
+        function insertAtCursor(textarea, textToInsert) {
+            const start = textarea.selectionStart ?? textarea.value.length;
+            const end = textarea.selectionEnd ?? textarea.value.length;
+            const before = textarea.value.slice(0, start);
+            const after = textarea.value.slice(end);
+
+            textarea.value = before + textToInsert + after;
+
+            const newCursorPos = start + textToInsert.length;
+            textarea.focus();
+            textarea.setSelectionRange(newCursorPos, newCursorPos);
+        }
+        
+        /**
+         * Build a valid Markdown syntax for rendering an image.
+         */
+        function buildMarkdownImage(alt, url) {
+            const safeAlt = (alt || "").replace(/\]/g, "");
+            return `![${safeAlt}](${url})`;
+        }
+
+        if (insertMarkdownImageBtn && textInput) {
+            insertMarkdownImageBtn.addEventListener("click", function() {
+                // Extract the user input url and alt text
+                const url = markdownImageUrlInput ? markdownImageUrlInput.value.trim() : "";
+                const alt = markdownImageAltInput ? markdownImageAltInput.value.trim() : "";
+
+                // Check if any url provided
+                if (!url) {
+                    markdownHintBox.textContent = "Please enter an image URL before inserting.";
+                    markdownHintBox.style.display = "block";
+                    return;
+                }
+
+                // Check if basic valid url provided
+                if (!/^https?:\/\//i.test(url)) {
+                    markdownHintBox.textContent = "Image URL must start with http:// or https://";
+                    markdownHintBox.style.display = "block";
+                    return;
+                }
+
+                // Initialize the syntax for Markdown image and insert it
+                const markdownImage = buildMarkdownImage(alt, url);
+                let textToInsert = markdownImage;
+                insertAtCursor(textInput, textToInsert);
+
+                // Clean the last input
+                if (markdownImageUrlInput) markdownImageUrlInput.value = "";
+                if (markdownImageAltInput) markdownImageAltInput.value = "";
+
+                updateMarkdownUi();
+            });
+        }
         
         /**
          * Convert raw text into safe HTML entities.

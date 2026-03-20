@@ -354,6 +354,42 @@
     color: var(--text-main);
 }
 
+.markdown-insert-tool {
+    border: 1px solid var(--border-main);
+    border-radius: 10px;
+    background: var(--bg-muted);
+    padding: 12px;
+}
+
+.markdown-insert-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+}
+
+.markdown-insert-row .form-control {
+    flex: 1 1 220px;
+}
+
+.markdown-insert-actions {
+    margin-top: 10px;
+}
+
+.btn-secondary {
+    background-color: var(--bg-code);
+    color: var(--text-main);
+    border: 1px solid var(--border-main);
+    padding: 8px 14px;
+    border-radius: var(--input-radius);
+    cursor: pointer;
+    font-weight: 500;
+}
+
+.btn-secondary:hover {
+    background-color: var(--border-light);
+}
+
 /* Form Specifics */
 .form-group {
     display: flex;
