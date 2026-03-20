@@ -146,7 +146,7 @@
                     
                     <div class="interaction-row" onclick="event.stopPropagation();">
                         {% if request.session.author_id %}
-                        <form method="POST" action="{{entry.author.id}}/inbox">
+                        <form method="POST" action="{% url 'interactions:add_remote_like' entry.id%}">
                             {% csrf_token %}
                             <button type="submit" class="stat-item {% if entry.liked_by_user %}liked{% endif %}">
                                 <span class="icon">{% if entry.liked_by_user %}❤️{% else %}🤍{% endif %}</span>
