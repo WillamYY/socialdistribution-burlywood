@@ -1,8 +1,11 @@
 # Create your views here.
 import base64
 import json
+import logging
 from email.mime import base
 import uuid
+
+logger = logging.getLogger(__name__)
 import requests
 from urllib.parse import unquote
 from django.http import HttpResponse, HttpResponseForbidden
@@ -150,11 +153,18 @@ def ApiAuthors(request):
     allAuthors = Author.objects.all()
     data = {"type":"authors"} 
     authors = []
-    # Gets the relevant information from each author
+    base_url = request.build_absolute_uri("/api/").rstrip("/")
     for author in allAuthors:
-        # Gets the authors info
-        authorID = author.host + "/authors/" + str(author.id)
-        authorInfo = {"type":"author","id": authorID,"host": author.host,"displayName": author.name, "github":author.github, "profileImage":author.picture_url,"web":author.web}
+        # Build canonical author URL (must be absolute HTTPS for federation)
+        host = (author.host or "").strip().rstrip("/")
+        if host and host.startswith("http"):
+            author_base = host if "/api" in host else f"{host.rstrip('/')}/api"
+        else:
+            author_base = base_url
+        if author_base.startswith("http://"):
+            author_base = "https" + author_base[4:]
+        authorID = f"{author_base}/authors/{author.id}"
+        authorInfo = {"type":"author","id": authorID,"host": author_base,"displayName": author.name or author.username,"github":author.github or "","profileImage":author.picture_url or "","web":author.web or ""}
         authors.append(authorInfo)
     # If size is not specified returns all authors
     if size == None:
@@ -180,9 +190,16 @@ def HandleApiAuthor(request, id):
 def ApiAuthor(request,id):
     if request.method == "GET":
         author = get_object_or_404(Author,pk=id) # Gets the author
-        authorID = author.host + "/authors/" + str(author.id)
-        # Creates the information that will be returned
-        authorInfo = {"type":"author","id": authorID,"host": author.host,"displayName": author.name, "github":author.github, "profileImage":author.picture_url,"web":author.web}
+        base_url = request.build_absolute_uri("/api/").rstrip("/")
+        host = (author.host or "").strip().rstrip("/")
+        if host and host.startswith("http"):
+            author_base = host if "/api" in host else f"{host.rstrip('/')}/api"
+        else:
+            author_base = base_url
+        if author_base.startswith("http://"):
+            author_base = "https" + author_base[4:]
+        authorID = f"{author_base}/authors/{author.id}"
+        authorInfo = {"type":"author","id": authorID,"host": author_base,"displayName": author.name or author.username,"github":author.github or "","profileImage":author.picture_url or "","web":author.web or ""}
         return Response(authorInfo)
     elif request.method == "PUT":
         # Replaces the object if it is put on top of
@@ -323,6 +340,7 @@ def ApiInbox(request, author_id):
     POST [remote]: Unified inbox accepts like, follow, comment, entry.
     Routes to appropriate handler by request body type.
     """
+    logger.info("Inbox POST author_id=%s type=%s", author_id, request.data.get("type") if request.data else "?")
     # Parse body - DRF may not parse application/ld+json; fallback to raw body
     data = request.data
     if not data and request.body:
@@ -388,6 +406,7 @@ def _inbox_handle_follow(request, author_id, data=None):
             actor_display_name=actor_display_name,
             target=target,
         )
+        logger.info("Created RemoteFollowRequest actor=%s target=%s", actor_fqid[:60], target.id)
     return Response({"detail": "Follow request received"}, status=202)
 
 

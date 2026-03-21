@@ -443,9 +443,11 @@ def follow_remote_author(request, fqid):
         RemoteFollow.objects.create(follower=me, followed_fqid=normalized)
         try:
             base = request.build_absolute_uri("/")[:-1]
-            author_base = me.host.rstrip("/") if me.host else base
+            author_base = (me.host or "").strip().rstrip("/") or base
             if "/api" not in author_base:
                 author_base = f"{author_base.rstrip('/')}/api"
+            if author_base.startswith("http://"):
+                author_base = "https" + author_base[4:]
             actor_id = f"{author_base}/authors/{me.id}"
             actor_info = {
                 "type": "author",
@@ -458,12 +460,21 @@ def follow_remote_author(request, fqid):
             }
             object_info = {"type": "author", "id": normalized}
             inbox_url = f"{normalized.rstrip('/')}/inbox"
+            headers = {
+                "Content-Type": "application/json",
+                "User-Agent": "SocialDistribution/1.0 (+https://github.com/uofa-cmput404/w26-socialdistribution-project-burlywood)",
+            }
             resp = requests.post(
                 inbox_url,
                 json={"type": "follow", "actor": actor_info, "object": object_info},
-                headers={"Content-Type": "application/json"},
-                timeout=10,
+                headers=headers,
+                timeout=15,
+                allow_redirects=False,
             )
+            if resp.status_code in (301, 302, 307, 308):
+                loc = resp.headers.get("Location", "")
+                if loc and loc != inbox_url:
+                    resp = requests.post(loc, json={"type": "follow", "actor": actor_info, "object": object_info}, headers=headers, timeout=15)
             if resp.status_code not in (200, 202, 204):
                 messages.warning(request, f"Inbox returned {resp.status_code}; the author may not have received the request.")
         except requests.exceptions.RequestException as e:
