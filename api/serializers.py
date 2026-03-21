@@ -2,6 +2,7 @@ from rest_framework import serializers
 from core.models import Author
 from entries.models import Entry
 from interactions.models import Like, Comment
+import re
 
 """
 Serializes author objects
@@ -22,7 +23,7 @@ class AuthorSerializer(serializers.ModelSerializer):
 
     # Defines how to create the id
     def get_id(self,obj):
-        return f"{obj.host}authors/{obj.id}"
+        return f"{obj.host}/authors/{obj.id}"
     
     def to_representation(self, instance):
         data = super().to_representation(instance)
@@ -182,9 +183,20 @@ class EntrySerializer(serializers.ModelSerializer):
         base_url = self.get_id(obj)
         
         likes_url = f"{base_url}likes" 
-        
-        # Query the database for likes on this entry
-        entry_likes = Like.objects.filter(object=base_url)
+        # Handles both http and http requests
+        search = re.search("entr(?:y|ies)/([^/]+)",base_url)
+        # Prevents crashes
+        if not search:
+            entry_likes = []
+        else:
+            # Handles both the no slash and slash version
+            if search.group(1)[-1] == "/":
+                alt = search.group(1)[:-1]
+            else:
+                alt = search.group(1) + "/"
+            print(search.group(1),alt)
+            # Query the database for likes on this entry
+            entry_likes = Like.objects.filter(object__endswith=search.group(1)) | Like.objects.filter(object__endswith=alt)
         
         # Package the data for LikesSerializer
         likes_data = {

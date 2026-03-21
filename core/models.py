@@ -69,3 +69,22 @@ class AdminHostedImage(models.Model):
     
     def __str__(self):
         return self.title
+
+"""
+Creates a class that handles the nodes that we want to pull information from
+"""
+class IncomingNode(models.Model):
+    id = models.AutoField(primary_key = True)
+    url = models.URLField(unique = True)
+    username = models.CharField(max_length = 30, default = "")
+    password = models.CharField(max_length = 30, default = "")
+
+"""
+Creates a class that handles the nodes that want to pull information from us
+"""
+class OutgoingNode(models.Model):
+    id = models.AutoField(primary_key = True)
+    url = models.URLField(unique = True)
+    username = models.CharField(max_length = 30, default = "")
+    password = models.CharField(max_length = 30, default = "")
+    is_active = models.BooleanField(default=True)
