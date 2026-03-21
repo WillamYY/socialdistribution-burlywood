@@ -1,4 +1,5 @@
 from django.shortcuts import render, redirect, get_object_or_404
+from django.http import Http404
 from django.contrib import messages
 from .models import Author, FollowRequest, AuthorRequest, IncomingNode, RemoteFollow, RemoteFollowRequest, RemoteFollower
 from entries.models import Entry
@@ -9,8 +10,11 @@ from .services import sync_author_github_activity
 from .validators import validate_username, validate_password, validate_github_url
 import requests
 import json
+import logging
 from api.serializers import EntrySerializer
 import re
+
+logger = logging.getLogger(__name__)
 
 def SignUpView(request):
     """
@@ -440,7 +444,6 @@ def follow_remote_author(request, fqid):
     if RemoteFollow.objects.filter(follower=me, followed_fqid=normalized).exists():
         messages.info(request, "You are already following this author.")
     else:
-        RemoteFollow.objects.create(follower=me, followed_fqid=normalized)
         try:
             base = request.build_absolute_uri("/")[:-1]
             author_base = (me.host or "").strip().rstrip("/") or base
@@ -464,22 +467,33 @@ def follow_remote_author(request, fqid):
                 "Content-Type": "application/json",
                 "User-Agent": "SocialDistribution/1.0 (+https://github.com/uofa-cmput404/w26-socialdistribution-project-burlywood)",
             }
+            payload = {"type": "follow", "actor": actor_info, "object": object_info}
+            logger.info("Sending follow to inbox url=%s actor=%s object=%s", inbox_url, actor_info.get("id"), normalized)
             resp = requests.post(
                 inbox_url,
-                json={"type": "follow", "actor": actor_info, "object": object_info},
+                json=payload,
                 headers=headers,
                 timeout=15,
                 allow_redirects=False,
             )
+            logger.info("Follow POST response status=%s url=%s body=%s", resp.status_code, inbox_url, resp.text[:200] if resp.text else "")
             if resp.status_code in (301, 302, 307, 308):
                 loc = resp.headers.get("Location", "")
                 if loc and loc != inbox_url:
-                    resp = requests.post(loc, json={"type": "follow", "actor": actor_info, "object": object_info}, headers=headers, timeout=15)
-            if resp.status_code not in (200, 202, 204):
-                messages.warning(request, f"Inbox returned {resp.status_code}; the author may not have received the request.")
+                    resp = requests.post(loc, json=payload, headers=headers, timeout=15)
+            if resp.status_code in (200, 202, 204):
+                RemoteFollow.objects.create(follower=me, followed_fqid=normalized)
+                messages.success(request, "Follow request sent!", extra_tags="follow")
+            else:
+                err_detail = resp.text[:150] if resp.text else resp.reason or ""
+                messages.error(
+                    request,
+                    f"Inbox rejected ({resp.status_code}): {err_detail or 'no details'} — armdb may not have received the request.",
+                )
+                logger.warning("Follow inbox rejected status=%s body=%s", resp.status_code, resp.text[:300])
         except requests.exceptions.RequestException as e:
-            messages.warning(request, f"Could not reach remote inbox: {str(e)[:80]}")
-        messages.success(request, "Follow request sent!", extra_tags="follow")
+            messages.error(request, f"Could not reach remote inbox: {str(e)[:100]}")
+            logger.warning("Follow POST failed: %s", e)
 
     referer = request.META.get("HTTP_REFERER")
     if referer:
@@ -564,25 +578,32 @@ def RemoteProfileDisplay(request, fqid):
             entry.liked_by_user = False
     """
     normalized_fqid = _normalize_fqid(fqid)
+    if not normalized_fqid or "/api/authors/" not in normalized_fqid:
+        raise Http404("Invalid remote author URL")
+
     is_following = False
     if logged_in_id and normalized_fqid:
         is_following = RemoteFollow.objects.filter(
             follower_id=logged_in_id, followed_fqid=normalized_fqid
         ).exists()
 
-    index = fqid.index("/api/authors/")
-    authorInfo = requests.get(fqid[:index] + "/api/authors/" + fqid)
+    # Fetch author: use normalized_fqid directly (was bug: fqid[:index]+"/api/authors/"+fqid produced malformed URL)
+    authorInfo = requests.get(normalized_fqid, timeout=10)
     authorInfo.raise_for_status()
     author = json.loads(authorInfo.text)
-    # Gets the authors id
-    id = re.search("/api/authors/([^/]*)/?",fqid).group(1)
-    entryInfo = requests.get(fqid[:index] + "/api/authors/" + id + "/entries/")
+    # Extract author id for entries fetch
+    id_match = re.search(r"/api/authors/([^/]+)/?", normalized_fqid)
+    author_id = id_match.group(1) if id_match else ""
+    if not author_id:
+        raise Http404("Could not parse author id from URL")
+    node_base = normalized_fqid.split("/api/authors/")[0].rstrip("/")
+    entries_url = f"{node_base}/api/authors/{author_id}/entries/"
+    entryInfo = requests.get(entries_url, timeout=10)
     entryInfo.raise_for_status()
     public_entries = []
     for entry in entryInfo.json().get("src", []):
         if entry["visibility"] == "PUBLIC":
-            print(entry["likes"])
-            entry["like_count"] = entry["likes"]["count"]
+            entry["like_count"] = entry["likes"].get("count", 0)
             public_entries.append(entry)
     context = {
         "author": author,
