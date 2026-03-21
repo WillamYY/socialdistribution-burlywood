@@ -81,8 +81,10 @@ class RemoteFollower(models.Model):
     """
     Remote actor follows our local author (approved).
     Friends = mutual follow: we follow them (RemoteFollow) and they follow us (RemoteFollower).
+    actor_url: legacy/alternate column name (some deployments use this).
     """
     actor_fqid = models.URLField(max_length=500)
+    actor_url = models.URLField(max_length=500, blank=True, null=True, db_column="actor_url")  # armdb compatibility
     actor_display_name = models.CharField(max_length=255, blank=True, default="Remote author")
     target = models.ForeignKey(Author, on_delete=models.CASCADE, related_name='remote_followers')
     created_at = models.DateTimeField(auto_now_add=True)

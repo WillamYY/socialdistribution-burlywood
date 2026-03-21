@@ -365,7 +365,7 @@ def approve_remote_follow(request, req_id):
     # Record that this remote actor follows us (for friends = mutual follow logic)
     RemoteFollower.objects.update_or_create(
         actor_fqid=actor_fqid, target=target,
-        defaults={"actor_display_name": name},
+        defaults={"actor_display_name": name, "actor_url": actor_fqid},
     )
     messages.success(request, f"You approved {name}'s follow request!", extra_tags='follow')
     return redirect('view_follow_requests')
