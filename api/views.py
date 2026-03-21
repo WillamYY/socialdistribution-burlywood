@@ -355,6 +355,8 @@ def ApiInbox(request, author_id):
         logger.info("Inbox POST author_id=%s type=%s", author_id, obj_type)
         if obj_type == "follow":
             return _inbox_handle_follow(request, author_id, data)
+        if obj_type == "accept":
+            return _inbox_handle_accept(request, author_id, data)
         if obj_type == "comment":
             return _inbox_handle_comment(request, author_id, data)
         if obj_type == "entry":
@@ -418,6 +420,30 @@ def _inbox_handle_follow(request, author_id, data=None):
         )
         logger.info("Created RemoteFollowRequest actor=%s target=%s", actor_fqid[:60], target.id)
     return Response({"detail": "Follow request received"}, status=202)
+
+
+def _inbox_handle_accept(request, author_id, data=None):
+    """Handle Accept: remote node approved our follow. Create RemoteFollow so Remote Following updates."""
+    from core.models import RemoteFollow
+
+    data = data or request.data or {}
+    follower = get_object_or_404(Author, id=author_id)
+    actor_raw = data.get("actor")
+    if isinstance(actor_raw, str):
+        followed_fqid = actor_raw.strip().rstrip("/")
+    elif isinstance(actor_raw, dict):
+        followed_fqid = (actor_raw.get("id") or "").strip().rstrip("/")
+    else:
+        return Response({"detail": "Missing actor"}, status=400)
+    if followed_fqid.startswith("http://"):
+        followed_fqid = "https" + followed_fqid[4:]
+    if not followed_fqid:
+        return Response({"detail": "Missing actor"}, status=400)
+    RemoteFollow.objects.get_or_create(
+        follower=follower, followed_fqid=followed_fqid,
+    )
+    logger.info("Accept: created RemoteFollow follower=%s followed=%s", follower.id, followed_fqid[:50])
+    return Response({"detail": "Accept received"}, status=202)
 
 
 def _inbox_handle_comment(request, author_id, data=None):

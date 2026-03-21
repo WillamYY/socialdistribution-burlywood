@@ -355,11 +355,38 @@ def deny_follow(request, req_id):
     return redirect('view_follow_requests')
 
 
+def _send_accept_to_requester(request, actor_fqid, accepter):
+    """POST Accept to requester's inbox so their Remote Following updates when we approve."""
+    try:
+        base = (accepter.host or "").strip().rstrip("/")
+        if not base or not base.startswith("http"):
+            base = request.build_absolute_uri("/")[:-1]
+        if "/api" not in base:
+            base = base.rstrip("/") + "/api"
+        if base.startswith("http://"):
+            base = "https" + base[4:]
+        accepter_id = f"{base}/authors/{accepter.id}"
+        inbox_url = f"{_normalize_fqid(actor_fqid).rstrip('/')}/inbox"
+        payload = {
+            "type": "Accept",
+            "actor": accepter_id,
+            "object": {"type": "Follow", "actor": actor_fqid, "object": accepter_id},
+        }
+        requests.post(
+            inbox_url,
+            json=payload,
+            headers={"Content-Type": "application/json", "User-Agent": "SocialDistribution/1.0"},
+            timeout=10,
+        )
+    except Exception:
+        pass
+
+
 def approve_remote_follow(request, req_id):
-    """Approves a follow request from a remote actor. Records RemoteFollower for friends logic."""
+    """Approves a follow request from a remote actor. Records RemoteFollower, notifies requester via Accept."""
     remote_req = get_object_or_404(RemoteFollowRequest, id=req_id, target_id=request.session.get('author_id'))
     name = remote_req.actor_display_name or "Remote author"
-    actor_fqid = remote_req.actor_fqid
+    actor_fqid = _normalize_fqid(remote_req.actor_fqid)
     target = remote_req.target
     remote_req.delete()
     # Record that this remote actor follows us (for friends = mutual follow logic)
@@ -367,6 +394,8 @@ def approve_remote_follow(request, req_id):
         actor_fqid=actor_fqid, target=target,
         defaults={"actor_display_name": name, "actor_url": actor_fqid},
     )
+    # Notify requester so their Remote Following updates
+    _send_accept_to_requester(request, actor_fqid=actor_fqid, accepter=target)
     messages.success(request, f"You approved {name}'s follow request!", extra_tags='follow')
     return redirect('view_follow_requests')
 
@@ -397,15 +426,23 @@ def connections(request):
     remote_followers = list(
         RemoteFollower.objects.filter(target=author).order_by("created_at")
     )
-    # Remote friends: mutual remote follow (we follow them AND they follow us)
-    follower_by_fqid = {r.actor_fqid: r for r in remote_followers}
+    # Remote friends: ONLY when BOTH follow each other (we follow them AND they follow us)
+    follower_by_fqid = {_normalize_fqid(r.actor_fqid): r for r in remote_followers}
     follower_fqids = set(follower_by_fqid)
-    remote_friends = [
-        {"fqid": rf.followed_fqid, "display_name": follower_by_fqid[rf.followed_fqid].actor_display_name or "Remote author"}
-        for rf in remote_followings if rf.followed_fqid in follower_fqids
+    remote_friends = []
+    for rf in remote_followings:
+        norm_fqid = _normalize_fqid(rf.followed_fqid)
+        if norm_fqid in follower_fqids:
+            r = follower_by_fqid[norm_fqid]
+            remote_friends.append({
+                "fqid": norm_fqid,
+                "display_name": r.actor_display_name or "Remote author",
+            })
+    # Remote following (excluding friends - those we follow but who don't follow us back)
+    remote_followings_only = [
+        rf for rf in remote_followings
+        if _normalize_fqid(rf.followed_fqid) not in follower_fqids
     ]
-    # Remote following (excluding friends, so we show "following but not mutual" separately)
-    remote_followings_only = [rf for rf in remote_followings if rf.followed_fqid not in follower_fqids]
 
     return render(request, "connections.html", {
         "followers": followers,
