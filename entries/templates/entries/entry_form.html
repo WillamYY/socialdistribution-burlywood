@@ -3,9 +3,11 @@
 {% if messages %}
     <div class="messages-container" style="margin-bottom: 20px;">
         {% for message in messages %}
-            <div style="background-color: #fee2e2; border: 1px solid #ef4444; color: #b91c1c; padding: 12px; border-radius: 6px; font-weight: 500;">
-                {{ message }}
-            </div>
+            {% if 'error' in message.tags %}
+                <div style="background-color: #fee2e2; border: 1px solid #ef4444; color: #b91c1c; padding: 12px; border-radius: 6px; font-weight: 500;">
+                    {{ message }}
+                </div>
+            {% endif %}
         {% endfor %}
     </div>
 {% endif %}
