@@ -794,6 +794,33 @@ class EntryAPITest(APITestCase):
         self.assertEqual(response["Content-Type"], "image/png")
         self.assertEqual(response.content, base64.b64decode(self.tiny_png_b64))
 
+    def test_markdown_entry_can_reference_hosted_image_url(self):
+        """
+        US #65: Verify the markdown entry can reference a hosted image on node
+        """
+        image_url = f"/api/authors/{self.author.id}/entries/{self.image_entry.id}/image"
+        markdown_source = f"## Image from entry\n![alt 123]({image_url})"
+
+        url = reverse("api:ApiEntries", kwargs={"author_id": self.author.id})
+        response = self.client.post(url, {
+            "title": "Markdown With Hosted Image",
+            "description": "Testing hosted image reference",
+            "contentType": "text/markdown",
+            "content": markdown_source,
+            "visibility": "PUBLIC",
+        }, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        created = Entry.objects.get(title="Markdown With Hosted Image")
+        self.assertEqual(created.contentType, "text/markdown")
+        self.assertEqual(created.content, markdown_source)
+
+        # Check if the referenced URL is actually a valid hosted image resource
+        image_response = self.client.get(image_url)
+        self.assertEqual(image_response.status_code, status.HTTP_200_OK)
+        self.assertTrue(image_response["Content-Type"].startswith("image/"))
+        
     def test_proxy_404_on_invalid_fqid(self):
         """
         Ensure it returns 404 if the FQID refers to a non-existent local entry.

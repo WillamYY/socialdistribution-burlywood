@@ -1,5 +1,5 @@
 import base64
-from email.mime import base
+import re
 import markdown
 import bleach
 from django.shortcuts import render, redirect, get_object_or_404
@@ -9,7 +9,7 @@ from django.contrib import messages
 from django.views.decorators.http import require_POST
 from django.db.models import Count, Q
 from .models import Entry
-from core.models import Author
+from core.models import Author, AdminHostedImage
 from core.services import maybe_sync_github_for_stream
 from interactions.models import Like, Comment
 
@@ -56,6 +56,38 @@ def check_visibility(entry, viewer_id, is_list=False):
             return False
             
     return False
+
+def validate_markdown_image_syntax(text_content):
+    """
+    Helper function to detect broken Markdown image syntax.
+
+    Return:
+    None if no error, else an error string message.
+    """
+    # Check if user probably wants to use Markdown image syntax
+    if not text_content or "![" not in text_content:
+        return None
+        
+    # If image marker ![ exists, but no proper ( after it
+    if re.search(r'!\[[^\]]*\](?!\()', text_content):
+        return (
+            "Invalid Markdown image syntax. Use the format: ![alt text](url)"
+        )
+
+    # If not enclose the URL with )
+    if re.search(r'!\[[^\]]*\]\([^)]*$', text_content):
+        return (
+            "Markdown image link is not enclosed with ')'. Use the format: ![alt text](url)"
+        )
+
+    # If no image URL in ()
+    if re.search(r'!\[[^\]]*\]\(\s*\)', text_content):
+        return (
+            "Markdown image URL cannot be empty. Use the format: ![alt text](url)"
+        )
+
+    # Otherwise valid syntax
+    return None 
 
 def render_safe_markdown(text_content):
     """
@@ -118,6 +150,9 @@ def update_entry_from_request(request, entry):
 
             # Check for text type
             if contentType == "text/markdown":
+                markdown_error = validate_markdown_image_syntax(text_content)
+                if markdown_error:
+                    return False, markdown_error
                 entry.content = render_safe_markdown(text_content)
             else:
                 entry.content = text_content
@@ -130,6 +165,26 @@ def update_entry_from_request(request, entry):
     entry.visibility = request.POST.get("visibility", entry.visibility)
 
     return True, None   # Success
+
+def get_admin_hosted_images(request):
+    """
+    Get node-admin hosted images with the absolute URL.
+    """
+    images = []
+    for image in AdminHostedImage.objects.order_by("-uploaded_at"):
+        if not image.content or not image.content_type:
+            continue
+
+        absolute_url = request.build_absolute_uri(
+            reverse("admin_hosted_image_file", kwargs={"image_id": image.id})
+        )
+        safe_title = (image.title or "").replace("]", "")
+        images.append({
+            "title": image.title,
+            "absolute_url": absolute_url,
+            "markdown": f"![{safe_title}]({absolute_url})",
+        })
+    return images
 
 def create_entry(request):
     """
@@ -151,14 +206,14 @@ def create_entry(request):
         if not success:
             messages.error(request, error_msg)
             # Pass new_entry back to continue
-            return render(request, "entries/create_entry.html", {"entry": new_entry})
+            return render(request, "entries/create_entry.html", {"entry": new_entry, "admin_hosted_images": get_admin_hosted_images(request)})
         
         # If successful, commit it to the database
         new_entry.save()
         return redirect("view_my_entries")
 
     # Show the empty form for GET requests
-    return render(request, "entries/create_entry.html")
+    return render(request, "entries/create_entry.html", {"admin_hosted_images": get_admin_hosted_images(request)})
 
 def edit_entry(request, entry_id):
     """
@@ -178,13 +233,13 @@ def edit_entry(request, entry_id):
         
         if not success:
             messages.error(request, error_msg)
-            return render(request, "entries/edit_entry.html", {"entry": entry})
+            return render(request, "entries/edit_entry.html", {"entry": entry, "admin_hosted_images": get_admin_hosted_images(request)})
         
         # Commit the updates to the database
         entry.save()
         return redirect("view_my_entries")
     
-    return render(request, "entries/edit_entry.html", {"entry": entry})
+    return render(request, "entries/edit_entry.html", {"entry": entry, "admin_hosted_images": get_admin_hosted_images(request)})
 
 @require_POST
 def delete_entry(request, entry_id):
@@ -505,8 +560,16 @@ def get_entry(request, entry_id):
     # Check the visibility for the logged-in user
     allowed = check_visibility(entry, logged_in_id)
 
+    image_api_url = None
+    if ";base64" in entry.contentType and "image" in entry.contentType:
+        image_api_url = reverse("api:ApiEntryImage", kwargs={
+            "author_id": entry.author.id,
+            "entry_id": entry.id,
+        })
+
     return render(request, "entries/entry.html", {
         "entry": entry,
         "allowed": allowed,
         "return_url": return_url,
+        "image_api_url": image_api_url,
     })

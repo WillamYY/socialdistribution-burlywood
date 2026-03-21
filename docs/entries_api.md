@@ -1,6 +1,6 @@
 # Entries and Image API Documentation
 
-This document covers the API implementation and expected behavior for **Entries and Visibility** user stories, referencing GitHub issues. The following content in this document is mainly generated via the generative AI: Gemini 3 Flash, Google, 2026-03-15, https://gemini.google.com/u/0/app/48a83dd17d81fcf7?pageId=none
+This document covers the API implementation and expected behavior for **Entries and Visibility** user stories, referencing GitHub issues. The following content in this document is mainly generated with the help of the generative AI: Gemini 3 Flash, Google, 2026-03-20, https://gemini.google.com/u/0/app/48a83dd17d81fcf7?pageId=none
 
 ### User Stories Covered
 * **#6**: As an author, I want my profile page to show my public entries (most recent first), so they can decide if they want to follow me.
@@ -436,6 +436,7 @@ This endpoint supports browsing the public posts of the local node beyond only a
 
 **URL 1:** `GET /api/authors/{AUTHOR_SERIAL}/entries/{ENTRY_SERIAL}/image`
 **URL 2:** `GET /api/entries/{ENTRY_FQID}/image`
+
 **Relevant User Stories:** #16, #18, #41, #65
 
 * **When to use it:** Use this to render an image entry directly inside an HTML `<img>` tag, or to embed images within a CommonMark entry.
@@ -448,13 +449,18 @@ This endpoint supports browsing the public posts of the local node beyond only a
 Image entries are stored as base64 content in an entry and exposed through this endpoint as real image bytes.
 
 **US #18:**
-Markdown entries can link to image-entry URLs from this endpoint, which allows images to appear inside CommonMark-rendered content.
+Markdown entries can link to image-entry URLs or valid external image URLs, which allows images to appear inside CommonMark-rendered content.
 
 **US #41:**
 If the image belongs to a friends-only entry, the image endpoint applies the same visibility restrictions and prevents strangers from accessing it.
 
 **US #65:**
-This node can host images locally as image entries. Authors can upload images through the web interface or create image entries through the API using base64 image content. Those images are then served from this node through the image endpoint, so they can be reused in CommonMark entries with stable local URLs.
+This node can host images locally as image entries. Node admins can upload images through the web interface or create image entries through the API using base64 image content. 
+1. **Author-hosted image entries** — authors can upload images as image entries (`image/png;base64` or `image/jpeg;base64`). These are served through the image API endpoint and can be reused in Markdown with stable local URLs.
+
+2. **Admin-hosted images** — the node admin can also upload shared hosted images (`image/png;base64` or `image/jpeg;base64`). These are exposed in the entry authoring form as reusable local image URLs (`app/hosted-images/<int:image_id>/image/`), so authors can paste or insert them into CommonMark content.
+
+This means users can embed both their own image-entry URLs and admin-provided hosted image URLs in Markdown while keeping the images hosted on the local node. 
 
 ### Expected Status Codes
 
@@ -463,16 +469,26 @@ This node can host images locally as image entries. Authors can upload images th
 * **`404 Not Found`**: The entry does not exist, is `DELETED`, or is not an image entry.
 * **`500 Internal Server Error`**: The image content exists but could not be decoded.
 
----
+### Example
+**Direct Local Access:**
+Use this when you know the local author and entry serial.
+```
+GET http://nodeaaaa/api/authors/111/entries/1145141919810/image
+```
+**FQID Proxy Access:**
+Use this when you have the Fully Qualified ID of an entry from a remote node and want your local node to proxy the image for you.
+```
+GET http://nodebbbb/api/entries/http%3A%2F%2Fnodeaaaa%2Fapi%2Fauthors%2F111%2Fentries%2F1145141919810/image
+```
 
 ## Markdown Support
 
-**Relevant User Stories:** #15, #18, #21
+**Relevant User Stories:** #15, #18, #21, #65
 
 * **When to use it:** For entries whose `contentType` is `text/markdown`.
 * **How it works in the web UI:** Markdown is rendered into safe HTML for browser display.
 * **How it works in the API:** The API stores and returns markdown content as entry content. Clients can render it appropriately.
-* **Why to use it:** Supports rich text authoring while still allowing safe browser-based viewing.
+* **Why to use it:** Supports rich text authoring and image rendering while still allowing safe browser-based viewing.
 
 ### Story Behavior Notes
 
@@ -480,7 +496,7 @@ This node can host images locally as image entries. Authors can upload images th
 Markdown entries are supported as a distinct content type from plain text entries. This allows authors to write formatted posts using CommonMark syntax.
 
 **US #18:**
-Markdown content can include image links, and those links can point to image-entry endpoints.
+Markdown content can include image links, and those links can point to image-entry endpoints, preset node-admin hosted images, or valid external image URLs.
 
 **US #21:**
 In the web UI, markdown can be authored in the browser and rendered safely for display.
@@ -495,7 +511,9 @@ Node-hosted images can be referenced from Markdown using the local image-entry e
     "title": "Markdown Example",
     "description": "Testing markdown",
     "contentType": "text/markdown",
-    "content": "# Hello\n\nThis is **bold** and this is ![an image](http://node/api/authors/123/entries/456/image)",
+    "content": "# Hello\n\nThis is **bold** and this is ![an image](http://node/api/authors/123/entries/456/image)
+    # Admin Hosted Image:
+    ![](http://127.0.0.1:8000/app/hosted-images/6/image/)",
     "visibility": "PUBLIC"
 }
 ```

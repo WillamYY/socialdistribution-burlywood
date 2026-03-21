@@ -1,7 +1,6 @@
 from django.test import TestCase, Client
 from django.urls import reverse
-from core.models import Author, FollowRequest, HostedImage
-from core.admin import HostedImageAdmin
+from core.models import Author, FollowRequest, AdminHostedImage
 from interactions.models import Like, Comment
 from entries.models import Entry
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -9,6 +8,7 @@ from django.contrib.postgres.fields import ArrayField
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.contrib.admin.sites import AdminSite
 import uuid
+import base64
 
 class UnfollowAPITestCase(TestCase):
     """
@@ -360,46 +360,79 @@ class AdminUserStoryTestCase(TestCase):
         # Ensures no likes have arrayfields
         for field in Like._meta.get_fields():
             self.assertFalse(isinstance(field,ArrayField))
-    
-    def test_hosted_image_generates_markdown_link_and_is_registered_in_admin(self):
-        """
-        User Story #65: As a node admin, images can be hosted on my node, 
-        so that my users can use them in their CommonMark entries.
 
-        ChatGPT, OpenAI, 2026-03-15, https://chatgpt.com/share/69b78062-384c-8011-b02b-fa8e5afeb9ab
-        """
-        image_file = SimpleUploadedFile(
-            "tiny.png",
-            (
-                b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01"
-                b"\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde\x00"
-                b"\x00\x00\x0cIDAT\x08\x99c\xf8\xff\xff?\x00\x05\xfe"
-                b"\x02\xfeA\xdd\x8d\xb1\x00\x00\x00\x00IEND\xaeB`\x82"
-            ),
+from entries.views import get_admin_hosted_images
+class AdminHostedImagesInEntryFormTests(TestCase):
+    """
+    Partial US #65 related to admin-hosted images.
+    """
+    def setUp(self):
+        self.author = Author.objects.create(
+            username="entry_user",
+            name="Entry User"
+        )
+
+        self.tiny_png_bytes = base64.b64decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+        )
+        self.hosted = AdminHostedImage.objects.create(
+            title="Bracket ] Test",
             content_type="image/png",
+            content=base64.b64encode(self.tiny_png_bytes).decode("utf-8"),
         )
 
-        hosted = HostedImage.objects.create(
-            title="Tiny Test Image",
-            image=image_file,
+    def test_get_admin_hosted_images_returns_absolute_url_and_markdown(self):
+        request = self.client.get("/app/entry/create/").wsgi_request
+        request.session["author_id"] = self.author.id
+
+        images = get_admin_hosted_images(request)
+        self.assertEqual(len(images), 1)
+
+        img = images[0]
+
+        # Title is correct
+        self.assertEqual(img["title"], "Bracket ] Test")
+
+        # URL correctness
+        expected_suffix = reverse(
+            "admin_hosted_image_file",
+            kwargs={"image_id": self.hosted.id}
         )
+        self.assertTrue(img["absolute_url"].endswith(expected_suffix))
 
-        # Model behavior
-        link = hosted.get_markdown_link()
-        self.assertEqual(str(hosted), "Tiny Test Image")
-        self.assertIn("![Tiny Test Image](", link)
-        self.assertIn("/media/hosted_images/", link)
-        self.assertTrue(link.endswith(".png)"))
+        # Markdown structure (loose)
+        markdown = img["markdown"]
+        self.assertIn("![", markdown)
+        self.assertIn("](", markdown)
+        self.assertIn(img["absolute_url"], markdown)
 
-        # Admin configuration behavior
-        admin_obj = HostedImageAdmin(HostedImage, AdminSite())
-        self.assertIn("title", admin_obj.list_display)
-        self.assertIn("uploaded_at", admin_obj.list_display)
-        self.assertIn("image", admin_obj.list_display)
-        self.assertIn("get_markdown_link", admin_obj.list_display)
-        self.assertIn("get_markdown_link", admin_obj.readonly_fields)
-        self.assertIn("title", admin_obj.search_fields)
+        # Alt text contains the title (loose)
+        self.assertIn("Bracket", markdown)
 
+    def test_create_entry_page_shows_node_hosted_image_picker(self):
+        session = self.client.session
+        session["author_id"] = self.author.id
+        session.save()
+
+        response = self.client.get(reverse("create_entry"))
+        self.assertEqual(response.status_code, 200)
+
+        hosted_url = reverse(
+            "admin_hosted_image_file",
+            kwargs={"image_id": self.hosted.id}
+        )
+        
+        # Section header exists
+        self.assertContains(response, "Node-hosted images")
+
+        # Title appears
+        self.assertContains(response, self.hosted.title)
+
+        # URL appears (absolute or relative)
+        self.assertIn(hosted_url, response.content.decode())
+
+        # At least one <img> tag exists
+        self.assertContains(response, "<img", html=False)
 
 class SameOriginSecurityMiddlewareTestCase(TestCase):
     """
