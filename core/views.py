@@ -2,7 +2,7 @@ import base64
 from django.http import HttpResponse, Http404
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
-from .models import Author, FollowRequest, AuthorRequest, IncomingNode, AdminHostedImage
+from .models import Author, FollowRequest, AuthorRequest, AdminHostedImage, IncomingNode
 from entries.models import Entry
 from interactions.models import Like, Comment
 from django.contrib.auth.hashers import check_password
@@ -375,6 +375,70 @@ def get_admin_hosted_image(request, image_id):
         raise Http404("Hosted image could not be decoded.")
 
     return HttpResponse(binary_data, content_type=image.content_type)
+
+"""
+########
+########
+Duplicate functions for handling users on other nodes below
+########
+#######
+"""
+
+
+
+
+
+def RemoteProfileDisplay(request, fqid):
+    """
+    Displays the profile of another user.
+    """
+    is_following = False
+    request_sent = False
+    logged_in_id = request.session.get("author_id")
+    """
+    if logged_in_id and Author.objects.filter(id=logged_in_id).exists():
+        me = Author.objects.get(id=logged_in_id)
+        is_following = author in me.following.all()
+        request_sent = FollowRequest.objects.filter(requester=me, target=author).exists()
+
+    user_fqid = None
+    if logged_in_id:
+        user_fqid = f"{request.build_absolute_uri('/')[:-1]}/api/authors/{logged_in_id}"
+    public_entries = Entry.objects.filter(author=author, visibility="PUBLIC")
+    base_url = request.build_absolute_uri('/')[:-1]
+    for entry in public_entries:
+        entry_url = f"{base_url}/api/authors/{entry.author.id}/entries/{entry.id}"
+        entry.like_count = Like.objects.filter(object=entry_url).count()
+        entry.comment_count = Comment.objects.filter(entry=entry_url).count()
+        if user_fqid:
+            entry.liked_by_user = Like.objects.filter(object=entry_url, author=user_fqid).exists()
+        else:
+            entry.liked_by_user = False
+    """
+    index = fqid.index("/api/authors/")
+    authorInfo = requests.get(fqid[:index] + "/api/authors/" + fqid)
+    authorInfo.raise_for_status()
+    author = json.loads(authorInfo.text)
+    # Gets the authors id
+    id = re.search("/api/authors/([^/]*)/?",fqid).group(1)
+    entryInfo = requests.get(fqid[:index] + "/api/authors/" + id + "/entries/")
+    entryInfo.raise_for_status()
+    public_entries = []
+    for entry in entryInfo.json().get("src", []):
+        if entry["visibility"] == "PUBLIC":
+            print(entry["likes"])
+            entry["like_count"] = entry["likes"]["count"]
+            public_entries.append(entry)
+    context = {
+        "author": author,
+        "followers_count": 0,
+        "following_count": 0,
+        "is_following": False,
+        "request_sent": False,
+        "logged_in_id": logged_in_id,
+        "public_entries": public_entries
+    }
+    return render(request, "remoteprofileview.html", context) 
 
 """
 ########
