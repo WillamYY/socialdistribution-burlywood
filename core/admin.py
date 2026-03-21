@@ -4,10 +4,7 @@ from django import forms
 from django.contrib import admin
 from django.utils.html import format_html
 from django.core.exceptions import ValidationError
-from django.core.exceptions import ValidationError
 from .models import Author, AuthorRequest, AdminHostedImage, IncomingNode, OutgoingNode
-from .validators import validate_username, validate_password
-import re, IncomingNode, OutgoingNode
 from .validators import validate_username, validate_password
 import re
 
@@ -154,69 +151,3 @@ class OutgoingNodeAdminForm(forms.ModelForm):
 class OutgoingNodeAdmin(admin.ModelAdmin):
     list_display = ('url','username')
     form = OutgoingNodeAdminForm
-  
-
-"""
-Creates the form that validates input
-"""
-class IncomingNodeAdminForm(forms.ModelForm):
-    class Meta:
-        model = IncomingNode
-        fields = ["url","username","password"]
-    """
-    Validates and ensures a proper password
-    """
-    def clean_password(self):
-        password = self.cleaned_data.get("password")
-        ok, error = validate_password(password)
-        if not ok:
-            raise ValidationError(error)
-        return password
-    """
-    Validates the url
-    """
-    def clean_url(self):
-        url = self.cleaned_data.get("url")
-        reMatch = re.search(f"^https?://[^/]+/$",url)
-        if reMatch:
-            return url
-        else:
-            raise ValidationError("Please enter valid host")
-
-@admin.register(IncomingNode)
-class IncomingNodeAdmin(admin.ModelAdmin):
-    list_display = ('url','username')
-    form = IncomingNodeAdminForm
-
-"""
-Creates the form that validates input
-"""
-class OutgoingNodeAdminForm(forms.ModelForm):
-    class Meta:
-        model = OutgoingNode
-        fields = ["url","username","password","is_active"]
-    """
-    Validates and ensures a proper password
-    """
-    def clean_password(self):
-        password = self.cleaned_data.get("password")
-        ok, error = validate_password(password)
-        if not ok:
-            raise ValidationError(error)
-        return password
-    """
-    Validates the url
-    """
-    def clean_url(self):
-        url = self.cleaned_data.get("url")
-        reMatch = re.search(f"^https?://[^/]+/$",url)
-        if reMatch:
-            return url
-        else:
-            raise ValidationError("Please enter valid host")
-
-@admin.register(OutgoingNode)
-class OutgoingNodeAdmin(admin.ModelAdmin):
-    list_display = ('url','username')
-    form = OutgoingNodeAdminForm
-  
