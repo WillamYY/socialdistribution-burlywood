@@ -119,13 +119,18 @@ def add_remote_comment(request, entry_id):
     if request.method == "POST":
         author_id = request.session.get("author_id")
         if not author_id:
+            print("no author id in session")
             return redirect('/app/login/')
 
         comment_text = (request.POST.get("comment") or "").strip()
+        print("comment text:", comment_text)
+
         if not comment_text:
+            print("empty comment")
             return redirect(request.META.get('HTTP_REFERER', '/app/stream/'))
 
         remote_entry_url = entry_id.rstrip("/").replace("http://", "https://")
+        print("remote entry url:", remote_entry_url)
 
         try:
             entry_resp = requests.get(
@@ -133,17 +138,24 @@ def add_remote_comment(request, entry_id):
                 headers={"Accept": "application/json"},
                 timeout=10,
             )
+            print("entry fetch status:", entry_resp.status_code)
+            print("entry fetch body:", entry_resp.text[:500])
             entry_resp.raise_for_status()
             entry_data = entry_resp.json()
-        except requests.RequestException:
+            print("entry data parsed")
+        except Exception as e:
+            print("entry fetch error:", e)
             return redirect(request.META.get('HTTP_REFERER', '/app/stream/'))
 
         foreign_author = (entry_data.get("author") or {}).get("id")
+        print("foreign author:", foreign_author)
+
         if not foreign_author:
+            print("missing foreign author")
             return redirect(request.META.get('HTTP_REFERER', '/app/stream/'))
 
         author = get_object_or_404(Author, pk=author_id)
-        base = request.build_absolute_uri('/')[:-1]
+        base = request.build_absolute_uri('/')[:-1].replace("http://", "https://")
 
         author_info = {
             "type": "author",
@@ -156,24 +168,30 @@ def add_remote_comment(request, entry_id):
         }
 
         inbox_url = foreign_author.rstrip("/") + "/inbox"
+        print("inbox url:", inbox_url)
+
+        payload = {
+            "type": "comment",
+            "author": author_info,
+            "comment": comment_text,
+            "contentType": "text/plain",
+            "object": remote_entry_url,
+            "id": "",
+            "published": datetime.now().isoformat(),
+        }
+        print("payload:", payload)
 
         try:
-            requests.post(
+            resp = requests.post(
                 inbox_url,
-                json={
-                    "type": "comment",
-                    "author": author_info,
-                    "comment": comment_text,
-                    "contentType": "text/plain",
-                    "object": remote_entry_url,
-                    "entry": remote_entry_url,
-                    "published": datetime.now().isoformat(),
-                },
+                json=payload,
                 headers={"Content-Type": "application/json", "Accept": "application/json"},
                 timeout=10,
             )
-        except requests.RequestException:
-            pass
+            print("comment post status:", resp.status_code)
+            print("comment post body:", resp.text[:500])
+        except Exception as e:
+            print("remote comment error:", e)
 
     return redirect(request.META.get('HTTP_REFERER', '/app/stream/'))
 

@@ -1,4 +1,5 @@
 import base64
+from email.mime import base
 from django.http import HttpResponse, Http404
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
@@ -426,7 +427,8 @@ def RemoteProfileDisplay(request, fqid):
     public_entries = []
     user_fqid = None
     if logged_in_id:
-        user_fqid = f"{request.build_absolute_uri('/')[:-1]}/api/authors/{logged_in_id}"
+        base = request.build_absolute_uri('/')[:-1].replace("http://", "https://")
+        user_fqid = f"{base}/api/authors/{logged_in_id}"
 
     for entry in entryInfo.json().get("src", []):
         if entry.get("visibility") == "PUBLIC":
