@@ -81,6 +81,7 @@ class RemoteFollower(models.Model):
     Friends = mutual follow: we follow them (RemoteFollow) and they follow us (RemoteFollower).
     """
     actor_fqid = models.URLField(max_length=500)
+    actor_display_name = models.CharField(max_length=255, blank=True, default="Remote author")
     target = models.ForeignKey(Author, on_delete=models.CASCADE, related_name='remote_followers')
     created_at = models.DateTimeField(auto_now_add=True)
 

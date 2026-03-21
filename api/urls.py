@@ -1,4 +1,5 @@
 from django.urls import path, include
+from django.views.decorators.csrf import csrf_exempt
 from . import views
 from django.contrib import admin
 
@@ -8,7 +9,7 @@ app_name = "api"
 urlpatterns = [
     path("authors/", views.ApiAuthors, name="ApiAuthors"),
     path("authors/<int:id>/", views.HandleApiAuthor, name="ApiAuthor"),
-    path("authors/<int:author_id>/inbox", views.ApiInbox, name="ApiSendLike"),
+    path("authors/<int:author_id>/inbox", csrf_exempt(views.ApiInbox), name="ApiSendLike"),
     path("authors/<int:author_id>/entries/<uuid:entry_id>/likes",views.ApiAuthorAndEntryLikes,name="ApiAuthorAndEntryLikes"),
     path("entries/<path:entry_fqid>/likes",views.ApiEntryLikes, name="ApiEntryLikes"),
 

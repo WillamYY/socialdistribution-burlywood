@@ -359,7 +359,10 @@ def approve_remote_follow(request, req_id):
     target = remote_req.target
     remote_req.delete()
     # Record that this remote actor follows us (for friends = mutual follow logic)
-    RemoteFollower.objects.get_or_create(actor_fqid=actor_fqid, target=target)
+    RemoteFollower.objects.update_or_create(
+        actor_fqid=actor_fqid, target=target,
+        defaults={"actor_display_name": name},
+    )
     messages.success(request, f"You approved {name}'s follow request!", extra_tags='follow')
     return redirect('view_follow_requests')
 
@@ -386,12 +389,27 @@ def connections(request):
     remote_followings = list(
         RemoteFollow.objects.filter(follower=author).order_by("created_at")
     )
+    # Remote followers: remote actors who follow us (approved)
+    remote_followers = list(
+        RemoteFollower.objects.filter(target=author).order_by("created_at")
+    )
+    # Remote friends: mutual remote follow (we follow them AND they follow us)
+    follower_by_fqid = {r.actor_fqid: r for r in remote_followers}
+    follower_fqids = set(follower_by_fqid)
+    remote_friends = [
+        {"fqid": rf.followed_fqid, "display_name": follower_by_fqid[rf.followed_fqid].actor_display_name or "Remote author"}
+        for rf in remote_followings if rf.followed_fqid in follower_fqids
+    ]
+    # Remote following (excluding friends, so we show "following but not mutual" separately)
+    remote_followings_only = [rf for rf in remote_followings if rf.followed_fqid not in follower_fqids]
 
     return render(request, "connections.html", {
         "followers": followers,
         "followings": followings,
         "friends": friends,
-        "remote_followings": remote_followings,
+        "remote_followings": remote_followings_only,
+        "remote_followers": remote_followers,
+        "remote_friends": remote_friends,
     })
 
 
