@@ -390,69 +390,79 @@ Duplicate functions for handling users on other nodes below
 
 
 def RemoteProfileDisplay(request, fqid):
-    """
-    Displays the profile of another user.
-    """
-    is_following = False
-    request_sent = False
     logged_in_id = request.session.get("author_id")
-    """
-    if logged_in_id and Author.objects.filter(id=logged_in_id).exists():
-        me = Author.objects.get(id=logged_in_id)
-        is_following = author in me.following.all()
-        request_sent = FollowRequest.objects.filter(requester=me, target=author).exists()
-
-    user_fqid = None
-    if logged_in_id:
-        user_fqid = f"{request.build_absolute_uri('/')[:-1]}/api/authors/{logged_in_id}"
-    public_entries = Entry.objects.filter(author=author, visibility="PUBLIC")
-    base_url = request.build_absolute_uri('/')[:-1]
-    for entry in public_entries:
-        entry_url = f"{base_url}/api/authors/{entry.author.id}/entries/{entry.id}"
-        entry.like_count = Like.objects.filter(object=entry_url).count()
-        entry.comment_count = Comment.objects.filter(entry=entry_url).count()
-        if user_fqid:
-            entry.liked_by_user = Like.objects.filter(object=entry_url, author=user_fqid).exists()
-        else:
-            entry.liked_by_user = False
-    """
-    index = fqid.index("/api/authors/")
-    authorInfo = requests.get(fqid[:index] + "/api/authors/" + fqid)
-    authorInfo.raise_for_status()
-    author = json.loads(authorInfo.text)
-    # Gets the authors id
-    id = re.search("/api/authors/([^/]*)/?",fqid).group(1)
-    entryInfo = requests.get(fqid[:index] + "/api/authors/" + id + "/entries/")
-    entryInfo.raise_for_status()
     public_entries = []
+
+    remote_author_url = fqid.rstrip("/").replace("http://", "https://")
+
+    try:
+        authorInfo = requests.get(
+            remote_author_url,
+            headers={"Accept": "application/json"},
+            timeout=10,
+        )
+        authorInfo.raise_for_status()
+        author = authorInfo.json()
+    except requests.RequestException:
+        return render(request, "error.html", {"message": "Could not load remote author profile."})
+
+    match = re.search(r"/api/authors/([^/]+)/?$", remote_author_url)
+    if not match:
+        return render(request, "error.html", {"message": "Invalid remote author id."})
+
+    author_id = match.group(1)
+    base_host = remote_author_url.split("/api/authors/")[0]
+
+    try:
+        entryInfo = requests.get(
+            f"{base_host}/api/authors/{author_id}/entries/",
+            headers={"Accept": "application/json"},
+            timeout=10,
+        )
+        entryInfo.raise_for_status()
+        entry_json = entryInfo.json()
+    except requests.RequestException:
+        entry_json = {}
+
     user_fqid = None
     if logged_in_id:
         base = request.build_absolute_uri('/')[:-1].replace("http://", "https://")
         user_fqid = f"{base}/api/authors/{logged_in_id}"
 
-    for entry in entryInfo.json().get("src", []):
-        print("remote entry id:", entry.get("id"))
-        if entry.get("visibility") == "PUBLIC":
-            clean_id = (entry.get("id") or "").rstrip("/")
+    raw_entries = []
+    if isinstance(entry_json, list):
+        raw_entries = entry_json
+    else:
+        raw_entries = (
+            entry_json.get("src")
+            or entry_json.get("entries")
+            or entry_json.get("items")
+            or []
+        )
 
-            # skip broken remote entries with no usable id
-            if not clean_id:
-                continue
+    for entry in raw_entries:
+        if entry.get("visibility") != "PUBLIC":
+            continue
 
-            entry["clean_id"] = clean_id
-            entry["fetched_comments"] = ((entry.get("comments") or {}).get("src")) or []
-            entry["like_count"] = (entry.get("likes") or {}).get("count", 0)
-            entry["comment_count"] = (entry.get("comments") or {}).get("count", len(entry["fetched_comments"]))
+        clean_id = (entry.get("id") or "").rstrip("/")
+        if not clean_id:
+            continue
 
-            liked_by_user = False
-            for like in (entry.get("likes") or {}).get("src", []):
-                like_author = (like.get("author") or {}).get("id")
-                if user_fqid and like_author == user_fqid:
-                    liked_by_user = True
-                    break
+        entry["clean_id"] = clean_id
+        entry["fetched_comments"] = ((entry.get("comments") or {}).get("src")) or []
+        entry["like_count"] = (entry.get("likes") or {}).get("count", 0)
+        entry["comment_count"] = (entry.get("comments") or {}).get("count", len(entry["fetched_comments"]))
 
-            entry["liked_by_user"] = liked_by_user
-            public_entries.append(entry)
+        liked_by_user = False
+        for like in (entry.get("likes") or {}).get("src", []):
+            like_author = (like.get("author") or {}).get("id")
+            if user_fqid and like_author == user_fqid:
+                liked_by_user = True
+                break
+
+        entry["liked_by_user"] = liked_by_user
+        public_entries.append(entry)
+
     context = {
         "author": author,
         "followers_count": 0,
@@ -460,6 +470,6 @@ def RemoteProfileDisplay(request, fqid):
         "is_following": False,
         "request_sent": False,
         "logged_in_id": logged_in_id,
-        "public_entries": public_entries
+        "public_entries": public_entries,
     }
-    return render(request, "remoteprofileview.html", context) 
+    return render(request, "remoteprofileview.html", context)
