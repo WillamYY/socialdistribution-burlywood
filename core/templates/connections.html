@@ -244,6 +244,7 @@
                             <h3 title="{{ rf.actor_fqid }}">{{ rf.actor_display_name|default:"Remote author" }}</h3>
                             <div class="button-container">
                                 <a href="{% url 'RemoteProfileDisplay' rf.actor_fqid %}">View</a>
+                                <a href="{% url 'RemoveRemoteFollower' rf.actor_fqid %}" class="follow-btn unfollow">Remove</a>
                             </div>
                         </div>
                     </section>

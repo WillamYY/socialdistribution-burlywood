@@ -1,5 +1,6 @@
 # Create your views here.
 import base64
+import json
 from email.mime import base
 import uuid
 import requests
@@ -322,22 +323,35 @@ def ApiInbox(request, author_id):
     POST [remote]: Unified inbox accepts like, follow, comment, entry.
     Routes to appropriate handler by request body type.
     """
-    obj_type = (request.data.get("type") or "like").lower()
+    # Parse body - DRF may not parse application/ld+json; fallback to raw body
+    data = request.data
+    if not data and request.body:
+        try:
+            data = json.loads(request.body.decode("utf-8"))
+        except (ValueError, UnicodeDecodeError):
+            data = {}
+    data = data or {}
+    obj_type = (data.get("type") or "like").lower()
     if obj_type == "follow":
-        return _inbox_handle_follow(request, author_id)
+        return _inbox_handle_follow(request, author_id, data)
     if obj_type == "comment":
-        return _inbox_handle_comment(request, author_id)
+        return _inbox_handle_comment(request, author_id, data)
     if obj_type == "entry":
-        return _inbox_handle_entry(request, author_id)
-    return _inbox_handle_like(request, author_id)
+        return _inbox_handle_entry(request, author_id, data)
+    return _inbox_handle_like(request, author_id, data)
 
 
-def _inbox_handle_follow(request, author_id):
+def _inbox_handle_follow(request, author_id, data=None):
     """Handle follow request: actor wants to follow object (our author)."""
     from core.models import RemoteFollowRequest
 
+    data = data or request.data or {}
     target = get_object_or_404(Author, id=author_id)
-    actor_data = request.data.get("actor") or {}
+    actor_raw = data.get("actor")
+    if isinstance(actor_raw, str):
+        actor_data = {"id": actor_raw}
+    else:
+        actor_data = (actor_raw or {}) if isinstance(actor_raw, dict) else {}
     actor_id_str = (actor_data.get("id") or "").strip().rstrip("/")
     if not actor_id_str:
         return Response({"detail": "Missing actor"}, status=400)
@@ -377,10 +391,11 @@ def _inbox_handle_follow(request, author_id):
     return Response({"detail": "Follow request received"}, status=202)
 
 
-def _inbox_handle_comment(request, author_id):
+def _inbox_handle_comment(request, author_id, data=None):
     """Handle comment: add comment to an entry."""
+    data = data or request.data or {}
     target_author = get_object_or_404(Author, id=author_id)
-    entry_url = request.data.get("entry") or (request.data.get("object") if isinstance(request.data.get("object"), str) else None)
+    entry_url = data.get("entry") or (data.get("object") if isinstance(data.get("object"), str) else None)
     if not entry_url:
         return Response({"detail": "Missing entry"}, status=400)
     entry_uuid = entry_url.rstrip("/").split("/")[-1]
@@ -390,9 +405,9 @@ def _inbox_handle_comment(request, author_id):
         return Response({"detail": "Entry not found"}, status=404)
     if entry.visibility == "DELETED":
         return Response({"detail": "Entry not found"}, status=404)
-    author_data = request.data.get("author") or {}
+    author_data = data.get("author") or {}
     author_url = author_data.get("id") or ""
-    comment_text = request.data.get("comment") or ""
+    comment_text = data.get("comment") or ""
     if not comment_text or not author_url:
         return Response({"detail": "Missing author or comment"}, status=400)
     base = request.build_absolute_uri("/")[:-1]
@@ -402,19 +417,20 @@ def _inbox_handle_comment(request, author_id):
         author=author_url,
         entry=entry_fqid,
         comment=comment_text,
-        contentType=request.data.get("contentType", "text/plain"),
+        contentType=data.get("contentType", "text/plain"),
     )
     return Response({"detail": "Comment received"}, status=202)
 
 
-def _inbox_handle_entry(request, author_id):
+def _inbox_handle_entry(request, author_id, data=None):
     """Handle incoming entry: store for stream (basic support)."""
     return Response({"detail": "Entry received (inbox storage not yet implemented)"}, status=202)
 
 
-def _inbox_handle_like(request, author_id):
+def _inbox_handle_like(request, author_id, data=None):
     """Handle like: existing like logic."""
-    obj_url = request.data.get("object")
+    data = data or request.data or {}
+    obj_url = data.get("object")
     print("obj_url:", obj_url)
     if not obj_url:
         return Response({"detail": "Missing object"}, status=400)
@@ -431,8 +447,7 @@ def _inbox_handle_like(request, author_id):
     if entry.author.id != author_id:
         return Response(status=400)
     """
-    author_data = request.data.get("author") or {}
-    print("author_data:", author_data)
+    author_data = data.get("author") or {}
     author_url = (author_data.get("id") if isinstance(author_data, dict) else None) or ""
     print("author_url:", author_url)
     if not author_url:

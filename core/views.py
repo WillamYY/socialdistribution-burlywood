@@ -458,13 +458,16 @@ def follow_remote_author(request, fqid):
             }
             object_info = {"type": "author", "id": normalized}
             inbox_url = f"{normalized.rstrip('/')}/inbox"
-            requests.post(
+            resp = requests.post(
                 inbox_url,
                 json={"type": "follow", "actor": actor_info, "object": object_info},
+                headers={"Content-Type": "application/json"},
                 timeout=10,
             )
-        except Exception:
-            pass
+            if resp.status_code not in (200, 202, 204):
+                messages.warning(request, f"Inbox returned {resp.status_code}; the author may not have received the request.")
+        except requests.exceptions.RequestException as e:
+            messages.warning(request, f"Could not reach remote inbox: {str(e)[:80]}")
         messages.success(request, "Follow request sent!", extra_tags="follow")
 
     referer = request.META.get("HTTP_REFERER")
@@ -481,7 +484,8 @@ def follow_remote_author(request, fqid):
 
 def unfollow_remote_author(request, fqid):
     """
-    Unfollow a remote author. Same UI flow as unfollow_author for local authors.
+    Unfollow a remote author. Also removes them from RemoteFollower (complete disconnect)
+    so they disappear from both Remote Friends and Remote Followers.
     """
     if not request.session.get("author_id"):
         return redirect("/app/login")
@@ -489,6 +493,8 @@ def unfollow_remote_author(request, fqid):
     me = Author.objects.get(id=request.session["author_id"])
     normalized = _normalize_fqid(fqid)
     RemoteFollow.objects.filter(follower=me, followed_fqid=normalized).delete()
+    # Also remove from RemoteFollower so they disappear from Remote Followers (complete unfriend)
+    RemoteFollower.objects.filter(actor_fqid=normalized, target=me).delete()
     messages.success(request, "You unfollowed this author.", extra_tags="follow")
     referer = request.META.get("HTTP_REFERER")
     if referer:
@@ -500,6 +506,23 @@ def unfollow_remote_author(request, fqid):
         except (Resolver404, ValueError):
             pass
     return redirect(request.session.get("last_feed_url", referer or "/"))
+
+
+def remove_remote_follower(request, fqid):
+    """
+    Remove a remote follower (revoke their follow). Removes them from Remote Followers list.
+    """
+    if not request.session.get("author_id"):
+        return redirect("/app/login")
+
+    me = Author.objects.get(id=request.session["author_id"])
+    normalized = _normalize_fqid(fqid)
+    deleted, _ = RemoteFollower.objects.filter(actor_fqid=normalized, target=me).delete()
+    if deleted:
+        messages.success(request, "Remote follower removed.", extra_tags="follow")
+    else:
+        messages.info(request, "Follower was already removed.", extra_tags="follow")
+    return redirect("connections")
 
 
 def RemoteProfileDisplay(request, fqid):

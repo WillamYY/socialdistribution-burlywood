@@ -10,6 +10,7 @@ urlpatterns = [
     path("authors/", views.ApiAuthors, name="ApiAuthors"),
     path("authors/<int:id>/", views.HandleApiAuthor, name="ApiAuthor"),
     path("authors/<int:author_id>/inbox", csrf_exempt(views.ApiInbox), name="ApiSendLike"),
+    path("authors/<int:author_id>/inbox/", csrf_exempt(views.ApiInbox), name="ApiSendLikeSlash"),
     path("authors/<int:author_id>/entries/<uuid:entry_id>/likes",views.ApiAuthorAndEntryLikes,name="ApiAuthorAndEntryLikes"),
     path("entries/<path:entry_fqid>/likes",views.ApiEntryLikes, name="ApiEntryLikes"),
 
