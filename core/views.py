@@ -424,10 +424,23 @@ def RemoteProfileDisplay(request, fqid):
     entryInfo = requests.get(fqid[:index] + "/api/authors/" + id + "/entries/")
     entryInfo.raise_for_status()
     public_entries = []
+    user_fqid = None
+    if logged_in_id:
+        user_fqid = f"{request.build_absolute_uri('/')[:-1]}/api/authors/{logged_in_id}"
+
     for entry in entryInfo.json().get("src", []):
-        if entry["visibility"] == "PUBLIC":
-            print(entry["likes"])
-            entry["like_count"] = entry["likes"]["count"]
+        if entry.get("visibility") == "PUBLIC":
+            entry["like_count"] = (entry.get("likes") or {}).get("count", 0)
+            entry["comment_count"] = (entry.get("comments") or {}).get("count", 0)
+
+            liked_by_user = False
+            for like in (entry.get("likes") or {}).get("src", []):
+                like_author = (like.get("author") or {}).get("id")
+                if user_fqid and like_author == user_fqid:
+                    liked_by_user = True
+                    break
+
+            entry["liked_by_user"] = liked_by_user
             public_entries.append(entry)
     context = {
         "author": author,

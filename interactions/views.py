@@ -38,19 +38,56 @@ def add_remote_like(request, entry_id):
         author_id = request.session.get("author_id")
         if not author_id:
             return redirect('/app/login/')
-        # Gets the entry info and ensures its valid
-        entryInfo = requests.get(entry_id.rstrip("/"))
-        entryInfo.raise_for_status()
-        foreignAuthor = json.loads(entryInfo.text)["author"]["id"]
-        # Get author making request
-        entry_id = entry_id.replace("http","https")
-        author = get_object_or_404(Author, pk = author_id)
-        authorInfo = {"type":"author","id": author.host + "/authors/" + str(author.id),"host": author.host,"displayName": author.name, "github":author.github, "profileImage":author.picture_url,"web":author.web}
-        # Post the like to the inbox
-        post = requests.post(foreignAuthor + "/inbox",json = {"type": "like","author": authorInfo,"published":datetime.now().isoformat(),"id":"","object":entry_id})
+
+        remote_entry_url = entry_id.rstrip("/").replace("http://", "https://")
+
+        try:
+            entry_resp = requests.get(
+                remote_entry_url,
+                headers={"Accept": "application/json"},
+                timeout=10,
+            )
+            entry_resp.raise_for_status()
+            entry_data = entry_resp.json()
+        except requests.RequestException:
+            return redirect(request.META.get('HTTP_REFERER', '/app/stream/'))
+
+        foreign_author = (entry_data.get("author") or {}).get("id")
+        if not foreign_author:
+            return redirect(request.META.get('HTTP_REFERER', '/app/stream/'))
+
+        author = get_object_or_404(Author, pk=author_id)
+        base = request.build_absolute_uri('/')[:-1]
+
+        author_info = {
+            "type": "author",
+            "id": f"{base}/api/authors/{author.id}",
+            "host": f"{base}/api",
+            "displayName": author.name,
+            "github": author.github,
+            "profileImage": getattr(author, "picture_url", "") or "",
+            "web": author.web,
+        }
+
+        inbox_url = foreign_author.rstrip("/") + "/inbox"
+
+        try:
+            requests.post(
+                inbox_url,
+                json={
+                    "type": "like",
+                    "author": author_info,
+                    "published": datetime.now().isoformat(),
+                    "id": "",
+                    "object": remote_entry_url,
+                },
+                headers={"Content-Type": "application/json", "Accept": "application/json"},
+                timeout=10,
+            )
+        except requests.RequestException:
+            pass
 
     return redirect(request.META.get('HTTP_REFERER', '/app/stream/'))
-
 
 def add_comment(request, entry_id):
     """Creates a Comment object using the Entry's FQID (URL)."""
@@ -75,6 +112,68 @@ def add_comment(request, entry_id):
                 comment=comment_text,
                 contentType="text/plain"
             )
+
+    return redirect(request.META.get('HTTP_REFERER', '/app/stream/'))
+
+def add_remote_comment(request, entry_id):
+    if request.method == "POST":
+        author_id = request.session.get("author_id")
+        if not author_id:
+            return redirect('/app/login/')
+
+        comment_text = (request.POST.get("comment") or "").strip()
+        if not comment_text:
+            return redirect(request.META.get('HTTP_REFERER', '/app/stream/'))
+
+        remote_entry_url = entry_id.rstrip("/").replace("http://", "https://")
+
+        try:
+            entry_resp = requests.get(
+                remote_entry_url,
+                headers={"Accept": "application/json"},
+                timeout=10,
+            )
+            entry_resp.raise_for_status()
+            entry_data = entry_resp.json()
+        except requests.RequestException:
+            return redirect(request.META.get('HTTP_REFERER', '/app/stream/'))
+
+        foreign_author = (entry_data.get("author") or {}).get("id")
+        if not foreign_author:
+            return redirect(request.META.get('HTTP_REFERER', '/app/stream/'))
+
+        author = get_object_or_404(Author, pk=author_id)
+        base = request.build_absolute_uri('/')[:-1]
+
+        author_info = {
+            "type": "author",
+            "id": f"{base}/api/authors/{author.id}",
+            "host": f"{base}/api",
+            "displayName": author.name,
+            "github": author.github,
+            "profileImage": getattr(author, "picture_url", "") or "",
+            "web": author.web,
+        }
+
+        inbox_url = foreign_author.rstrip("/") + "/inbox"
+
+        try:
+            requests.post(
+                inbox_url,
+                json={
+                    "type": "comment",
+                    "author": author_info,
+                    "comment": comment_text,
+                    "contentType": "text/plain",
+                    "object": remote_entry_url,
+                    "entry": remote_entry_url,
+                    "published": datetime.now().isoformat(),
+                },
+                headers={"Content-Type": "application/json", "Accept": "application/json"},
+                timeout=10,
+            )
+        except requests.RequestException:
+            pass
 
     return redirect(request.META.get('HTTP_REFERER', '/app/stream/'))
 
