@@ -485,10 +485,18 @@ def follow_remote_author(request, fqid):
                 RemoteFollow.objects.create(follower=me, followed_fqid=normalized)
                 messages.success(request, "Follow request sent!", extra_tags="follow")
             else:
-                err_detail = resp.text[:150] if resp.text else resp.reason or ""
+                err_detail = resp.reason or ""
+                try:
+                    err_json = resp.json() if resp.text else {}
+                    err_detail = err_json.get("error") or err_json.get("detail") or err_detail
+                except (ValueError, AttributeError):
+                    if resp.text and not resp.text.strip().startswith("<"):
+                        err_detail = resp.text[:150]
+                if not err_detail:
+                    err_detail = resp.text[:100] if resp.text else "no details"
                 messages.error(
                     request,
-                    f"Inbox rejected ({resp.status_code}): {err_detail or 'no details'} — armdb may not have received the request.",
+                    f"Inbox rejected ({resp.status_code}): {err_detail} — armdb may not have received the request.",
                 )
                 logger.warning("Follow inbox rejected status=%s body=%s", resp.status_code, resp.text[:300])
         except requests.exceptions.RequestException as e:

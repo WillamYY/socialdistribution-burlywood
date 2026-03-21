@@ -340,23 +340,32 @@ def ApiInbox(request, author_id):
     POST [remote]: Unified inbox accepts like, follow, comment, entry.
     Routes to appropriate handler by request body type.
     """
-    logger.info("Inbox POST author_id=%s type=%s", author_id, request.data.get("type") if request.data else "?")
-    # Parse body - DRF may not parse application/ld+json; fallback to raw body
-    data = request.data
-    if not data and request.body:
-        try:
-            data = json.loads(request.body.decode("utf-8"))
-        except (ValueError, UnicodeDecodeError):
+    try:
+        # Parse body - DRF may not parse application/ld+json; fallback to raw body
+        data = getattr(request, "data", None)
+        if not data and request.body:
+            try:
+                data = json.loads(request.body.decode("utf-8"))
+            except (ValueError, UnicodeDecodeError):
+                data = {}
+        data = data or {}
+        if not isinstance(data, dict):
             data = {}
-    data = data or {}
-    obj_type = (data.get("type") or "like").lower()
-    if obj_type == "follow":
-        return _inbox_handle_follow(request, author_id, data)
-    if obj_type == "comment":
-        return _inbox_handle_comment(request, author_id, data)
-    if obj_type == "entry":
-        return _inbox_handle_entry(request, author_id, data)
-    return _inbox_handle_like(request, author_id, data)
+        obj_type = str(data.get("type") or "like").lower()
+        logger.info("Inbox POST author_id=%s type=%s", author_id, obj_type)
+        if obj_type == "follow":
+            return _inbox_handle_follow(request, author_id, data)
+        if obj_type == "comment":
+            return _inbox_handle_comment(request, author_id, data)
+        if obj_type == "entry":
+            return _inbox_handle_entry(request, author_id, data)
+        return _inbox_handle_like(request, author_id, data)
+    except Exception as e:
+        logger.exception("Inbox error: %s", e)
+        return Response(
+            {"detail": "Inbox error", "error": str(e)},
+            status=500,
+        )
 
 
 def _inbox_handle_follow(request, author_id, data=None):
@@ -398,7 +407,7 @@ def _inbox_handle_follow(request, author_id, data=None):
         actor_fqid = actor_id_str
         if actor_fqid.startswith("http://"):
             actor_fqid = "https" + actor_fqid[4:]
-        actor_display_name = (actor_data.get("displayName") or actor_data.get("username") or "Remote author")[:255]
+        actor_display_name = str(actor_data.get("displayName") or actor_data.get("username") or "Remote author")[:255]
         if RemoteFollowRequest.objects.filter(actor_fqid=actor_fqid, target=target).exists():
             return Response({"detail": "Follow request already sent"}, status=409)
         RemoteFollowRequest.objects.create(
