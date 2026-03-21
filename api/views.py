@@ -412,6 +412,7 @@ def _inbox_handle_follow(request, author_id, data=None):
             return Response({"detail": "Follow request already sent"}, status=409)
         RemoteFollowRequest.objects.create(
             actor_fqid=actor_fqid,
+            actor_url=actor_fqid,  # armdb uses actor_url as NOT NULL column
             actor_display_name=actor_display_name,
             target=target,
         )

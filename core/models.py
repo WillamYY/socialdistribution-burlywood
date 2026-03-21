@@ -65,8 +65,10 @@ class RemoteFollowRequest(models.Model):
     """
     Follow request from a remote actor (they want to follow our local author).
     Shows up in Follow Requests so the target can approve/deny.
+    actor_url: legacy/alternate column name (some deployments use this).
     """
     actor_fqid = models.URLField(max_length=500)
+    actor_url = models.URLField(max_length=500, blank=True, null=True, db_column="actor_url")  # alias for armdb compatibility
     actor_display_name = models.CharField(max_length=255, blank=True, default="Remote author")
     target = models.ForeignKey(Author, on_delete=models.CASCADE, related_name='remote_follow_requests')
     created_at = models.DateTimeField(auto_now_add=True)
