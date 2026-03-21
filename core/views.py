@@ -69,17 +69,19 @@ def NodeDisplay(request):
     """
     node_authors = Author.objects.all()
     other_node_authors = []
-    # Gets authors from other nodes
+
     for node in IncomingNode.objects.all():
-        request = requests.get(node.url + "/api/authors/")
-        # Only proceeds if request was success
-        if request.status_code == 200:
-            # Gets all the authors
-            data = json.loads(request.text)
+        response = requests.get(node.url + "/api/authors/")
+        if response.status_code == 200:
+            data = json.loads(response.text)
             if data["type"] == "authors":
                 for author in data["authors"]:
                     other_node_authors.append(author)
-    return render(request, "node.html", {"users": node_authors,"other_users":other_node_authors})
+
+    return render(request, "node.html", {
+        "users": node_authors,
+        "other_users": other_node_authors
+    })
 
 def login_view(request):
     """
@@ -385,10 +387,6 @@ Duplicate functions for handling users on other nodes below
 #######
 """
 
-
-
-
-
 def RemoteProfileDisplay(request, fqid):
     logged_in_id = request.session.get("author_id")
     public_entries = []
@@ -449,16 +447,35 @@ def RemoteProfileDisplay(request, fqid):
             continue
 
         entry["clean_id"] = clean_id
-        entry["fetched_comments"] = ((entry.get("comments") or {}).get("src")) or []
-        entry["like_count"] = (entry.get("likes") or {}).get("count", 0)
-        entry["comment_count"] = (entry.get("comments") or {}).get("count", len(entry["fetched_comments"]))
+        remote_comments = ((entry.get("comments") or {}).get("src")) or []
+        local_comments = list(Comment.objects.filter(entry=clean_id).values("author", "comment"))
+
+        merged_comments = list(remote_comments)
+        for c in local_comments:
+            merged_comments.append({
+                "author": {
+                    "displayName": c["author"].rstrip("/").split("/")[-1]
+                },
+                "comment": c["comment"],
+            })
+
+        remote_like_count = (entry.get("likes") or {}).get("count", 0)
+        local_like_count = Like.objects.filter(object=clean_id).count()
+
+        entry["fetched_comments"] = merged_comments
+        entry["comment_count"] = len(merged_comments)
+        entry["like_count"] = max(remote_like_count, local_like_count)
 
         liked_by_user = False
-        for like in (entry.get("likes") or {}).get("src", []):
-            like_author = (like.get("author") or {}).get("id")
-            if user_fqid and like_author == user_fqid:
-                liked_by_user = True
-                break
+
+        if user_fqid and Like.objects.filter(author=user_fqid, object=clean_id).exists():
+            liked_by_user = True
+        else:
+            for like in (entry.get("likes") or {}).get("src", []):
+                like_author = (like.get("author") or {}).get("id")
+                if user_fqid and like_author == user_fqid:
+                    liked_by_user = True
+                    break
 
         entry["liked_by_user"] = liked_by_user
         public_entries.append(entry)

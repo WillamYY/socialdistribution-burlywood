@@ -8,30 +8,33 @@ from core.models import Author
 import requests
 from datetime import datetime
 import json
+from django.http import JsonResponse
 
 def add_like(request, entry_id):
-    """Toggles a Like object using the Entry's FQID (URL)."""
-    if request.method == "POST":
-        author_id = request.session.get("author_id")
+    if request.method != "POST":
+        return JsonResponse({"error": "Method not allowed"}, status=405)
 
-        if not author_id:
-            return redirect('/app/login/') 
-            
-        entry = get_object_or_404(Entry, id=entry_id)
-        base = request.build_absolute_uri('/')[:-1]
-        entry_fqid = f"{base}/api/authors/{entry.author.id}/entries/{entry.id}"
-        author_fqid = f"{base}/api/authors/{request.session['author_id']}"
+    author_id = request.session.get("author_id")
+    if not author_id:
+        return JsonResponse({"error": "Not logged in"}, status=401)
 
-        likeId = uuid.uuid4()
-        like, created = Like.objects.get_or_create(
-            author=author_fqid,
-            object=entry_fqid,
-            defaults={'id': f"{request.build_absolute_uri('/')[:-1]}/likes/{likeId}","uuid":likeId}
-        )
-        if not created:
-            like.delete()
+    entry = get_object_or_404(Entry, id=entry_id)
+    base = request.build_absolute_uri('/')[:-1]
+    entry_fqid = f"{base}/api/authors/{entry.author.id}/entries/{entry.id}"
+    author_fqid = f"{base}/api/authors/{author_id}"
 
-    return redirect(request.META.get('HTTP_REFERER', '/app/stream/'))
+    like_id = uuid.uuid4()
+    like, created = Like.objects.get_or_create(
+        author=author_fqid,
+        object=entry_fqid,
+        defaults={'id': f"{base}/likes/{like_id}", "uuid": like_id}
+    )
+
+    if created:
+        return JsonResponse({"success": True, "liked": True})
+    else:
+        like.delete()
+        return JsonResponse({"success": True, "liked": False})
 
 def add_remote_like(request, entry_id):
     if request.method == "POST":
@@ -40,6 +43,23 @@ def add_remote_like(request, entry_id):
             return redirect('/app/login/')
 
         remote_entry_url = entry_id.rstrip("/").replace("http://", "https://")
+        base = request.build_absolute_uri('/')[:-1].replace("http://", "https://")
+        author = get_object_or_404(Author, pk=author_id)
+        author_fqid = f"{base}/api/authors/{author.id}"
+
+        like_id = uuid.uuid4()
+        like, created = Like.objects.get_or_create(
+            author=author_fqid,
+            object=remote_entry_url,
+            defaults={
+                "id": f"{base}/likes/{like_id}",
+                "uuid": like_id,
+            }
+        )
+
+        if not created:
+            like.delete()
+            return redirect(request.META.get('HTTP_REFERER', '/app/stream/'))
 
         try:
             entry_resp = requests.get(
@@ -56,12 +76,9 @@ def add_remote_like(request, entry_id):
         if not foreign_author:
             return redirect(request.META.get('HTTP_REFERER', '/app/stream/'))
 
-        author = get_object_or_404(Author, pk=author_id)
-        base = request.build_absolute_uri('/')[:-1]
-
         author_info = {
             "type": "author",
-            "id": f"{base}/api/authors/{author.id}",
+            "id": author_fqid,
             "host": f"{base}/api",
             "displayName": author.name,
             "github": author.github,
@@ -78,7 +95,7 @@ def add_remote_like(request, entry_id):
                     "type": "like",
                     "author": author_info,
                     "published": datetime.now().isoformat(),
-                    "id": "",
+                    "id": f"{base}/likes/{like_id}",
                     "object": remote_entry_url,
                 },
                 headers={"Content-Type": "application/json", "Accept": "application/json"},
@@ -119,18 +136,24 @@ def add_remote_comment(request, entry_id):
     if request.method == "POST":
         author_id = request.session.get("author_id")
         if not author_id:
-            print("no author id in session")
             return redirect('/app/login/')
 
         comment_text = (request.POST.get("comment") or "").strip()
-        print("comment text:", comment_text)
-
         if not comment_text:
-            print("empty comment")
             return redirect(request.META.get('HTTP_REFERER', '/app/stream/'))
 
         remote_entry_url = entry_id.rstrip("/").replace("http://", "https://")
-        print("remote entry url:", remote_entry_url)
+        base = request.build_absolute_uri('/')[:-1].replace("http://", "https://")
+        author = get_object_or_404(Author, pk=author_id)
+        author_fqid = f"{base}/api/authors/{author.id}"
+
+        Comment.objects.create(
+            id=f"{base}/comments/{uuid.uuid4()}",
+            author=author_fqid,
+            entry=remote_entry_url,
+            comment=comment_text,
+            contentType="text/plain",
+        )
 
         try:
             entry_resp = requests.get(
@@ -138,28 +161,18 @@ def add_remote_comment(request, entry_id):
                 headers={"Accept": "application/json"},
                 timeout=10,
             )
-            print("entry fetch status:", entry_resp.status_code)
-            print("entry fetch body:", entry_resp.text[:500])
             entry_resp.raise_for_status()
             entry_data = entry_resp.json()
-            print("entry data parsed")
-        except Exception as e:
-            print("entry fetch error:", e)
+        except requests.RequestException:
             return redirect(request.META.get('HTTP_REFERER', '/app/stream/'))
 
         foreign_author = (entry_data.get("author") or {}).get("id")
-        print("foreign author:", foreign_author)
-
         if not foreign_author:
-            print("missing foreign author")
             return redirect(request.META.get('HTTP_REFERER', '/app/stream/'))
-
-        author = get_object_or_404(Author, pk=author_id)
-        base = request.build_absolute_uri('/')[:-1].replace("http://", "https://")
 
         author_info = {
             "type": "author",
-            "id": f"{base}/api/authors/{author.id}",
+            "id": author_fqid,
             "host": f"{base}/api",
             "displayName": author.name,
             "github": author.github,
@@ -168,7 +181,6 @@ def add_remote_comment(request, entry_id):
         }
 
         inbox_url = foreign_author.rstrip("/") + "/inbox"
-        print("inbox url:", inbox_url)
 
         payload = {
             "type": "comment",
@@ -179,7 +191,6 @@ def add_remote_comment(request, entry_id):
             "id": "",
             "published": datetime.now().isoformat(),
         }
-        print("payload:", payload)
 
         try:
             resp = requests.post(
@@ -188,10 +199,9 @@ def add_remote_comment(request, entry_id):
                 headers={"Content-Type": "application/json", "Accept": "application/json"},
                 timeout=10,
             )
-            print("comment post status:", resp.status_code)
-            print("comment post body:", resp.text[:500])
-        except Exception as e:
-            print("remote comment error:", e)
+            resp.raise_for_status()
+        except requests.RequestException:
+            pass
 
     return redirect(request.META.get('HTTP_REFERER', '/app/stream/'))
 
