@@ -12,7 +12,7 @@ from rest_framework.response import Response
 from core.models import Author, AuthorRequest, FollowRequest
 from entries.models import Entry
 from interactions.models import Like, Comment
-from .serializers import LikesSerializer, LikeSerializer, EntrySerializer, EntriesSerializer, CommentSerializer
+from .serializers import AuthorSerializer, LikesSerializer, LikeSerializer, EntrySerializer, EntriesSerializer, CommentSerializer
 
 # Create your views here.
 def check_visibility(entry, viewer_id, is_list=False):
@@ -109,43 +109,29 @@ def fetch_remote_image(remote_url):
 
 @api_view(['GET'])
 def ApiAuthors(request):
-    query_string = request.META["QUERY_STRING"].split("&")
     page = 1
     size = None
-    for query in query_string:
-        # Gets the page number from query string
-        if query.split("=")[0] == "page":
-            if query.split("=")[1].isdigit():
-                page = int(query.split("=")[1])
-        # Gets the size  from query string
-        if query.split("=")[0] == "size":
-            if query.split("=")[1].isdigit():
-                size = int(query.split("=")[1])
-    # gets all the authors
-    allAuthors = Author.objects.all()
-    data = {"type":"authors"} 
-    authors = []
-    # Gets the relevant information from each author
-    for author in allAuthors:
-        # Gets the authors info
-        authorID = author.host + "/authors/" + str(author.id)
-        authorInfo = {"type":"author","id": authorID,"host": author.host,"displayName": author.name, "github":author.github, "profileImage":author.picture_url,"web":author.web}
-        authors.append(authorInfo)
-    # If size is not specified returns all authors
-    if size == None:
-        data["authors"] = authors
+
+    if request.GET.get("page") and request.GET.get("page").isdigit():
+        page = int(request.GET.get("page"))
+
+    if request.GET.get("size") and request.GET.get("size").isdigit():
+        size = int(request.GET.get("size"))
+
+    all_authors = Author.objects.all()
+    serialized_authors = AuthorSerializer(all_authors, many=True).data
+
+    if size is None:
+        authors = serialized_authors
     else:
-        if page  * size < len(authors):
-            # For case when we can make a full page of that size
-            if (page + 1) * size < len(authors):
-                data["authors"] = authors[page * size:(page + 1) * size]
-            # Case where the page is not complete because it encounters the end of the list
-            else:
-                data["authors"] = authors[page * size:]
-        # Returns empty if page and size are out of range
-        else:
-            data["authors"] = []
-    return Response(data)
+        start = page * size
+        end = (page + 1) * size
+        authors = serialized_authors[start:end]
+
+    return Response({
+        "type": "authors",
+        "authors": authors
+    })
 
 # Single author API endpoint
 @api_view(['GET','PUT'])
@@ -154,11 +140,8 @@ def HandleApiAuthor(request, id):
 
 def ApiAuthor(request,id):
     if request.method == "GET":
-        author = get_object_or_404(Author,pk=id) # Gets the author
-        authorID = author.host + "/authors/" + str(author.id)
-        # Creates the information that will be returned
-        authorInfo = {"type":"author","id": authorID,"host": author.host,"displayName": author.name, "github":author.github, "profileImage":author.picture_url,"web":author.web}
-        return Response(authorInfo)
+        author = get_object_or_404(Author, pk=id)
+        return Response(AuthorSerializer(author).data)
     elif request.method == "PUT":
         # Replaces the object if it is put on top of
         if not Author.objects.filter(id = id).exists():
