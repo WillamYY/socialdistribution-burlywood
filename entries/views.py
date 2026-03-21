@@ -172,16 +172,18 @@ def get_admin_hosted_images(request):
     """
     images = []
     for image in AdminHostedImage.objects.order_by("-uploaded_at"):
-        if image.image and hasattr(image.image, "url"):
-            if image.image.url.startswith(("http://", "https://")):
-                absolute_url = image.image.url
-            else:
-                absolute_url = request.build_absolute_uri(image.image.url)
+        if not image.content or not image.content_type:
+            continue
 
-            images.append({
-                "title": image.title,
-                "absolute_url": absolute_url,
-            })
+        absolute_url = request.build_absolute_uri(
+            reverse("admin_hosted_image_file", kwargs={"image_id": image.id})
+        )
+        safe_title = (image.title or "").replace("]", "")
+        images.append({
+            "title": image.title,
+            "absolute_url": absolute_url,
+            "markdown": f"![{safe_title}]({absolute_url})",
+        })
     return images
 
 def create_entry(request):

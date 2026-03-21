@@ -16,5 +16,6 @@ urlpatterns = [
     path('follow-requests/', views.view_follow_requests, name='view_follow_requests'),
     path('follow-requests/approve/<int:req_id>/', views.approve_follow, name='ApproveFollow'),
     path('follow-requests/deny/<int:req_id>/', views.deny_follow, name='DenyFollow'),
-    path("connections/", views.connections, name="connections")
+    path("connections/", views.connections, name="connections"),
+    path("hosted-images/<int:image_id>/image/", views.get_admin_hosted_image, name="admin_hosted_image_file"),
 ]

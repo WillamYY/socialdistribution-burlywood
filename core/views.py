@@ -1,6 +1,8 @@
+import base64
+from django.http import HttpResponse, Http404
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
-from .models import Author, FollowRequest, AuthorRequest
+from .models import Author, FollowRequest, AuthorRequest, AdminHostedImage
 from entries.models import Entry
 from interactions.models import Like, Comment
 from django.contrib.auth.hashers import check_password
@@ -342,3 +344,19 @@ def connections(request):
         "followings": followings,
         "friends": friends
     })
+
+def get_admin_hosted_image(request, image_id):
+    """
+    Get the admin hosted image from db.
+    """
+    image = get_object_or_404(AdminHostedImage, id=image_id)
+
+    if not image.content or not image.content_type:
+        raise Http404("Hosted image content is missing.")
+
+    try:
+        binary_data = base64.b64decode(image.content)
+    except Exception:
+        raise Http404("Hosted image could not be decoded.")
+
+    return HttpResponse(binary_data, content_type=image.content_type)

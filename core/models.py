@@ -63,8 +63,9 @@ class AuthorRequest(models.Model):
 
 class AdminHostedImage(models.Model):
     title = models.CharField(max_length=255)
-    image = models.ImageField(upload_to='hosted_images/')
+    content_type = models.CharField(max_length=50, blank=True, null=True)
+    content = models.TextField(blank=True, null=True)    # base64 string
     uploaded_at = models.DateTimeField(auto_now_add=True)
-
+    
     def __str__(self):
         return self.title
