@@ -145,7 +145,7 @@
                     </div>
                     
                     <div class="interaction-row" onclick="event.stopPropagation();">
-                        {% if request.session.author_id %}
+                        {% if request.session.author_id and entry.clean_id %}
                         <form method="POST" action="{% url 'interactions:add_remote_like' entry.clean_id %}">
                             {% csrf_token %}
                             <button type="submit" class="stat-item {% if entry.liked_by_user %}liked{% endif %}">
@@ -171,7 +171,7 @@
                             </span>
                         </div>
 
-                        {% if request.session.author_id %}
+                        {% if request.session.author_id and entry.clean_id %}
                         <form method="POST" action="{% url 'interactions:add_remote_comment' entry.clean_id %}" style="display:flex; gap:8px; align-items:center; margin-left:12px;">
                             {% csrf_token %}
                             <input

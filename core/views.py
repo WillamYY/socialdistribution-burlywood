@@ -431,9 +431,18 @@ def RemoteProfileDisplay(request, fqid):
         user_fqid = f"{base}/api/authors/{logged_in_id}"
 
     for entry in entryInfo.json().get("src", []):
+        print("remote entry id:", entry.get("id"))
         if entry.get("visibility") == "PUBLIC":
+            clean_id = (entry.get("id") or "").rstrip("/")
+
+            # skip broken remote entries with no usable id
+            if not clean_id:
+                continue
+
+            entry["clean_id"] = clean_id
+            entry["fetched_comments"] = ((entry.get("comments") or {}).get("src")) or []
             entry["like_count"] = (entry.get("likes") or {}).get("count", 0)
-            entry["comment_count"] = (entry.get("comments") or {}).get("count", 0)
+            entry["comment_count"] = (entry.get("comments") or {}).get("count", len(entry["fetched_comments"]))
 
             liked_by_user = False
             for like in (entry.get("likes") or {}).get("src", []):
