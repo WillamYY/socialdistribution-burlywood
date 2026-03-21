@@ -459,25 +459,33 @@ def RemoteProfileDisplay(request, fqid):
                 "comment": c["comment"],
             })
 
+        remote_likes_src = (entry.get("likes") or {}).get("src", [])
         remote_like_count = (entry.get("likes") or {}).get("count", 0)
-        local_like_count = Like.objects.filter(object=clean_id).count()
 
         entry["fetched_comments"] = merged_comments
         entry["comment_count"] = len(merged_comments)
-        entry["like_count"] = max(remote_like_count, local_like_count)
 
-        liked_by_user = False
+        remote_user_liked = False
+        for like in remote_likes_src:
+            like_author = (like.get("author") or {}).get("id")
+            if user_fqid and like_author == user_fqid:
+                remote_user_liked = True
+                break
 
+        local_user_liked = False
         if user_fqid and Like.objects.filter(author=user_fqid, object=clean_id).exists():
-            liked_by_user = True
-        else:
-            for like in (entry.get("likes") or {}).get("src", []):
-                like_author = (like.get("author") or {}).get("id")
-                if user_fqid and like_author == user_fqid:
-                    liked_by_user = True
-                    break
+            local_user_liked = True
 
-        entry["liked_by_user"] = liked_by_user
+        entry["liked_by_user"] = local_user_liked
+
+        display_like_count = remote_like_count
+
+        if local_user_liked and not remote_user_liked:
+            display_like_count += 1
+        elif not local_user_liked and remote_user_liked:
+            display_like_count = max(0, display_like_count - 1)
+
+        entry["like_count"] = display_like_count
         public_entries.append(entry)
 
     context = {
