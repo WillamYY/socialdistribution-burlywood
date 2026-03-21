@@ -47,12 +47,14 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     "rest_framework",
+    "corsheaders",
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'core.middleware.SameOriginSecurityMiddleware',  # US#79: UI only communicates with node's web server
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -166,3 +168,17 @@ CACHES = {
 }
 # How often to run GitHub sync when stream is viewed (seconds)
 GITHUB_SYNC_INTERVAL = 10  # 10 seconds
+
+# Allow other teams' frontends to access your API
+CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_CREDENTIALS = True
+
+# API Authentication Setup
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        # Allows remote nodes to authenticate using HTTP Basic Auth
+        'rest_framework.authentication.BasicAuthentication',
+        # Allows the local UI to continue working using standard login sessions
+        'rest_framework.authentication.SessionAuthentication',
+    ],
+}
