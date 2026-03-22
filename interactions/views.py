@@ -65,11 +65,17 @@ def add_remote_like(request, entry_id):
     author_fqid = f"{base}/api/authors/{author.id}"
 
     remote_node = get_remote_node_for_url(remote_entry_url)
+    print("REMOTE ENTRY URL:", remote_entry_url)
+    print("MATCHED NODE URL:", remote_node.url if remote_node else None)
+    print("MATCHED NODE USERNAME:", remote_node.username if remote_node else None)
+    print("MATCHED NODE PASSWORD:", remote_node.password if remote_node else None)
+
     if not remote_node:
         print("NO MATCHING REMOTE NODE FOR:", remote_entry_url)
         return redirect(request.META.get("HTTP_REFERER", "/app/stream/"))
 
     try:
+        print("AUTH SENT:", (remote_node.username, remote_node.password) if remote_node else None)
         entry_resp = requests.get(
             remote_entry_url,
             headers={"Accept": "application/json"},
@@ -188,11 +194,17 @@ def add_remote_comment(request, entry_id):
     author_fqid = f"{base}/api/authors/{author.id}"
 
     remote_node = get_remote_node_for_url(remote_entry_url)
+    print("REMOTE ENTRY URL:", remote_entry_url)
+    print("MATCHED NODE URL:", remote_node.url if remote_node else None)
+    print("MATCHED NODE USERNAME:", remote_node.username if remote_node else None)
+    print("MATCHED NODE PASSWORD:", remote_node.password if remote_node else None)
+
     if not remote_node:
         print("NO MATCHING REMOTE NODE FOR:", remote_entry_url)
         return redirect(request.META.get("HTTP_REFERER", "/app/stream/"))
 
     try:
+        print("AUTH SENT:", (remote_node.username, remote_node.password) if remote_node else None)
         entry_resp = requests.get(
             remote_entry_url,
             headers={"Accept": "application/json"},
