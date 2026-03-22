@@ -13,6 +13,7 @@ from django.shortcuts import render, get_object_or_404
 from django.urls import path
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
+from core.remote import federate_entry_create_or_update, federate_entry_deleted
 from core.models import Author, AuthorRequest, FollowRequest
 from entries.models import Entry
 from interactions.models import Like, Comment
@@ -668,7 +669,10 @@ def ApiEntries(request, author_id):
             visibility=request.data.get("visibility", "PUBLIC")
         )
         
-        # Return the newly created entry using your teammate's serializer
+        # Notify remote nodes
+        federate_entry_create_or_update(new_entry, request)
+
+        # Srialize and return
         serializer = EntrySerializer(new_entry, context={'request': request})
         return Response(serializer.data, status=201)
 
@@ -725,7 +729,10 @@ def ApiEntry(request, author_id, entry_id):
         entry.content = request.data.get("content", entry.content)
         entry.visibility = request.data.get("visibility", entry.visibility)
         entry.save()
-        
+
+        # Notify remote nodes
+        federate_entry_create_or_update(entry, request)
+
         # Serialize and return
         serializer = EntrySerializer(entry, context={'request': request})
         return Response(serializer.data, status=200)
@@ -742,6 +749,9 @@ def ApiEntry(request, author_id, entry_id):
         # Soft delete by changing visibility to DELETED
         entry.visibility = "DELETED"
         entry.save()
+        
+        # Notify remote nodes
+        federate_entry_deleted(entry, request)
         
         return Response(status=204)
 
