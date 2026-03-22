@@ -40,78 +40,7 @@ def add_like(request, entry_id):
     like.save()
 
     return redirect(request.META.get('HTTP_REFERER', '/app/stream/'))
-
-def add_remote_like(request, entry_id):
-    """
-    if request.method == "POST":
-        author_id = request.session.get("author_id")
-        if not author_id:
-            return redirect('/app/login/')
-
-        remote_entry_url = entry_id.rstrip("/").replace("http://", "https://")
-        base = request.build_absolute_uri('/')[:-1].replace("http://", "https://")
-        author = get_object_or_404(Author, pk=author_id)
-        author_fqid = f"{base}/api/authors/{author.id}"
-
-        
-        like_id = uuid.uuid4()
-        like, created = Like.objects.get_or_create(
-            author=author_fqid,
-            object=remote_entry_url,
-            defaults={
-                "id": f"{base}/likes/{like_id}",
-                "uuid": like_id,
-            }
-        )
-
-        if not created:
-            like.delete()
-            return redirect(request.META.get('HTTP_REFERER', '/app/stream/'))
-
-        try:
-            entry_resp = requests.get(
-                remote_entry_url,
-                headers={"Accept": "application/json"},
-                timeout=10,
-            )
-            entry_resp.raise_for_status()
-            entry_data = entry_resp.json()
-        except requests.RequestException:
-            return redirect(request.META.get('HTTP_REFERER', '/app/stream/'))
-
-        foreign_author = (entry_data.get("author") or {}).get("id")
-        if not foreign_author:
-            return redirect(request.META.get('HTTP_REFERER', '/app/stream/'))
-
-        author_info = {
-            "type": "author",
-            "id": author_fqid,
-            "host": f"{base}/api",
-            "displayName": author.name,
-            "github": author.github,
-            "profileImage": getattr(author, "picture_url", "") or "",
-            "web": author.web,
-        }
-
-        inbox_url = foreign_author.rstrip("/") + "/inbox"
-
-        try:
-            requests.post(
-                inbox_url,
-                json={
-                    "type": "like",
-                    "author": author_info,
-                    "published": datetime.now().isoformat(),
-                    "id": "",
-                    "object": remote_entry_url,
-                },
-                headers={"Content-Type": "application/json", "Accept": "application/json"},
-                timeout=10,
-            )
-        except requests.RequestException:
-            pass
-    return redirect(request.META.get('HTTP_REFERER', '/app/stream/'))
-    """
+    
 def add_remote_like(request, entry_id):
     if request.method == "POST":
         author_id = request.session.get("author_id")
