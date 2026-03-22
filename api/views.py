@@ -491,7 +491,8 @@ def _inbox_handle_like(request, author_id, data=None):
     if not author_url:
         return Response(status=400)
     if Like.objects.filter(author=author_url, object=obj_url.rstrip("/")).exists():
-        return Response(status=409)
+        Like.objects.filter(author=author_url, object=obj_url.rstrip("/")).delete()
+        return Response(status=204)
     like = Like(
         author=author_url,
         object=obj_url.rstrip("/"),
