@@ -21,7 +21,7 @@ def add_like(request, entry_id):
     me = get_object_or_404(Author, id=author_id)
     entry = get_object_or_404(Entry, id=entry_id)
 
-    object_fqid = f"{entry.author.host}authors/{entry.author.id}/entries/{entry.id}".rstrip("/")
+    object_fqid = f"{entry.author.host}/authors/{entry.author.id}/entries/{entry.id}".rstrip("/")
     author_fqid = f"{request.build_absolute_uri('/')[:-1]}/api/authors/{me.id}".rstrip("/")
 
     existing = Like.objects.filter(
@@ -31,13 +31,14 @@ def add_like(request, entry_id):
 
     if existing:
         existing.delete()
-        return JsonResponse({"success": True, "liked": False})
+        return redirect(request.META.get('HTTP_REFERER', '/app/stream/'))
 
+    print(object_fqid)
     like = Like(object=object_fqid, author=author_fqid)
     like.uuid = uuid.uuid4()
     like.save()
 
-    return JsonResponse({"success": True, "liked": True})
+    return redirect(request.META.get('HTTP_REFERER', '/app/stream/'))
 
 def add_remote_like(request, entry_id):
     if request.method == "POST":
@@ -98,7 +99,7 @@ def add_remote_like(request, entry_id):
                     "type": "like",
                     "author": author_info,
                     "published": datetime.now().isoformat(),
-                    "id": f"{base}/likes/{like_id}",
+                    "id": "",
                     "object": remote_entry_url,
                 },
                 headers={"Content-Type": "application/json", "Accept": "application/json"},
