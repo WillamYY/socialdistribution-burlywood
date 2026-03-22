@@ -218,10 +218,10 @@
                             <img class="profile-picture" src="{% static 'images/default_profile.jpg' %}" alt="Remote">
                         </div>
                         <div class="profile-information">
-                            <h3 title="{{ rf.followed_fqid }}">Remote author</h3>
+                            <h3 title="{{ rf.fqid }}">{{ rf.display_name|default:"Remote author" }}</h3>
                             <div class="button-container">
-                                <a href="{% url 'RemoteProfileDisplay' rf.followed_fqid %}">View</a>
-                                <a href="{% url 'UnfollowRemoteAuthor' rf.followed_fqid %}" class="follow-btn unfollow">Unfollow</a>
+                                <a href="{% url 'RemoteProfileDisplay' rf.fqid %}">View</a>
+                                <a href="{% url 'UnfollowRemoteAuthor' rf.fqid %}" class="follow-btn unfollow">Unfollow</a>
                             </div>
                         </div>
                     </section>

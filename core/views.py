@@ -430,25 +430,24 @@ def connections(request):
     follower_by_fqid = {_normalize_fqid(r.actor_fqid): r for r in remote_followers}
     follower_fqids = set(follower_by_fqid)
     remote_friends = []
+    # Remote following: ALL we follow, with display_name from RemoteFollower when they follow us
+    remote_followings_with_names = []
     for rf in remote_followings:
         norm_fqid = _normalize_fqid(rf.followed_fqid)
+        display_name = "Remote author"
         if norm_fqid in follower_fqids:
-            r = follower_by_fqid[norm_fqid]
-            remote_friends.append({
-                "fqid": norm_fqid,
-                "display_name": r.actor_display_name or "Remote author",
-            })
-    # Remote following (excluding friends - those we follow but who don't follow us back)
-    remote_followings_only = [
-        rf for rf in remote_followings
-        if _normalize_fqid(rf.followed_fqid) not in follower_fqids
-    ]
+            display_name = follower_by_fqid[norm_fqid].actor_display_name or "Remote author"
+            remote_friends.append({"fqid": norm_fqid, "display_name": display_name})
+        remote_followings_with_names.append({
+            "fqid": norm_fqid,
+            "display_name": display_name,
+        })
 
     return render(request, "connections.html", {
         "followers": followers,
         "followings": followings,
         "friends": friends,
-        "remote_followings": remote_followings_only,
+        "remote_followings": remote_followings_with_names,
         "remote_followers": remote_followers,
         "remote_friends": remote_friends,
     })
