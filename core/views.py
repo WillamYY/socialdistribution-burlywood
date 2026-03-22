@@ -625,14 +625,6 @@ def remove_remote_follower(request, fqid):
         messages.info(request, "Follower was already removed.", extra_tags="follow")
     return redirect("connections")
 
-
-def normalize_author_url(url):
-    if not url:
-        return ""
-    url = url.rstrip("/").lower()
-    url = url.replace("http://", "https://")
-    return url
-
 def RemoteProfileDisplay(request, fqid):
     """
     Displays the profile of a remote author. Fetches author and entries from remote node.
@@ -720,10 +712,9 @@ def RemoteProfileDisplay(request, fqid):
 
         remote_user_liked = False
         for like in remote_likes_src:
-            like_author = (like.get("author") or {}).get("id") or ""
+            like_author = (like.get("author") or {}).get("id")
             # Compare by author ID number only, as host varies
-            like_author_id = like_author.rstrip("/").split("/")[-1]
-            if like_author_id == str(logged_in_id):
+            if user_fqid == like_author:
                 remote_user_liked = True
                 break
 
