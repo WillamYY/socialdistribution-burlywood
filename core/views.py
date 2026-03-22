@@ -76,6 +76,7 @@ def NodeDisplay(request):
             data = json.loads(response.text)
             if data["type"] == "authors":
                 for author in data["authors"]:
+                    print("REMOTE AUTHOR:", author)
                     other_node_authors.append(author)
 
     return render(request, "node.html", {
