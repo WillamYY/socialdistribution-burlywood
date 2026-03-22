@@ -1,7 +1,7 @@
 from django.http import HttpResponse, Http404
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
-from .models import Author, FollowRequest, AuthorRequest, IncomingNode, RemoteFollow, RemoteFollowRequest, RemoteFollower, HostedImage
+from .models import Author, FollowRequest, AuthorRequest, IncomingNode, RemoteFollow, RemoteFollowRequest, RemoteFollower, AdminHostedImage
 from entries.models import Entry
 from interactions.models import Like, Comment
 from django.contrib.auth.hashers import check_password
@@ -466,9 +466,9 @@ def connections(request):
 def get_admin_hosted_image(request, image_id):
     """
     Serve hosted image by id for Markdown embedding.
-    Uses HostedImage model (ImageField).
+    Uses AdminHostedImage model (ImageField).
     """
-    hosted = get_object_or_404(HostedImage, id=image_id)
+    hosted = get_object_or_404(AdminHostedImage, id=image_id)
     if not hosted.image:
         return HttpResponse(status=404)
     try:
