@@ -56,7 +56,7 @@ def SignUpProcessing(request):
         new_author = AuthorRequest(
             username=username,
             name=username,
-            host=f"http://{request.get_host()}/api",
+            host=f"https://{request.get_host()}/api",
             password=password,
         )
         new_author.save()
@@ -238,23 +238,18 @@ def ProfileDisplay(request, id):
     if logged_in_id:
         user_fqid = f"{request.build_absolute_uri('/')[:-1]}/api/authors/{logged_in_id}"
     public_entries = Entry.objects.filter(author=author, visibility="PUBLIC")
-    
+    base_url = request.build_absolute_uri('/')[:-1]
     for entry in public_entries:
-        entry_url = f"{entry.author.host}authors/{entry.author.id}/entries/{entry.id}".rstrip("/")
-
-        entry.like_count = Like.objects.filter(
-            object__in=[entry_url, entry_url + "/"]
-        ).count()
-
-        entry.comment_count = Comment.objects.filter(
-            entry__in=[entry_url, entry_url + "/"]
-        ).count()
-
+        entry_url = f"{base_url}/api/authors/{entry.author.id}/entries/{entry.id}"
+        # Tries both securea and insecure
+        if "https" in entry_url:
+            alt_url = entry_url.replace("https","http")
+        else:
+            alt_url = entry_url.replace('http',"https")
+        entry.like_count = Like.objects.filter(object=entry_url).count() + Like.objects.filter(object=alt_url).count()
+        entry.comment_count = Comment.objects.filter(entry=entry_url).count()
         if user_fqid:
-            entry.liked_by_user = Like.objects.filter(
-                object__in=[entry_url, entry_url + "/"],
-                author__in=[user_fqid.rstrip("/"), user_fqid.rstrip("/") + "/"]
-            ).exists()
+            entry.liked_by_user = Like.objects.filter(object=entry_url, author=user_fqid).exists() or Like.objects.filter(object=alt_url, author=user_fqid).exists()
         else:
             entry.liked_by_user = False
 
@@ -630,7 +625,6 @@ def remove_remote_follower(request, fqid):
         messages.info(request, "Follower was already removed.", extra_tags="follow")
     return redirect("connections")
 
-
 def RemoteProfileDisplay(request, fqid):
     """
     Displays the profile of a remote author. Fetches author and entries from remote node.
@@ -676,6 +670,7 @@ def RemoteProfileDisplay(request, fqid):
     if logged_in_id:
         base = request.build_absolute_uri('/')[:-1].replace("http://", "https://")
         user_fqid = f"{base}/api/authors/{logged_in_id}"
+        
 
     raw_entries = []
     if isinstance(entry_json, list):
@@ -718,24 +713,14 @@ def RemoteProfileDisplay(request, fqid):
         remote_user_liked = False
         for like in remote_likes_src:
             like_author = (like.get("author") or {}).get("id")
-            if user_fqid and like_author == user_fqid:
+            # Compare by author ID number only, as host varies
+            if user_fqid == like_author:
                 remote_user_liked = True
                 break
 
-        local_user_liked = False
-        if user_fqid and Like.objects.filter(author=user_fqid, object=clean_id).exists():
-            local_user_liked = True
+        entry["liked_by_user"] = remote_user_liked
 
-        entry["liked_by_user"] = local_user_liked
-
-        display_like_count = remote_like_count
-
-        if local_user_liked and not remote_user_liked:
-            display_like_count += 1
-        elif not local_user_liked and remote_user_liked:
-            display_like_count = max(0, display_like_count - 1)
-
-        entry["like_count"] = display_like_count
+        entry["like_count"] = entry["likes"]["count"]
         public_entries.append(entry)
 
     is_following = False

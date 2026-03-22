@@ -11,36 +11,30 @@ import json
 from django.http import JsonResponse
 
 def add_like(request, entry_id):
-    if request.method != "POST":
-        return JsonResponse({"success": False, "error": "POST required"}, status=405)
+    """Toggles a Like object using the Entry's FQID (URL)."""
+    if request.method == "POST":
+        author_id = request.session.get("author_id")
 
-    author_id = request.session.get("author_id")
-    if not author_id:
-        return JsonResponse({"success": False, "error": "Login required"}, status=403)
+        if not author_id:
+            return redirect('/app/login/') 
+            
+        entry = get_object_or_404(Entry, id=entry_id)
+        base = request.build_absolute_uri('/')[:-1]
+        entry_fqid = f"{base}/api/authors/{entry.author.id}/entries/{entry.id}"
+        author_fqid = f"{base}/api/authors/{request.session['author_id']}"
 
-    me = get_object_or_404(Author, id=author_id)
-    entry = get_object_or_404(Entry, id=entry_id)
+        likeId = uuid.uuid4()
+        like, created = Like.objects.get_or_create(
+            author=author_fqid,
+            object=entry_fqid,
+            defaults={'id': f"{request.build_absolute_uri('/')[:-1]}/likes/{likeId}","uuid":likeId}
+        )
 
-    object_fqid = f"{entry.author.host}/authors/{entry.author.id}/entries/{entry.id}".rstrip("/")
-    author_fqid = f"{request.build_absolute_uri('/')[:-1]}/api/authors/{me.id}".rstrip("/")
-
-    existing = Like.objects.filter(
-        object__in=[object_fqid, object_fqid + "/"],
-        author__in=[author_fqid, author_fqid + "/"]
-    ).first()
-
-    if existing:
-        existing.delete()
-        return redirect(request.META.get('HTTP_REFERER', '/app/stream/'))
-
-    print(object_fqid)
-    like = Like(object=object_fqid, author=author_fqid)
-    like.uuid = uuid.uuid4()
-    like.id = author_fqid +  "/liked/" + str(like.uuid)
-    like.save()
+        if not created:
+            like.delete()
 
     return redirect(request.META.get('HTTP_REFERER', '/app/stream/'))
-    
+
 def add_remote_like(request, entry_id):
     if request.method == "POST":
         author_id = request.session.get("author_id")
@@ -52,7 +46,8 @@ def add_remote_like(request, entry_id):
         jsonEntry = json.loads(entryInfo.text)
         foreignAuthor = jsonEntry["author"]["id"]
         # Get author making request
-        entry_id = entry_id.replace("http","https")
+        if "https" not in entry_id:
+            entry_id = entry_id.replace("http","https")
         author = get_object_or_404(Author, pk = author_id)
         # Print the likes
         print(jsonEntry["likes"]["count"])

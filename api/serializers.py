@@ -238,9 +238,9 @@ class EntrySerializer(serializers.ModelSerializer):
         request = self.context.get('request')
         if request:
             # URL of the user's HTML profile page
-             return request.build_absolute_uri(f"/app/authors/{obj.author.id}/entries/{obj.id}/")
+             return request.build_absolute_uri(f"/app/entry/{obj.id}/")
         # Fallback if no request context
-        return f"/app/authors/{obj.author.id}/entries/{obj.id}/"
+        return f"/app/entry/{obj.id}/"
 
     def get_comments(self, obj):
         """
