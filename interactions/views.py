@@ -21,7 +21,7 @@ def add_like(request, entry_id):
     me = get_object_or_404(Author, id=author_id)
     entry = get_object_or_404(Entry, id=entry_id)
 
-    object_fqid = f"{entry.author.host}authors/{entry.author.id}/entries/{entry.id}".rstrip("/")
+    object_fqid = f"{entry.author.host}/authors/{entry.author.id}/entries/{entry.id}".rstrip("/")
     author_fqid = f"{request.build_absolute_uri('/')[:-1]}/api/authors/{me.id}".rstrip("/")
 
     existing = Like.objects.filter(
@@ -36,6 +36,7 @@ def add_like(request, entry_id):
     print(object_fqid)
     like = Like(object=object_fqid, author=author_fqid)
     like.uuid = uuid.uuid4()
+    like.id = author_fqid +  "/liked/" + str(like.uuid)
     like.save()
 
     return redirect(request.META.get('HTTP_REFERER', '/app/stream/'))
