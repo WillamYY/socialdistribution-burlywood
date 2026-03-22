@@ -24,6 +24,16 @@
         <div class="entry-content" style="margin-top: 20px; border-top: 1px solid var(--border-light); padding-top: 20px;">
             {% if "image" in entry.contentType %}
                 <img src="{% url 'api:ApiEntryImage' author_id=entry.author.id entry_id=entry.id %}" class="entry-image">
+
+                {% if image_api_url %}
+                <div class="image-embed-helper">
+                    <label for="imageApiUrlField" class="image-embed-label">Hosted image URL</label>
+                    <div class="image-embed-row">
+                        <input id="imageApiUrlField" type="text" class="form-control image-embed-input" value="{{ image_api_url }}" readonly>
+                        <!-- <button type="button" class="btn-secondary copy-embed-btn" data-copy-target="imageApiUrlField">Copy URL</button> -->
+                    </div>
+                </div>
+                {% endif %}
             {% elif entry.contentType == "text/markdown" %}
                 <div class="entry-markdown">{{ entry.content|safe }}</div>
             {% else %}
@@ -76,6 +86,7 @@
                             </div>
                         {% endif %}
                     </div>
+                </div>
             {% empty %}
                 <p class="text-muted">No comments yet. Start the conversation!</p>
             {% endfor %}

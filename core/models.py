@@ -107,17 +107,14 @@ class AuthorRequest(models.Model):
     host = models.URLField(blank=True)
     web = models.URLField(blank=True)
 
-class HostedImage(models.Model):
+class AdminHostedImage(models.Model):
     title = models.CharField(max_length=255)
-    image = models.ImageField(upload_to='hosted_images/')
+    content_type = models.CharField(max_length=50, blank=True, null=True)
+    content = models.TextField(blank=True, null=True)    # base64 string
     uploaded_at = models.DateTimeField(auto_now_add=True)
-
+    
     def __str__(self):
         return self.title
-        
-    def get_markdown_link(self):
-        # A handy property to show the admin exactly what to copy/paste
-        return f"![{self.title}](/media/{self.image.name})"
 
 """
 Creates a class that handles the nodes that we want to pull information from

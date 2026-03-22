@@ -16,7 +16,7 @@ from rest_framework.response import Response
 from core.models import Author, AuthorRequest, FollowRequest
 from entries.models import Entry
 from interactions.models import Like, Comment
-from .serializers import LikesSerializer, LikeSerializer, EntrySerializer, EntriesSerializer, CommentSerializer
+from .serializers import AuthorSerializer, LikesSerializer, LikeSerializer, EntrySerializer, EntriesSerializer, CommentSerializer
 
 # Create your views here.
 def _normalize_fqid_for_check(s):
@@ -137,21 +137,14 @@ def fetch_remote_image(remote_url):
 
 @api_view(['GET'])
 def ApiAuthors(request):
-    query_string = request.META["QUERY_STRING"].split("&")
     page = 1
     size = None
-    for query in query_string:
-        # Gets the page number from query string
-        if query.split("=")[0] == "page":
-            if query.split("=")[1].isdigit():
-                page = int(query.split("=")[1])
-        # Gets the size  from query string
-        if query.split("=")[0] == "size":
-            if query.split("=")[1].isdigit():
-                size = int(query.split("=")[1])
-    # gets all the authors
+    if request.GET.get("page") and request.GET.get("page").isdigit():
+        page = int(request.GET.get("page"))
+    if request.GET.get("size") and request.GET.get("size").isdigit():
+        size = int(request.GET.get("size"))
+
     allAuthors = Author.objects.all()
-    data = {"type":"authors"} 
     authors = []
     base_url = request.build_absolute_uri("/api/").rstrip("/")
     for author in allAuthors:
@@ -166,21 +159,18 @@ def ApiAuthors(request):
         authorID = f"{author_base}/authors/{author.id}"
         authorInfo = {"type":"author","id": authorID,"host": author_base,"displayName": author.name or author.username,"github":author.github or "","profileImage":author.picture_url or "","web":author.web or ""}
         authors.append(authorInfo)
-    # If size is not specified returns all authors
-    if size == None:
-        data["authors"] = authors
+
+    if size is None:
+        data_authors = authors
     else:
-        if page  * size < len(authors):
-            # For case when we can make a full page of that size
-            if (page + 1) * size < len(authors):
-                data["authors"] = authors[page * size:(page + 1) * size]
-            # Case where the page is not complete because it encounters the end of the list
-            else:
-                data["authors"] = authors[page * size:]
-        # Returns empty if page and size are out of range
-        else:
-            data["authors"] = []
-    return Response(data)
+        start = page * size
+        end = (page + 1) * size
+        data_authors = authors[start:end] if start < len(authors) else []
+
+    return Response({
+        "type": "authors",
+        "authors": data_authors
+    })
 
 # Single author API endpoint
 @api_view(['GET','PUT'])
@@ -486,28 +476,20 @@ def _inbox_handle_like(request, author_id, data=None):
     """Handle like: existing like logic."""
     data = data or request.data or {}
     obj_url = data.get("object")
-    print("obj_url:", obj_url)
     if not obj_url:
         return Response({"detail": "Missing object"}, status=400)
     obj_url = obj_url.rstrip("/")
     entry_id = obj_url.split("/")[-1]
-    print("entry_id:", entry_id)
     try:
         entry = Entry.objects.get(id=entry_id)
     except (Entry.DoesNotExist, ValueError):
         return Response(status=404)
     if entry.visibility == "DELETED":
         return Response(status=404)
-    """
-    if entry.author.id != author_id:
-        return Response(status=400)
-    """
     author_data = data.get("author") or {}
     author_url = (author_data.get("id") if isinstance(author_data, dict) else None) or ""
-    print("author_url:", author_url)
     if not author_url:
         return Response(status=400)
-    print("checking duplicate like")
     if Like.objects.filter(author=author_url, object=obj_url.rstrip("/")).exists():
         return Response(status=409)
     like = Like(

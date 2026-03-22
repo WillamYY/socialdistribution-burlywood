@@ -1,8 +1,10 @@
 # core/admin.py
+import base64
 from django import forms
 from django.contrib import admin
+from django.utils.html import format_html
 from django.core.exceptions import ValidationError
-from .models import Author, AuthorRequest, HostedImage, IncomingNode, OutgoingNode
+from .models import Author, AuthorRequest, AdminHostedImage, IncomingNode, OutgoingNode
 from .validators import validate_username, validate_password
 import re
 
@@ -39,12 +41,52 @@ class AuthorRequestAdmin(admin.ModelAdmin):
         for authorrequest in authorrequests:
             AuthorRequest.objects.get(pk=authorrequest.id).delete()
 
-@admin.register(HostedImage)
+class AdminHostedImageAdminForm(forms.ModelForm):
+    """
+    Customed form to upload hosted images in admin panel.
+    """
+    upload_image = forms.ImageField(required=False)
+
+    class Meta:
+        model = AdminHostedImage
+        fields = ["title"]
+
+    def clean_upload_image(self):
+        image = self.cleaned_data.get("upload_image")
+        if image and image.content_type not in ["image/png", "image/jpeg"]:
+            raise forms.ValidationError("Only PNG and JPEG images are allowed.")
+        return image
+
+@admin.register(AdminHostedImage)
 class HostedImageAdmin(admin.ModelAdmin):
-    # Displays the title, upload date, and the markdown link in the admin table
-    list_display = ('title', 'uploaded_at', 'image', 'get_markdown_link')
-    readonly_fields = ('get_markdown_link',)
-    search_fields = ('title',)
+    form = AdminHostedImageAdminForm
+    list_display = ("title", "content_type", "uploaded_at", "preview")
+    readonly_fields = ("content_type", "preview")
+    fields = ("title", "upload_image", "content_type", "preview")
+
+    def save_model(self, request, obj, form, change):
+        """
+        Encode uploaded images in base64.
+        """
+        upload = form.cleaned_data.get("upload_image")
+        if upload:
+            obj.content_type = upload.content_type
+            obj.content = base64.b64encode(upload.read()).decode("utf-8")
+        super().save_model(request, obj, form, change)
+
+    def preview(self, obj):
+        """
+        Rendere a <img> html for image preview.
+        """
+        if obj.content and obj.content_type:
+            return format_html(
+                '<img src="data:{};base64,{}" style="max-height:120px; max-width:200px;" />',
+                obj.content_type,
+                obj.content,
+            )
+        return "No image"
+
+    preview.short_description = "Preview"
 
 """
 Creates the form that validates input
@@ -109,4 +151,3 @@ class OutgoingNodeAdminForm(forms.ModelForm):
 class OutgoingNodeAdmin(admin.ModelAdmin):
     list_display = ('url','username')
     form = OutgoingNodeAdminForm
-  

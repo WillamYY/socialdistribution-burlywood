@@ -1,7 +1,7 @@
+from django.http import HttpResponse, Http404
 from django.shortcuts import render, redirect, get_object_or_404
-from django.http import Http404
 from django.contrib import messages
-from .models import Author, FollowRequest, AuthorRequest, IncomingNode, RemoteFollow, RemoteFollowRequest, RemoteFollower
+from .models import Author, FollowRequest, AuthorRequest, IncomingNode, RemoteFollow, RemoteFollowRequest, RemoteFollower, HostedImage
 from entries.models import Entry
 from interactions.models import Like, Comment
 from django.contrib.auth.hashers import check_password
@@ -70,7 +70,7 @@ def NodeDisplay(request):
     """
     node_authors = Author.objects.all()
     other_node_authors = []
-    # Gets authors from other nodes
+
     for node in IncomingNode.objects.all():
         resp = requests.get(node.url.rstrip("/") + "/api/authors/", timeout=10)
         if resp.status_code != 200:
@@ -88,7 +88,11 @@ def NodeDisplay(request):
                 author = dict(author)
                 author["id"] = f"{base}/api/authors/{aid}"
             other_node_authors.append(author)
-    return render(request, "node.html", {"users": node_authors,"other_users":other_node_authors})
+
+    return render(request, "node.html", {
+        "users": node_authors,
+        "other_users": other_node_authors
+    })
 
 def login_view(request):
     """
@@ -407,6 +411,7 @@ def deny_remote_follow(request, req_id):
     messages.info(request, "Request denied.", extra_tags='follow')
     return redirect('view_follow_requests')
 
+
 def connections(request):
     author_id = request.session.get('author_id')
     if not author_id:
@@ -456,6 +461,25 @@ def connections(request):
         "remote_followers": remote_followers,
         "remote_friends": remote_friends,
     })
+
+
+def get_admin_hosted_image(request, image_id):
+    """
+    Serve hosted image by id for Markdown embedding.
+    Uses HostedImage model (ImageField).
+    """
+    hosted = get_object_or_404(HostedImage, id=image_id)
+    if not hosted.image:
+        return HttpResponse(status=404)
+    try:
+        with hosted.image.open("rb") as f:
+            content = f.read()
+        content_type = "image/png"
+        if hasattr(hosted.image, "content_type") and hosted.image.content_type:
+            content_type = hosted.image.content_type
+        return HttpResponse(content, content_type=content_type)
+    except (IOError, OSError):
+        return HttpResponse(status=404)
 
 
 def _normalize_fqid(s):
@@ -547,7 +571,7 @@ def follow_remote_author(request, fqid):
     referer = request.META.get("HTTP_REFERER")
     if referer:
         try:
-            base_url = request.build_absolute_uri("/")[:-1]
+            base_url = request.build_absolute_uri('/')[:-1]
             match = resolve(referer.replace(base_url, ""))
             if match.url_name in ("ProfileDisplay", "RemoteProfileDisplay", "connections"):
                 request.session["last_feed_url"] = referer
@@ -571,7 +595,7 @@ def unfollow_remote_author(request, fqid):
     referer = request.META.get("HTTP_REFERER")
     if referer:
         try:
-            base_url = request.build_absolute_uri("/")[:-1]
+            base_url = request.build_absolute_uri('/')[:-1]
             match = resolve(referer.replace(base_url, ""))
             if match.url_name in ("ProfileDisplay", "RemoteProfileDisplay", "connections"):
                 request.session["last_feed_url"] = referer
@@ -599,34 +623,110 @@ def remove_remote_follower(request, fqid):
 
 def RemoteProfileDisplay(request, fqid):
     """
-    Displays the profile of another user.
+    Displays the profile of a remote author. Fetches author and entries from remote node.
     """
-    is_following = False
-    request_sent = False
     logged_in_id = request.session.get("author_id")
-    """
-    if logged_in_id and Author.objects.filter(id=logged_in_id).exists():
-        me = Author.objects.get(id=logged_in_id)
-        is_following = author in me.following.all()
-        request_sent = FollowRequest.objects.filter(requester=me, target=author).exists()
+    public_entries = []
+
+    remote_author_url = fqid.rstrip("/").replace("http://", "https://")
+    normalized_fqid = _normalize_fqid(remote_author_url)
+    if not normalized_fqid or "/api/authors/" not in normalized_fqid:
+        raise Http404("Invalid remote author URL")
+
+    try:
+        authorInfo = requests.get(
+            remote_author_url,
+            headers={"Accept": "application/json"},
+            timeout=10,
+        )
+        authorInfo.raise_for_status()
+        author = authorInfo.json()
+    except requests.RequestException:
+        return render(request, "error.html", {"message": "Could not load remote author profile."})
+
+    match = re.search(r"/api/authors/([^/]+)/?$", remote_author_url)
+    if not match:
+        return render(request, "error.html", {"message": "Invalid remote author id."})
+
+    author_id = match.group(1)
+    base_host = remote_author_url.split("/api/authors/")[0]
+
+    try:
+        entryInfo = requests.get(
+            f"{base_host}/api/authors/{author_id}/entries/",
+            headers={"Accept": "application/json"},
+            timeout=10,
+        )
+        entryInfo.raise_for_status()
+        entry_json = entryInfo.json()
+    except requests.RequestException:
+        entry_json = {}
 
     user_fqid = None
     if logged_in_id:
-        user_fqid = f"{request.build_absolute_uri('/')[:-1]}/api/authors/{logged_in_id}"
-    public_entries = Entry.objects.filter(author=author, visibility="PUBLIC")
-    base_url = request.build_absolute_uri('/')[:-1]
-    for entry in public_entries:
-        entry_url = f"{base_url}/api/authors/{entry.author.id}/entries/{entry.id}"
-        entry.like_count = Like.objects.filter(object=entry_url).count()
-        entry.comment_count = Comment.objects.filter(entry=entry_url).count()
-        if user_fqid:
-            entry.liked_by_user = Like.objects.filter(object=entry_url, author=user_fqid).exists()
-        else:
-            entry.liked_by_user = False
-    """
-    normalized_fqid = _normalize_fqid(fqid)
-    if not normalized_fqid or "/api/authors/" not in normalized_fqid:
-        raise Http404("Invalid remote author URL")
+        base = request.build_absolute_uri('/')[:-1].replace("http://", "https://")
+        user_fqid = f"{base}/api/authors/{logged_in_id}"
+
+    raw_entries = []
+    if isinstance(entry_json, list):
+        raw_entries = entry_json
+    else:
+        raw_entries = (
+            entry_json.get("src")
+            or entry_json.get("entries")
+            or entry_json.get("items")
+            or []
+        )
+
+    for entry in raw_entries:
+        if entry.get("visibility") != "PUBLIC":
+            continue
+
+        clean_id = (entry.get("id") or "").rstrip("/")
+        if not clean_id:
+            continue
+
+        entry["clean_id"] = clean_id
+        remote_comments = ((entry.get("comments") or {}).get("src")) or []
+        local_comments = list(Comment.objects.filter(entry=clean_id).values("author", "comment"))
+
+        merged_comments = list(remote_comments)
+        for c in local_comments:
+            merged_comments.append({
+                "author": {
+                    "displayName": c["author"].rstrip("/").split("/")[-1]
+                },
+                "comment": c["comment"],
+            })
+
+        remote_likes_src = (entry.get("likes") or {}).get("src", [])
+        remote_like_count = (entry.get("likes") or {}).get("count", 0)
+
+        entry["fetched_comments"] = merged_comments
+        entry["comment_count"] = len(merged_comments)
+
+        remote_user_liked = False
+        for like in remote_likes_src:
+            like_author = (like.get("author") or {}).get("id")
+            if user_fqid and like_author == user_fqid:
+                remote_user_liked = True
+                break
+
+        local_user_liked = False
+        if user_fqid and Like.objects.filter(author=user_fqid, object=clean_id).exists():
+            local_user_liked = True
+
+        entry["liked_by_user"] = local_user_liked
+
+        display_like_count = remote_like_count
+
+        if local_user_liked and not remote_user_liked:
+            display_like_count += 1
+        elif not local_user_liked and remote_user_liked:
+            display_like_count = max(0, display_like_count - 1)
+
+        entry["like_count"] = display_like_count
+        public_entries.append(entry)
 
     is_following = False
     if logged_in_id and normalized_fqid:
@@ -634,32 +734,16 @@ def RemoteProfileDisplay(request, fqid):
             follower_id=logged_in_id, followed_fqid=normalized_fqid
         ).exists()
 
-    # Fetch author: use normalized_fqid directly (was bug: fqid[:index]+"/api/authors/"+fqid produced malformed URL)
-    authorInfo = requests.get(normalized_fqid, timeout=10)
-    authorInfo.raise_for_status()
-    author = json.loads(authorInfo.text)
-    # Extract author id for entries fetch
-    id_match = re.search(r"/api/authors/([^/]+)/?", normalized_fqid)
-    author_id = id_match.group(1) if id_match else ""
-    if not author_id:
-        raise Http404("Could not parse author id from URL")
-    node_base = normalized_fqid.split("/api/authors/")[0].rstrip("/")
-    entries_url = f"{node_base}/api/authors/{author_id}/entries/"
-    entryInfo = requests.get(entries_url, timeout=10)
-    entryInfo.raise_for_status()
-    public_entries = []
-    for entry in entryInfo.json().get("src", []):
-        if entry["visibility"] == "PUBLIC":
-            entry["like_count"] = entry["likes"].get("count", 0)
-            public_entries.append(entry)
+    request_sent = False
+
     context = {
         "author": author,
         "followers_count": 0,
         "following_count": 0,
         "is_following": is_following,
-        "request_sent": False,
+        "request_sent": request_sent,
         "logged_in_id": logged_in_id,
         "public_entries": public_entries,
         "author_fqid": normalized_fqid,
     }
-    return render(request, "remoteprofileview.html", context) 
+    return render(request, "remoteprofileview.html", context)
