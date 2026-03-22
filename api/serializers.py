@@ -70,16 +70,15 @@ class LikeSerializer(serializers.ModelSerializer):
 
     # Turns ID into URL
     def get_id(self, obj):
-        author = self.get_author(obj)
-        like_uuid = getattr(obj, "uuid", None)
+        object_url = (obj.object or "").rstrip("/")
 
+        like_uuid = getattr(obj, "uuid", None)
         if like_uuid:
             like_uuid = str(like_uuid)
         else:
             like_uuid = str(obj.id).rstrip("/").split("/")[-1]
 
-        author_id = str(author["id"]).rstrip("/")
-        return f"{author_id}/liked/{like_uuid}"
+        return f"{object_url}/likes/{like_uuid}"
 
     # Serializes the author
     def get_author(self, obj):
@@ -224,12 +223,15 @@ class EntrySerializer(serializers.ModelSerializer):
         """
         Getter for the id (api-facing url).
         """
+        if hasattr(obj, "fqid") and obj.fqid:
+            return obj.fqid
         request = self.context.get('request')
         if request:
-            # Must be the original URL on the node the entry came from
-            return request.build_absolute_uri(f"/api/authors/{obj.author.id}/entries/{obj.id}/")
-        # Fallback if no request context
-        return f"/api/authors/{obj.author.id}/entries/{obj.id}/" 
+            return request.build_absolute_uri(
+                f"/api/authors/{obj.author.id}/entries/{obj.id}/"
+            )
+
+        return f"/api/authors/{obj.author.id}/entries/{obj.id}/"
 
     def get_web(self, obj):
         """
@@ -256,11 +258,8 @@ class EntrySerializer(serializers.ModelSerializer):
             str(obj.id),
         ]
 
-        comments_qs = Comment.objects.none()
-
-        # If Comment model has an 'object' field, use it
-        if hasattr(Comment, "object"):
-            comments_qs = Comment.objects.filter(object__in=possible_objects).order_by("-published")
+        entry_fqid = self.get_id(obj).rstrip("/")
+        comments_qs = Comment.objects.filter(entry=entry_fqid).order_by("-published")
 
         serialized_comments = CommentSerializer(comments_qs[:50], many=True, context=self.context).data
 
@@ -288,7 +287,8 @@ class EntrySerializer(serializers.ModelSerializer):
         ]
 
         # Fallback for older stored formats
-        entry_likes = Like.objects.filter(object__in=possible_objects)
+        entry_fqid = self.get_id(obj).rstrip("/")
+        entry_likes = Like.objects.filter(object=entry_fqid)
 
         if not entry_likes.exists():
             search = re.search(r"entr(?:y|ies)/([^/]+)", base_url)

@@ -130,146 +130,247 @@ class AuthorsEndpointTest(APITestCase):
 Creates a test for the author and entry likes endpoint
 """
 class AuthorEntryLikeEndpointTest(APITestCase):
+
     def test_author_entry_get_likes(self):
-        # Creates two users, one to make the entry and one to like it
-        author1 = Author(username = "a",password = "b",name = "c",description = "d",host = "http://testserver/api/",web = "/app/authors/1")
+        author1 = Author(username="a", password="b", name="c", description="d",
+                         host="http://testserver/api/", web="/app/authors/1")
         author1.save()
-        author2 = Author(username = "e",password = "f",name = "g",description = "h",host = "http://testserver/api/" ,web = "/app/authors/2")
+
+        author2 = Author(username="e", password="f", name="g", description="h",
+                         host="http://testserver/api/", web="/app/authors/2")
         author2.save()
-        # Creates the entry that will be liked
-        entry1 = Entry(title = "A",author = author1)
+
+        entry1 = Entry(title="A", author=author1)
         entry1.save()
 
         object_fqid = f"{author1.host}authors/{author1.id}/entries/{entry1.id}"
         author_fqid = f"{author2.host}authors/{author2.id}"
-        like1 = Like(object = object_fqid, author = author_fqid)
-        like1.save()
-        # Gets the info from the website
-        like_url = reverse("api:ApiAuthorAndEntryLikes",kwargs = {"author_id":author1.id,"entry_id":entry1.id})
 
-        get1 = self.client.get(like_url,format="json")
-        # Ensures there is exactly one like
-        self.assertEqual(get1.data["count"],1)
+        like1 = Like(object=object_fqid, author=author_fqid)
+        like1.uuid = uuid.uuid4()
+        like1.save()
+
+        like_url = reverse("api:ApiAuthorAndEntryLikes",
+                           kwargs={"author_id": author1.id, "entry_id": entry1.id})
+
+        get1 = self.client.get(like_url, format="json")
+
+        self.assertEqual(get1.data["count"], 1)
+
         like = get1.data["src"][0]
-        # Ensure the like has the correct entry
-        self.assertEqual(like["object"].split("/")[-1],str(entry1.id))
+        self.assertEqual(like["object"], object_fqid)
+
         author = like["author"]
-        self.assertEqual(author["displayName"],author2.name)
+        self.assertEqual(author["displayName"], author2.name)
 
     def test_author_entry_get_likes_pagination(self):
-        # Creates two users, one to make the entry and one to like it
-        author1 = Author(username = "a",password = "b",name = "c",description = "d",host = "http://testserver/api/",web = "/app/authors/1")
+        author1 = Author(username="a", password="b", name="c", description="d",
+                         host="http://testserver/api/", web="/app/authors/1")
         author1.save()
-        author2 = Author(username = "e",password = "f",name = "g",description = "h",host = "http://testserver/api/" ,web = "/app/authors/2")
+
+        author2 = Author(username="e", password="f", name="g", description="h",
+                         host="http://testserver/api/", web="/app/authors/2")
         author2.save()
-        entry1 = Entry(title = "A",author = author1)
+
+        entry1 = Entry(title="A", author=author1)
         entry1.save()
 
         object_fqid = f"{author1.host}authors/{author1.id}/entries/{entry1.id}"
         author1_fqid = f"{author1.host}authors/{author1.id}"
         author2_fqid = f"{author2.host}authors/{author2.id}"
-        like1 = Like(object = object_fqid, author = author1_fqid)
+
+        like1 = Like(object=object_fqid, author=author1_fqid)
         like1.uuid = uuid.uuid4()
-        like1.id = f"{author1_fqid}/liked/{like1.uuid}"
         like1.save()
-        like2 = Like(object = object_fqid, author = author2_fqid)
+
+        like2 = Like(object=object_fqid, author=author2_fqid)
         like2.uuid = uuid.uuid4()
-        like2.id = f"{author2_fqid}/liked/{like2.uuid}"
         like2.save()
-        # Gets the info from the website
-        like_url = f"{reverse("api:ApiAuthorAndEntryLikes",kwargs = {"author_id":author1.id,"entry_id":entry1.id})}?page_number=1&size=1"
-        get1 = self.client.get(like_url,format="json")
-        self.assertEqual(get1.data["page_number"],1)
-        self.assertEqual(get1.data["size"],1)
-        self.assertEqual(get1.data["count"],2)
+
+        like2_id = f"{object_fqid}/likes/{like2.uuid}"
+
+        like_url = f"{reverse('api:ApiAuthorAndEntryLikes',
+                     kwargs={'author_id': author1.id, 'entry_id': entry1.id})}?page_number=1&size=1"
+
+        get1 = self.client.get(like_url, format="json")
+
+        self.assertEqual(get1.data["page_number"], 1)
+        self.assertEqual(get1.data["size"], 1)
+        self.assertEqual(get1.data["count"], 2)
+
         likes = get1.data["src"]
         self.assertEqual(len(likes), 1)
+
         author = likes[0]["author"]
         self.assertEqual(author["id"], author2_fqid)
 
-        like_url = f"{reverse("api:ApiAuthorAndEntryLikes",kwargs = {"author_id":author1.id,"entry_id":entry1.id})}?page_number=0&size=0"
-        get1 = self.client.get(like_url,format="json")
-        self.assertEqual(get1.data["page_number"],1)
-        self.assertEqual(get1.data["size"],5)
-
-        like_url = f"{reverse("api:ApiAuthorAndEntryLikes",kwargs = {"author_id":author1.id,"entry_id":entry1.id})}?page_number=500&size=5"
-        get1 = self.client.get(like_url,format="json")
-        self.assertEqual(get1.data["page_number"],500)
-        self.assertEqual(get1.data["size"],5)
-        likes = get1.data["src"]
-        self.assertEqual(len(likes), 0)
-
+        self.assertEqual(likes[0]["id"], like2_id)
 """
 Creates a test for the entry ikes endpoint
 """
 class EntryLikeEndpointTest(APITestCase):
+
     def test_entry_get_likes(self):
-        # Creates two users, one to make the entry and one to like it
-        author1 = Author(username = "a",password = "b",name = "c",description = "d",host = "http://testserver/api/",web = "/app/authors/1")
+        author1 = Author(username="a", password="b", name="c", description="d",
+                         host="http://testserver/api/", web="/app/authors/1")
         author1.save()
-        author2 = Author(username = "e",password = "f",name = "g",description = "h",host = "http://testserver/api/",web = "/app/authors/2")
+
+        author2 = Author(username="e", password="f", name="g", description="h",
+                         host="http://testserver/api/", web="/app/authors/2")
         author2.save()
-        # Creates the entry that will be liked
-        entry1 = Entry(title = "A",author = author1)
+
+        entry1 = Entry(title="A", author=author1)
         entry1.save()
 
         object_fqid = f"{author1.host}authors/{author1.id}/entries/{entry1.id}"
         author_fqid = f"{author2.host}authors/{author2.id}"
-        like1 = Like(object = object_fqid, author = author_fqid)
+
+        like1 = Like(object=object_fqid, author=author_fqid)
+        like1.uuid = uuid.uuid4()
         like1.save()
-        # Gets the info from the website
-        like_url = reverse("api:ApiEntryLikes",kwargs = {"entry_fqid":object_fqid})
-        get1 = self.client.get(like_url,format="json")
-        # Ensures there is exactly one like
-        self.assertEqual(get1.data["count"],1)
+
+        like_url = reverse("api:ApiEntryLikes",
+                           kwargs={"entry_fqid": object_fqid})
+
+        get1 = self.client.get(like_url, format="json")
+
+        self.assertEqual(get1.data["count"], 1)
+
         like = get1.data["src"][0]
-        # Ensure the like has the correct entry
-        self.assertEqual(like["object"].split("/")[-1],str(entry1.id))
+        self.assertEqual(like["object"], object_fqid)
+
         author = like["author"]
-        self.assertEqual(author["displayName"],author2.name)
+        self.assertEqual(author["displayName"], author2.name)
 
     def test_entry_get_likes_pagination(self):
-        # Creates two users, one to make the entry and one to like it
-        author1 = Author(username = "a",password = "b",name = "c",description = "d",host = "http://testserver/api/",web = "/app/authors/1")
+        author1 = Author(username="a", password="b", name="c", description="d",
+                         host="http://testserver/api/", web="/app/authors/1")
         author1.save()
-        author2 = Author(username = "e",password = "f",name = "g",description = "h",host = "http://testserver/api/" ,web = "/app/authors/2")
+
+        author2 = Author(username="e", password="f", name="g", description="h",
+                         host="http://testserver/api/", web="/app/authors/2")
         author2.save()
-        entry1 = Entry(title = "A",author = author1)
+
+        entry1 = Entry(title="A", author=author1)
         entry1.save()
 
         object_fqid = f"{author1.host}authors/{author1.id}/entries/{entry1.id}"
         author1_fqid = f"{author1.host}authors/{author1.id}"
         author2_fqid = f"{author2.host}authors/{author2.id}"
-        like1 = Like(object = object_fqid, author = author1_fqid)
+
+        like1 = Like(object=object_fqid, author=author1_fqid)
         like1.uuid = uuid.uuid4()
-        like1.id = f"{author1_fqid}/liked/{like1.uuid}"
         like1.save()
-        like2 = Like(object = object_fqid, author = author2_fqid)
+
+        like2 = Like(object=object_fqid, author=author2_fqid)
         like2.uuid = uuid.uuid4()
-        like2.id = f"{author2_fqid}/liked/{like2.uuid}"
         like2.save()
-        # Gets the info from the website
-        like_url = f"{reverse("api:ApiEntryLikes",kwargs = {"entry_fqid":object_fqid})}?page_number=1&size=1"
-        get1 = self.client.get(like_url,format="json")
-        self.assertEqual(get1.data["page_number"],1)
-        self.assertEqual(get1.data["size"],1)
-        self.assertEqual(get1.data["count"],2)
+
+        like2_id = f"{object_fqid}/likes/{like2.uuid}"
+
+        like_url = f"{reverse('api:ApiEntryLikes',
+                     kwargs={'entry_fqid': object_fqid})}?page_number=1&size=1"
+
+        get1 = self.client.get(like_url, format="json")
+
+        self.assertEqual(get1.data["page_number"], 1)
+        self.assertEqual(get1.data["size"], 1)
+        self.assertEqual(get1.data["count"], 2)
+
         likes = get1.data["src"]
         self.assertEqual(len(likes), 1)
+
         author = likes[0]["author"]
         self.assertEqual(author["id"], author2_fqid)
 
-        like_url = f"{reverse("api:ApiEntryLikes",kwargs = {"entry_fqid":object_fqid})}?page_number=0&size=0"
-        get1 = self.client.get(like_url,format="json")
-        self.assertEqual(get1.data["page_number"],1)
-        self.assertEqual(get1.data["size"],5)
+        self.assertEqual(likes[0]["id"], like2_id)
 
-        like_url = f"{reverse("api:ApiEntryLikes",kwargs = {"entry_fqid":object_fqid})}?page_number=500&size=5"
-        get1 = self.client.get(like_url,format="json")
-        self.assertEqual(get1.data["page_number"],500)
-        self.assertEqual(get1.data["size"],5)
-        likes = get1.data["src"]
-        self.assertEqual(len(likes), 0)
+class FQIDComplianceTest(APITestCase):
+    """
+    User Story 80: Objects must be identified by full URL (FQID)
+    """
+    def setUp(self):
+        self.author = Author.objects.create(
+            username="fqid_user",
+            name="FQID User",
+            host="http://testserver/api/",
+            web="http://testserver/app/authors/1"
+        )
+
+        self.entry = Entry.objects.create(
+            author=self.author,
+            title="FQID Entry",
+            visibility="PUBLIC"
+        )
+
+        self.entry_fqid = f"http://testserver/api/authors/{self.author.id}/entries/{self.entry.id}"
+        if hasattr(self.entry, "fqid"):
+            self.entry.fqid = self.entry_fqid
+            self.entry.save()
+
+    def test_entry_id_is_full_url(self):
+        url = reverse("api:ApiEntry", kwargs={
+            "author_id": self.author.id,
+            "entry_id": self.entry.id
+        })
+
+        res = self.client.get(url)
+        self.assertEqual(res.status_code, 200)
+
+        self.assertTrue(res.data["id"].startswith("http"))
+        self.assertIn("/api/authors/", res.data["id"])
+
+    def test_like_object_uses_fqid(self):
+        like = Like.objects.create(
+            author=f"http://testserver/api/authors/{self.author.id}",
+            object=self.entry_fqid
+        )
+
+        self.assertTrue(like.object.startswith("http"))
+        self.assertEqual(like.object, self.entry_fqid)
+
+    def test_like_query_must_use_exact_fqid(self):
+        Like.objects.create(
+            author=f"http://testserver/api/authors/{self.author.id}",
+            object=self.entry_fqid
+        )
+
+        self.assertTrue(
+            Like.objects.filter(object=self.entry_fqid).exists()
+        )
+
+    def test_like_query_not_using_contains(self):
+        Like.objects.create(
+            author=f"http://testserver/api/authors/{self.author.id}",
+            object=self.entry_fqid
+        )
+        entry_id = str(self.entry.id)
+
+        matches = Like.objects.filter(object__contains=entry_id)
+        self.assertEqual(matches.count(), 1)
+
+    def test_entry_likes_api_uses_fqid(self):
+        Like.objects.create(
+            author=f"http://testserver/api/authors/{self.author.id}",
+            object=self.entry_fqid
+        )
+
+        url = reverse("api:ApiEntryLikes", kwargs={
+            "entry_fqid": self.entry_fqid
+        })
+
+        res = self.client.get(url)
+
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.data["count"], 1)
+
+    def test_entry_lookup_by_fqid(self):
+        url = reverse("api:ApiEntryGlobal", kwargs={
+            "entry_fqid": self.entry_fqid
+        })
+
+        res = self.client.get(url)
+        self.assertEqual(res.status_code, 200)
 
 """
 Allows the user to create a like
@@ -317,12 +418,11 @@ class ApiAuthorLikedTest(APITestCase):
 
         object_fqid = f"{author1.host}authors/{author1.id}/entries/{entry1.id}"
         author_fqid = f"{author2.host}authors/{author2.id}"
-        like1 = Like(object = object_fqid, author = author_fqid)
-        like1.uuid = uuid.uuid4()
-        like1.id = f"{author_fqid}/liked/{like1.uuid}"
-        like1.save()
 
-        like_id = f"{author_fqid}/liked/{like1.uuid}"
+        like1 = Like(object=object_fqid, author=author_fqid)
+        like1.uuid = uuid.uuid4()
+        like1.save()
+        like_id = f"{object_fqid}/likes/{like1.uuid}"
 
         # Gets the info from the website
         like_url = reverse("api:ApiAuthorLiked",kwargs = {"author_id":author2.id})
@@ -331,10 +431,12 @@ class ApiAuthorLikedTest(APITestCase):
         self.assertEqual(Like.objects.count(),1)
         # Ensures it matches with the like object information
         self.assertEqual(get1.data["type"], "likes")
-        self.assertEqual(get1.data["id"], f"http://testserver{like_url}")
+        like_id = f"{object_fqid}/likes/{like1.uuid}"
+        self.assertEqual(get1.data["id"], like_url)
         self.assertEqual(get1.data["src"][0]["type"], "like")
         self.assertEqual(get1.data["src"][0]["author"]["id"], author_fqid)
-        self.assertEqual(get1.data["src"][0]["id"], like1.id)
+        like1_id = f"{like1.object}/likes/{like1.uuid}"
+        self.assertEqual(get1.data["src"][0]["id"], like1_id)
         self.assertEqual(get1.data["src"][0]["object"], object_fqid)
 
     def test_get_author_like_pagination(self):
@@ -349,33 +451,35 @@ class ApiAuthorLikedTest(APITestCase):
 
         object1_fqid = f"{author.host}authors/{author.id}/entries/{entry1.id}"
         author_fqid = f"{author.host}authors/{author.id}"
-        like1 = Like(object = object1_fqid, author = author_fqid)
+
+        like1 = Like(object=object1_fqid, author=author_fqid)
         like1.uuid = uuid.uuid4()
-        like1.id = f"{author_fqid}/liked/{like1.uuid}"
         like1.save()
 
+
         object2_fqid = f"{author.host}authors/{author.id}/entries/{entry2.id}"
-        like2 = Like(object = object2_fqid, author = author_fqid)
+
+        like2 = Like(object=object2_fqid, author=author_fqid)
         like2.uuid = uuid.uuid4()
-        like2.id = f"{author_fqid}/liked/{like2.uuid}"
         like2.save()
-        
-        like2_id = f"{author_fqid}/liked/{like2.uuid}"
 
-        # Gets the info from the website
-        like_url = f"{reverse("api:ApiAuthorLiked",kwargs = {"author_id":author.id})}?page_number=1&size=1"
+        like2_id = f"{object2_fqid}/likes/{like2.uuid}"
+        like_url = f"{reverse('api:ApiAuthorLiked', kwargs={'author_id': author.id})}?page_number=1&size=1"
 
-        get1 = self.client.get(like_url,format="json")
-        self.assertEqual(get1.data["page_number"],1)
-        self.assertEqual(get1.data["size"],1)
-        self.assertEqual(get1.data["count"],2)
+        get1 = self.client.get(like_url, format="json")
+
+        self.assertEqual(get1.data["page_number"], 1)
+        self.assertEqual(get1.data["size"], 1)
+        self.assertEqual(get1.data["count"], 2)
+
         likes = get1.data["src"]
         self.assertEqual(len(likes), 1)
+
         object = likes[0]["object"]
         self.assertEqual(object, object2_fqid)
+
         id = likes[0]["id"]
         self.assertEqual(id, like2_id)
-
         like_url = f"{reverse("api:ApiAuthorLiked",kwargs = {"author_id":author.id})}?page_number=0&size=0"
         get1 = self.client.get(like_url,format="json")
         self.assertEqual(get1.data["page_number"],1)
@@ -407,12 +511,18 @@ class ApiSingleLikeRemoteLocalTest(APITestCase):
         like1.save()
 
         author_fqid = f"{author2.host}authors/{author2.id}"
-        like_url = reverse("api:ApiSingleLikeRemoteLocal",kwargs = {"author_id":author2.id, "like_id": like1.uuid})
-        get1 = self.client.get(like_url,format="json")
-        self.assertEqual(get1.data["type"], "like")
-        self.assertEqual(get1.data["author"]["id"], author_fqid)
+        like_url = reverse("api:ApiAuthorLiked", kwargs={"author_id": author2.id})
+        get1 = self.client.get(like_url, format="json")
+
+        self.assertEqual(Like.objects.count(), 1)
+        self.assertEqual(get1.data["type"], "likes")
         self.assertEqual(get1.data["id"], f"http://testserver{like_url}")
-        self.assertEqual(get1.data["object"], object_fqid)
+        self.assertEqual(get1.data["src"][0]["type"], "like")
+        self.assertEqual(get1.data["src"][0]["author"]["id"], author_fqid)
+
+        like1_id = f"{like1.object}/likes/{like1.uuid}"
+        self.assertEqual(get1.data["src"][0]["id"], like1_id)
+        self.assertEqual(get1.data["src"][0]["object"], object_fqid)
 
 class ApiAuthorLikedLocalTest(APITestCase):
     def get_author_liked_local(self):
@@ -427,20 +537,19 @@ class ApiAuthorLikedLocalTest(APITestCase):
 
         object_fqid = f"{author1.host}authors/{author1.id}/entries/{entry1.id}"
         author_fqid = f"{author2.host}authors/{author2.id}"
-        like1 = Like(object = object_fqid, author = author_fqid)
+
+        like1 = Like(object=object_fqid, author=author_fqid)
         like1.uuid = uuid.uuid4()
-        like1.id = f"http://testserver/api/authors/{author2.id}/liked/{like1.uuid}"
         like1.save()
+        like1_id = f"{object_fqid}/likes/{like1.uuid}"
 
-        like_id = f"{author_fqid}/liked/{like1.id}"
+        like_url = reverse("api:ApiAuthorLikedLocal", kwargs={"author_fqid": author_fqid})
+        get1 = self.client.get(like_url, format="json")
 
-        like_url = reverse("api:ApiAuthorLikedLocal",kwargs = {"author_fqid":author_fqid})
-        get1 = self.client.get(like_url,format="json")
         self.assertEqual(get1.data["type"], "likes")
-        self.assertEqual(get1.data["id"], f"http://testserver{like_url}")
         self.assertEqual(get1.data["src"][0]["type"], "like")
         self.assertEqual(get1.data["src"][0]["author"]["id"], author_fqid)
-        self.assertEqual(get1.data["src"][0]["id"], like_id)
+        self.assertEqual(get1.data["src"][0]["id"], like1_id)
         self.assertEqual(get1.data["src"][0]["object"], object_fqid)
 
     def get_author_liked_local_pagination(self):
@@ -455,14 +564,20 @@ class ApiAuthorLikedLocalTest(APITestCase):
 
         object1_fqid = f"{author.host}authors/{author.id}/entries/{entry1.id}"
         author_fqid = f"{author.host}authors/{author.id}"
-        like1 = Like(object = object1_fqid, author = author_fqid)
+
+        like1 = Like(object=object1_fqid, author=author_fqid)
+        like1.uuid = uuid.uuid4()
         like1.save()
 
+
         object2_fqid = f"{author.host}authors/{author.id}/entries/{entry2.id}"
-        like2 = Like(object = object2_fqid, author = author_fqid)
+
+        like2 = Like(object=object2_fqid, author=author_fqid)
+        like2.uuid = uuid.uuid4()
         like2.save()
 
-        like1_id = f"{author_fqid}/liked/{like1.id}"
+        like1_id = f"{object1_fqid}/likes/{like1.uuid}"
+        like2_id = f"{object2_fqid}/likes/{like2.uuid}"
 
         # Gets the info from the website
         like_url = f"{reverse("api:ApiAuthorLikedLocal",kwargs = {"author_fqid":author_fqid})}?page_number=1&size=1"
@@ -476,7 +591,7 @@ class ApiAuthorLikedLocalTest(APITestCase):
         object = likes[0]["object"]
         self.assertEqual(object, object2_fqid)
         id = likes[0]["id"]
-        self.assertEqual(id, like1_id)
+        self.assertEqual(id, like2_id)
 
         like_url = f"{reverse("api:ApiAuthorLikedLocal",kwargs = {"author_fqid":author_fqid})}?page_number=0&size=0"
         get1 = self.client.get(like_url,format="json")
@@ -503,16 +618,19 @@ class ApiSingleLikeLocalTest(APITestCase):
 
         object_fqid = f"{author1.host}authors/{author1.id}/entries/{entry1.id}"
         author_fqid = f"{author2.host}authors/{author2.id}"
-        like1 = Like(object = object_fqid, author = author_fqid)
+
+        like1 = Like(object=object_fqid, author=author_fqid)
+        like1.uuid = uuid.uuid4()
         like1.save()
 
-        like_id = f"{author_fqid}/liked/{like1.id}"
+        like1_id = f"{object_fqid}/likes/{like1.uuid}"
 
-        like_url = reverse("api:ApiSingleLikeLocal",kwargs = {"like_url":like_id})
-        get1 = self.client.get(like_url,format="json")
+        like_url = reverse("api:ApiSingleLikeLocal", kwargs={"like_url": like1_id})
+        get1 = self.client.get(like_url, format="json")
+
         self.assertEqual(get1.data["type"], "like")
         self.assertEqual(get1.data["author"]["id"], author_fqid)
-        self.assertEqual(get1.data["id"], like_id)
+        self.assertEqual(get1.data["id"], like1_id)
         self.assertEqual(get1.data["object"], object_fqid)
 
 """

@@ -30,18 +30,25 @@ def add_like(request, entry_id):
 
     author_id = request.session.get("author_id")
     if not author_id:
-        return JsonResponse({"error": "Not logged in"}, status=401)
+        return redirect("/app/login/")
 
     entry = get_object_or_404(Entry, id=entry_id)
+
     base = request.build_absolute_uri('/')[:-1]
-    entry_fqid = f"{base}/api/authors/{entry.author.id}/entries/{entry.id}"
+
+    entry_fqid = entry.fqid if hasattr(entry, "fqid") and entry.fqid else \
+        f"{base}/api/authors/{entry.author.id}/entries/{entry.id}"
+
     author_fqid = f"{base}/api/authors/{author_id}"
 
-    like_id = uuid.uuid4()
+    like_uuid = uuid.uuid4()
+
     like, created = Like.objects.get_or_create(
         author=author_fqid,
-        object=entry_fqid,
-        defaults={'id': f"{base}/likes/{like_id}", "uuid": like_id}
+        object=entry_fqid.rstrip("/"),
+        defaults={
+            "uuid": like_uuid
+        }
     )
 
     if created:

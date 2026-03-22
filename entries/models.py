@@ -6,6 +6,7 @@ class Entry(models.Model):
     title = models.CharField(max_length=255)
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     description = models.TextField()
+    fqid = models.URLField(null=True, blank=True)
 
     CONTENT_TYPE_CHOICES = [
         ("text/markdown", "Markdown"),

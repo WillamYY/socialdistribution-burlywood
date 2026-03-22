@@ -229,7 +229,8 @@ def ProfileDisplay(request, id):
     public_entries = Entry.objects.filter(author=author, visibility="PUBLIC")
     base_url = request.build_absolute_uri('/')[:-1]
     for entry in public_entries:
-        entry_url = f"{base_url}/api/authors/{entry.author.id}/entries/{entry.id}"
+        entry_url = entry.fqid if hasattr(entry, "fqid") and entry.fqid else \
+            f"{base_url}/api/authors/{entry.author.id}/entries/{entry.id}"
         entry.like_count = Like.objects.filter(object=entry_url).count()
         entry.comment_count = Comment.objects.filter(entry=entry_url).count()
         if user_fqid:

@@ -176,9 +176,8 @@ CORS_ALLOW_CREDENTIALS = True
 # API Authentication Setup
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        # Allows remote nodes to authenticate using HTTP Basic Auth
+        'core.authentication.NodeBasicAuthentication',
         'rest_framework.authentication.BasicAuthentication',
-        # Allows the local UI to continue working using standard login sessions
         'rest_framework.authentication.SessionAuthentication',
     ],
 }
