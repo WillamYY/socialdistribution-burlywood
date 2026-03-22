@@ -15,20 +15,12 @@ from django.conf import settings
 from core.models import IncomingNode
 
 def get_remote_node_for_url(url: str):
-    """
-    Match a remote URL to an approved IncomingNode record.
-    Adjust field names here if your model uses different names.
-    """
     normalized = url.rstrip("/").replace("http://", "https://")
-
     for node in IncomingNode.objects.all():
-        node_url = getattr(node, "url", "") or getattr(node, "host", "") or ""
-        node_url = node_url.rstrip("/").replace("http://", "https://")
+        node_url = node.url.rstrip("/").replace("http://", "https://")
         if normalized.startswith(node_url):
             return node
-
     return None
-
 
 def build_local_author_payload(author, base: str):
     return {
@@ -119,8 +111,13 @@ def add_remote_like(request, entry_id):
         like.delete()
         return JsonResponse({"success": False, "error": "Remote entry missing author id"}, status=502)
 
-    inbox_url = foreign_author.rstrip("/") + "/inbox"
-    node = get_remote_node_for_url(remote_entry_url)
+    foreign_author = foreign_author.rstrip("/").replace("http://", "https://")
+    inbox_url = f"{foreign_author}/inbox"
+    node = get_remote_node_for_url(inbox_url)
+
+    print("MATCHED NODE URL:", node.url if node else None)
+    print("MATCHED NODE USERNAME:", node.username if node else None)
+    print("REMOTE INBOX URL FINAL:", inbox_url)
 
     if not node:
         print("NO MATCHING INCOMINGNODE FOR:", remote_entry_url)
@@ -224,8 +221,13 @@ def add_remote_comment(request, entry_id):
         print("REMOTE ENTRY AUTHOR FIELD MISSING:", entry_data)
         return redirect(request.META.get("HTTP_REFERER", "/app/stream/"))
 
-    inbox_url = foreign_author.rstrip("/") + "/inbox"
-    node = get_remote_node_for_url(remote_entry_url)
+    foreign_author = foreign_author.rstrip("/").replace("http://", "https://")
+    inbox_url = f"{foreign_author}/inbox"
+    node = get_remote_node_for_url(inbox_url)
+
+    print("MATCHED NODE URL:", node.url if node else None)
+    print("MATCHED NODE USERNAME:", node.username if node else None)
+    print("REMOTE INBOX URL FINAL:", inbox_url)
 
     if not node:
         print("NO MATCHING INCOMINGNODE FOR:", remote_entry_url)
