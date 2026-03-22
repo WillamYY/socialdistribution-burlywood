@@ -81,17 +81,16 @@ class LikeSerializer(serializers.ModelSerializer):
         author_id = str(author["id"]).rstrip("/")
         return f"{author_id}/liked/{like_uuid}"
 
-    # Serializes the author
     def get_author(self, obj):
         author_url = (obj.author or "").rstrip("/")
-
-        # Try to parse a local integer author id safely
-        author_url = author_url.replace("://", "§§TEMP§§").replace("//", "/").replace("§§TEMP§§", "://")
-
         author_id_part = author_url.split("/")[-1]
-        author_obj = None
 
-        if author_id_part.isdigit():
+        # Only look up locally if the URL belongs to our server
+        request = self.context.get("request")
+        our_host = request.build_absolute_uri("/").rstrip("/") if request else ""
+        
+        author_obj = None
+        if author_id_part.isdigit() and our_host and author_url.startswith(our_host):
             author_obj = Author.objects.filter(id=int(author_id_part)).first()
 
         if not author_obj:
@@ -105,15 +104,7 @@ class LikeSerializer(serializers.ModelSerializer):
                 "web": ""
             }
 
-        data = AuthorSerializer(author_obj).data
-
-        if not data.get("displayName"):
-            data["displayName"] = author_obj.username
-
-        if not data.get("host"):
-            data["host"] = "http://127.0.0.1:8000/"
-
-        return data
+        return AuthorSerializer(author_obj).data
 
 """
 Creates the serializer for multiple likes
