@@ -42,6 +42,7 @@ def add_like(request, entry_id):
     return redirect(request.META.get('HTTP_REFERER', '/app/stream/'))
 
 def add_remote_like(request, entry_id):
+    """
     if request.method == "POST":
         author_id = request.session.get("author_id")
         if not author_id:
@@ -52,6 +53,7 @@ def add_remote_like(request, entry_id):
         author = get_object_or_404(Author, pk=author_id)
         author_fqid = f"{base}/api/authors/{author.id}"
 
+        
         like_id = uuid.uuid4()
         like, created = Like.objects.get_or_create(
             author=author_fqid,
@@ -108,6 +110,26 @@ def add_remote_like(request, entry_id):
             )
         except requests.RequestException:
             pass
+    return redirect(request.META.get('HTTP_REFERER', '/app/stream/'))
+    """
+def add_remote_like(request, entry_id):
+    if request.method == "POST":
+        author_id = request.session.get("author_id")
+        if not author_id:
+            return redirect('/app/login/')
+        # Gets the entry info and ensures its valid
+        entryInfo = requests.get(entry_id.rstrip("/"))
+        entryInfo.raise_for_status()
+        jsonEntry = json.loads(entryInfo.text)
+        foreignAuthor = jsonEntry["author"]["id"]
+        # Get author making request
+        entry_id = entry_id.replace("http","https")
+        author = get_object_or_404(Author, pk = author_id)
+        # Print the likes
+        print(jsonEntry["likes"]["count"])
+        authorInfo = {"type":"author","id": author.host + "/authors/" + str(author.id),"host": author.host,"displayName": author.name, "github":author.github, "profileImage":author.picture_url,"web":author.web}
+        # Post the like to the inbox
+        post = requests.post(foreignAuthor + "/inbox",json = {"type": "like","author": authorInfo,"published":datetime.now().isoformat(),"id":"","object":entry_id})
 
     return redirect(request.META.get('HTTP_REFERER', '/app/stream/'))
 
