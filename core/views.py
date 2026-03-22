@@ -423,31 +423,36 @@ def connections(request):
         RemoteFollow.objects.filter(follower=author).order_by("created_at")
     )
     # Remote followers: remote actors who follow us (approved)
-    remote_followers = list(
+    remote_followers_raw = list(
         RemoteFollower.objects.filter(target=author).order_by("created_at")
     )
-    # Remote friends: ONLY when BOTH follow each other (we follow them AND they follow us)
-    follower_by_fqid = {_normalize_fqid(r.actor_fqid): r for r in remote_followers}
+    following_fqids = {_normalize_fqid(rf.followed_fqid) for rf in remote_followings}
+    follower_by_fqid = {_normalize_fqid(r.actor_fqid): r for r in remote_followers_raw}
     follower_fqids = set(follower_by_fqid)
-    remote_friends = []
-    # Remote following: ALL we follow, with display_name from RemoteFollower when they follow us
-    remote_followings_with_names = []
+    # Remote friends: ONLY mutual (both follow each other) - appear ONLY here, not in other sections
+    remote_friends = [
+        {"fqid": norm_fqid, "display_name": follower_by_fqid[norm_fqid].actor_display_name or "Remote author"}
+        for norm_fqid in follower_fqids
+        if norm_fqid in following_fqids
+    ]
+    mutual_fqids = {rf["fqid"] for rf in remote_friends}
+    # Remote following: only we follow them, they do NOT follow us (exclude mutual)
+    remote_followings_display = []
     for rf in remote_followings:
         norm_fqid = _normalize_fqid(rf.followed_fqid)
-        display_name = "Remote author"
-        if norm_fqid in follower_fqids:
-            display_name = follower_by_fqid[norm_fqid].actor_display_name or "Remote author"
-            remote_friends.append({"fqid": norm_fqid, "display_name": display_name})
-        remote_followings_with_names.append({
-            "fqid": norm_fqid,
-            "display_name": display_name,
-        })
+        if norm_fqid not in mutual_fqids:
+            remote_followings_display.append({"fqid": norm_fqid, "display_name": "Remote author"})
+    # Remote followers: only they follow us, we do NOT follow them (exclude mutual)
+    remote_followers = [
+        r for r in remote_followers_raw
+        if _normalize_fqid(r.actor_fqid) not in mutual_fqids
+    ]
 
     return render(request, "connections.html", {
         "followers": followers,
         "followings": followings,
         "friends": friends,
-        "remote_followings": remote_followings_with_names,
+        "remote_followings": remote_followings_display,
         "remote_followers": remote_followers,
         "remote_friends": remote_friends,
     })
@@ -553,8 +558,8 @@ def follow_remote_author(request, fqid):
 
 def unfollow_remote_author(request, fqid):
     """
-    Unfollow a remote author. Also removes them from RemoteFollower (complete disconnect)
-    so they disappear from both Remote Friends and Remote Followers.
+    Unfollow a remote author (stop following them). Does NOT remove them from RemoteFollower.
+    If they were a friend, they move to Remote Followers (they still follow you).
     """
     if not request.session.get("author_id"):
         return redirect("/app/login")
@@ -562,8 +567,6 @@ def unfollow_remote_author(request, fqid):
     me = Author.objects.get(id=request.session["author_id"])
     normalized = _normalize_fqid(fqid)
     RemoteFollow.objects.filter(follower=me, followed_fqid=normalized).delete()
-    # Also remove from RemoteFollower so they disappear from Remote Followers (complete unfriend)
-    RemoteFollower.objects.filter(actor_fqid=normalized, target=me).delete()
     messages.success(request, "You unfollowed this author.", extra_tags="follow")
     referer = request.META.get("HTTP_REFERER")
     if referer:
