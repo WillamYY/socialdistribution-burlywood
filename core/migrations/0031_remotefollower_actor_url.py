@@ -1,20 +1,34 @@
-# Add actor_url for armdb compatibility (column may already exist)
+"""
+ChatGPT, OpenAI, 2026-03-22, https://chatgpt.com/share/69c06f1d-df74-8329-a340-09d07835cfb1
+"""
+from django.db import migrations, models
 
-from django.db import migrations
+
+TABLE_NAME = "core_remotefollower"
+
+
+def _table_exists(schema_editor, table_name):
+    return table_name in schema_editor.connection.introspection.table_names()
+
+
+def _column_exists(schema_editor, table_name, column_name):
+    with schema_editor.connection.cursor() as cursor:
+        description = schema_editor.connection.introspection.get_table_description(cursor, table_name)
+    return any(col.name == column_name for col in description)
 
 
 def add_actor_url_if_missing(apps, schema_editor):
     """Add actor_url column only if it doesn't exist."""
-    with schema_editor.connection.cursor() as cursor:
-        cursor.execute("""
-            DO $$
-            BEGIN
-                IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
-                    WHERE table_name='core_remotefollower' AND column_name='actor_url') THEN
-                    ALTER TABLE core_remotefollower ADD COLUMN actor_url VARCHAR(500);
-                END IF;
-            END $$;
-        """)
+    if not _table_exists(schema_editor, TABLE_NAME):
+        return
+
+    if _column_exists(schema_editor, TABLE_NAME, "actor_url"):
+        return
+
+    RemoteFollower = apps.get_model("core", "RemoteFollower")
+    field = models.URLField(max_length=500, blank=True, null=True, db_column="actor_url")
+    field.set_attributes_from_name("actor_url")
+    schema_editor.add_field(RemoteFollower, field)
 
 
 def noop(apps, schema_editor):
@@ -24,7 +38,7 @@ def noop(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('core', '0030_remotefollowrequest_actor_url'),
+        ("core", "0030_remotefollowrequest_actor_url"),
     ]
 
     operations = [
