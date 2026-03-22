@@ -241,10 +241,15 @@ def ProfileDisplay(request, id):
     base_url = request.build_absolute_uri('/')[:-1]
     for entry in public_entries:
         entry_url = f"{base_url}/api/authors/{entry.author.id}/entries/{entry.id}"
-        entry.like_count = Like.objects.filter(object=entry_url).count()
+        # Tries both securea and insecure
+        if "https" in entry_url:
+            alt_url = entry_url.replace("https","http")
+        else:
+            alt_url = entry_url.replace('http',"https")
+        entry.like_count = Like.objects.filter(object=entry_url).count() + Like.objects.filter(object=alt_url).count()
         entry.comment_count = Comment.objects.filter(entry=entry_url).count()
         if user_fqid:
-            entry.liked_by_user = Like.objects.filter(object=entry_url, author=user_fqid).exists()
+            entry.liked_by_user = Like.objects.filter(object=entry_url, author=user_fqid).exists() or Like.objects.filter(object=alt_url, author=user_fqid).exists()
         else:
             entry.liked_by_user = False
 
@@ -621,6 +626,13 @@ def remove_remote_follower(request, fqid):
     return redirect("connections")
 
 
+def normalize_author_url(url):
+    if not url:
+        return ""
+    url = url.rstrip("/").lower()
+    url = url.replace("http://", "https://")
+    return url
+
 def RemoteProfileDisplay(request, fqid):
     """
     Displays the profile of a remote author. Fetches author and entries from remote node.
@@ -666,6 +678,7 @@ def RemoteProfileDisplay(request, fqid):
     if logged_in_id:
         base = request.build_absolute_uri('/')[:-1].replace("http://", "https://")
         user_fqid = f"{base}/api/authors/{logged_in_id}"
+        
 
     raw_entries = []
     if isinstance(entry_json, list):
@@ -707,13 +720,12 @@ def RemoteProfileDisplay(request, fqid):
 
         remote_user_liked = False
         for like in remote_likes_src:
-            like_author = (like.get("author") or {}).get("id")
-            if user_fqid == like_author:
-                print("HELLO")
+            like_author = (like.get("author") or {}).get("id") or ""
+            # Compare by author ID number only, as host varies
+            like_author_id = like_author.rstrip("/").split("/")[-1]
+            if like_author_id == str(logged_in_id):
                 remote_user_liked = True
                 break
-            else:
-                print(user_fqid, like_author)
 
         entry["liked_by_user"] = remote_user_liked
 
