@@ -288,7 +288,7 @@ def stream_view(request):
     # US#26: All PUBLIC entries from any author on the node
     # US#27: UNLISTED from following; FRIENDS from friends only
     # US#29: No DELETED (hard-delete removes from DB)
-    entries = (
+    local_entries = list(
         Entry.objects.filter(
             Q(visibility="PUBLIC")
             | Q(author_id__in=following_ids, visibility="UNLISTED")
@@ -298,10 +298,44 @@ def stream_view(request):
         .order_by("-published")
     )
 
+    # Public entries from IncomingNode; UNLISTED from following; FRIENDS from remote friends (mutual follow)
+    from core.models import RemoteFollow, RemoteFollower
+    from core.remote import fetch_remote_public_entries
+    following_remote_fqids = list(
+        RemoteFollow.objects.filter(follower=viewer).values_list("followed_fqid", flat=True)
+    )
+    # Remote friends = we follow them AND they follow us
+    followers_remote_fqids = set(
+        RemoteFollower.objects.filter(target=viewer).values_list("actor_fqid", flat=True)
+    )
+    friends_remote_fqids = [f for f in following_remote_fqids if f in followers_remote_fqids]
+    base_url_for_fetch = request.build_absolute_uri("/")[:-1]
+    viewer_fqid = f"{base_url_for_fetch}/api/authors/{viewer.id}"
+    remote_entries = fetch_remote_public_entries(
+        following_remote_fqids=following_remote_fqids,
+        friends_remote_fqids=friends_remote_fqids,
+        requested_by_fqid=viewer_fqid,
+    )
+
+    # Combine and sort by published (newest first)
+    def _sort_key(e):
+        p = getattr(e, "published", None)
+        if hasattr(p, "isoformat"):
+            return p.isoformat()
+        return str(p) if p else ""
+
+    entries = sorted(
+        local_entries + remote_entries,
+        key=_sort_key,
+        reverse=True,
+    )
+
     # Build the current user's URL
     base_url = request.build_absolute_uri('/')[:-1]
 
     for entry in entries:
+        if getattr(entry, "is_remote", False):
+            continue
         entry_url = f"{base_url}/api/authors/{entry.author.id}/entries/{entry.id}"
         
         # Fetch the count of interactions
