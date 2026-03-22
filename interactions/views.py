@@ -36,6 +36,7 @@ def add_like(request, entry_id):
     print(object_fqid)
     like = Like(object=object_fqid, author=author_fqid)
     like.uuid = uuid.uuid4()
+    like.id = author_fqid +  "/liked/" + str(like.uuid)
     like.save()
 
     return redirect(request.META.get('HTTP_REFERER', '/app/stream/'))
