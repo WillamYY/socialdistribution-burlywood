@@ -467,7 +467,7 @@ def connections(request):
 def get_admin_hosted_image(request, image_id):
     """
     Serve hosted image by id for Markdown embedding.
-    Uses HostedImage model (ImageField).
+    Uses AdminHostedImage model (ImageField).
     """
     hosted = get_object_or_404(AdminHostedImage, id=image_id)
     if not hosted.content or not hosted.content_type:
