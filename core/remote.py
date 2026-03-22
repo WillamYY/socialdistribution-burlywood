@@ -6,7 +6,12 @@ import json
 import re
 import requests
 from types import SimpleNamespace
+import logging
+import requests
+from api.serializers import EntrySerializer
+from core.models import RemoteFollow, RemoteFollower, EntryDelivery, OutgoingNode
 
+logger = logging.getLogger(__name__)
 
 _UUID_RE = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
@@ -55,6 +60,13 @@ def _normalize_fqid(s):
         s = "https" + s[4:]
     return s
 
+def _normalize_remote_fqid(fqid: str) -> str:
+    if not fqid:
+        return ""
+    fqid = str(fqid).strip().rstrip("/")
+    if fqid.startswith("http://"):
+        fqid = "https" + fqid[4:]
+    return fqid
 
 def fetch_remote_public_entries(following_remote_fqids=None, friends_remote_fqids=None, requested_by_fqid=None):
     """
@@ -166,3 +178,113 @@ def fetch_remote_public_entries(following_remote_fqids=None, friends_remote_fqid
             continue
 
     return all_entries
+
+def _inbox_url_for_author_fqid(author_fqid: str) -> str:
+    return f"{author_fqid.rstrip('/')}/inbox"
+
+def _credentials_for_remote_author(author_fqid: str):
+    """
+    Find matching OutgoingNode credentials based on the remote node base URL.
+    """
+    author_fqid = _normalize_remote_fqid(author_fqid)
+
+    for node in OutgoingNode.objects.filter(is_active=True):
+        base = (node.url or "").strip().rstrip("/")
+        if not base:
+            continue
+        if author_fqid.startswith(base):
+            return (node.username, node.password)
+
+    return None
+
+
+def get_remote_entry_recipients(author, visibility: str):
+    """
+    PUBLIC / UNLISTED -> remote followers + remote friends
+    FRIENDS -> remote friends only
+    DELETED is handled separately from delivery records
+    """
+    remote_followers = {
+        _normalize_remote_fqid(x)
+        for x in RemoteFollower.objects.filter(target=author).values_list("actor_fqid", flat=True)
+    }
+
+    remote_following = {
+        _normalize_remote_fqid(x)
+        for x in RemoteFollow.objects.filter(follower=author).values_list("followed_fqid", flat=True)
+    }
+
+    remote_friends = remote_followers & remote_following
+
+    if visibility in {"PUBLIC", "UNLISTED"}:
+        return sorted(remote_followers | remote_friends)
+    if visibility == "FRIENDS":
+        return sorted(remote_friends)
+
+    return []
+
+
+def _post_entry_to_single_remote(entry, request, recipient_fqid: str) -> bool:
+    recipient_fqid = _normalize_remote_fqid(recipient_fqid)
+    inbox_url = _inbox_url_for_author_fqid(recipient_fqid)
+
+    payload = EntrySerializer(entry, context={"request": request}).data
+    payload["type"] = "entry"
+
+    auth = _credentials_for_remote_author(recipient_fqid)
+    headers = {"Accept": "application/json", "Content-Type": "application/json"}
+
+    try:
+        response = requests.post(
+            inbox_url,
+            json=payload,
+            headers=headers,
+            auth=auth,
+            timeout=10,
+        )
+        if response.status_code in {200, 201, 202}:
+            return True
+
+        logger.warning(
+            "Entry federation failed entry=%s recipient=%s status=%s body=%s",
+            entry.id,
+            recipient_fqid,
+            response.status_code,
+            response.text[:300],
+        )
+        return False
+
+    except requests.RequestException as exc:
+        logger.warning(
+            "Entry federation request error entry=%s recipient=%s error=%s",
+            entry.id,
+            recipient_fqid,
+            exc,
+        )
+        return False
+
+def federate_entry_create_or_update(entry, request):
+    """
+    Send the current entry to all currently eligible remote recipients.
+    Also record successful deliveries.
+    """
+    recipients = get_remote_entry_recipients(entry.author, entry.visibility)
+
+    for recipient_fqid in recipients:
+        ok = _post_entry_to_single_remote(entry, request, recipient_fqid)
+        if ok:
+            EntryDelivery.objects.get_or_create(
+                entry=entry,
+                recipient_fqid=recipient_fqid,
+            )
+
+def federate_entry_deleted(entry, request):
+    """
+    Send deleted-state entry only to recipients that received it before.
+    """
+    previous_recipients = list(
+        entry.deliveries.values_list("recipient_fqid", flat=True)
+    )
+
+    for recipient_fqid in previous_recipients:
+        _post_entry_to_single_remote(entry, request, recipient_fqid)
