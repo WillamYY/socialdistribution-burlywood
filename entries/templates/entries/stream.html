@@ -36,13 +36,8 @@
             </div>
 
             <div class="interaction-row" onclick="event.stopPropagation();">
-                {% if entry.is_remote %}
-                <div class="stat-item">
-                    <span class="icon">🤍</span>
-                    <span class="count">{{ entry.like_count|default:0 }}</span>
-                </div>
-                {% elif request.session.author_id %}
-                <form method="POST" action="{% url 'interactions:add_like' entry.id %}">
+                {% if request.session.author_id %}
+                <form method="POST" action="{% if entry.is_remote %}{% url 'interactions:add_remote_like' entry.clean_id %}{% else %}{% url 'interactions:add_like' entry.id %}{% endif %}">
                     {% csrf_token %}
                     <button type="submit" class="stat-item {% if entry.liked_by_user %}liked{% endif %}">
                         <span class="icon">{% if entry.liked_by_user %}❤️{% else %}🤍{% endif %}</span>
