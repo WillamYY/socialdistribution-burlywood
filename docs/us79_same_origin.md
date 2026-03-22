@@ -49,5 +49,5 @@ python manage.py test core.tests.SameOriginSecurityMiddlewareTestCase
 -API Documentation
 
 ## Citation
-- For documentation and some error fixing, used genAI for formatting help.
+- For documentation and some error fixing, used genAI for formatting help and testing.
 Prompt- "Help me clean the formatting for this document and make it look tidy"
