@@ -1,7 +1,7 @@
 from django.http import HttpResponse, Http404
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
-from .models import Author, FollowRequest, AuthorRequest, IncomingNode, RemoteFollow, RemoteFollowRequest, RemoteFollower, HostedImage
+from .models import Author, FollowRequest, AuthorRequest, IncomingNode, RemoteFollow, RemoteFollowRequest, RemoteFollower, AdminHostedImage
 from entries.models import Entry
 from interactions.models import Like, Comment
 from django.contrib.auth.hashers import check_password
@@ -13,6 +13,7 @@ import json
 import logging
 from api.serializers import EntrySerializer
 import re
+import base64
 
 logger = logging.getLogger(__name__)
 
@@ -468,18 +469,14 @@ def get_admin_hosted_image(request, image_id):
     Serve hosted image by id for Markdown embedding.
     Uses HostedImage model (ImageField).
     """
-    hosted = get_object_or_404(HostedImage, id=image_id)
-    if not hosted.image:
+    hosted = get_object_or_404(AdminHostedImage, id=image_id)
+    if not hosted.content or not hosted.content_type:
         return HttpResponse(status=404)
     try:
-        with hosted.image.open("rb") as f:
-            content = f.read()
-        content_type = "image/png"
-        if hasattr(hosted.image, "content_type") and hosted.image.content_type:
-            content_type = hosted.image.content_type
-        return HttpResponse(content, content_type=content_type)
-    except (IOError, OSError):
+        binary_data = base64.b64decode(hosted.content)
+    except (ValueError, TypeError):
         return HttpResponse(status=404)
+    return HttpResponse(binary_data, content_type=hosted.content_type)
 
 
 def _normalize_fqid(s):
