@@ -22,7 +22,7 @@ def add_like(request, entry_id):
     entry = get_object_or_404(Entry, id=entry_id)
 
     object_fqid = f"{entry.author.host}authors/{entry.author.id}/entries/{entry.id}".rstrip("/")
-    author_fqid = f"{request.build_absolute_uri('/')[:-1]}/api/authors/{me.id}".rstrip("/")
+    author_fqid = f"{me.host}authors/{me.id}".rstrip("/")
 
     existing = Like.objects.filter(
         object__in=[object_fqid, object_fqid + "/"],
