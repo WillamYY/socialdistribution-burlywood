@@ -40,7 +40,7 @@ def add_like(request, entry_id):
     like.save()
 
     return redirect(request.META.get('HTTP_REFERER', '/app/stream/'))
-    
+
 def add_remote_like(request, entry_id):
     if request.method == "POST":
         author_id = request.session.get("author_id")
@@ -52,7 +52,8 @@ def add_remote_like(request, entry_id):
         jsonEntry = json.loads(entryInfo.text)
         foreignAuthor = jsonEntry["author"]["id"]
         # Get author making request
-        entry_id = entry_id.replace("http","https")
+        if "https" not in entry_id:
+            entry_id = entry_id.replace("http","https")
         author = get_object_or_404(Author, pk = author_id)
         # Print the likes
         print(jsonEntry["likes"]["count"])
