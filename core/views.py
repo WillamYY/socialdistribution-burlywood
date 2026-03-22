@@ -709,6 +709,7 @@ def RemoteProfileDisplay(request, fqid):
         for like in remote_likes_src:
             like_author = (like.get("author") or {}).get("id")
             if user_fqid == like_author:
+                print("HELLO")
                 remote_user_liked = True
                 break
             else:
