@@ -238,13 +238,23 @@ def ProfileDisplay(request, id):
     if logged_in_id:
         user_fqid = f"{request.build_absolute_uri('/')[:-1]}/api/authors/{logged_in_id}"
     public_entries = Entry.objects.filter(author=author, visibility="PUBLIC")
-    base_url = request.build_absolute_uri('/')[:-1]
+    
     for entry in public_entries:
-        entry_url = f"{base_url}/api/authors/{entry.author.id}/entries/{entry.id}"
-        entry.like_count = Like.objects.filter(object=entry_url).count()
-        entry.comment_count = Comment.objects.filter(entry=entry_url).count()
+        entry_url = f"{entry.author.host}authors/{entry.author.id}/entries/{entry.id}".rstrip("/")
+
+        entry.like_count = Like.objects.filter(
+            object__in=[entry_url, entry_url + "/"]
+        ).count()
+
+        entry.comment_count = Comment.objects.filter(
+            entry__in=[entry_url, entry_url + "/"]
+        ).count()
+
         if user_fqid:
-            entry.liked_by_user = Like.objects.filter(object=entry_url, author=user_fqid).exists()
+            entry.liked_by_user = Like.objects.filter(
+                object__in=[entry_url, entry_url + "/"],
+                author__in=[user_fqid.rstrip("/"), user_fqid.rstrip("/") + "/"]
+            ).exists()
         else:
             entry.liked_by_user = False
 

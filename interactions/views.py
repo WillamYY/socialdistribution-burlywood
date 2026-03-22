@@ -12,29 +12,32 @@ from django.http import JsonResponse
 
 def add_like(request, entry_id):
     if request.method != "POST":
-        return JsonResponse({"error": "Method not allowed"}, status=405)
+        return JsonResponse({"success": False, "error": "POST required"}, status=405)
 
     author_id = request.session.get("author_id")
     if not author_id:
-        return JsonResponse({"error": "Not logged in"}, status=401)
+        return JsonResponse({"success": False, "error": "Login required"}, status=403)
 
+    me = get_object_or_404(Author, id=author_id)
     entry = get_object_or_404(Entry, id=entry_id)
-    base = request.build_absolute_uri('/')[:-1]
-    entry_fqid = f"{base}/api/authors/{entry.author.id}/entries/{entry.id}"
-    author_fqid = f"{base}/api/authors/{author_id}"
 
-    like_id = uuid.uuid4()
-    like, created = Like.objects.get_or_create(
-        author=author_fqid,
-        object=entry_fqid,
-        defaults={'id': f"{base}/likes/{like_id}", "uuid": like_id}
-    )
+    object_fqid = f"{entry.author.host}authors/{entry.author.id}/entries/{entry.id}".rstrip("/")
+    author_fqid = f"{request.build_absolute_uri('/')[:-1]}/api/authors/{me.id}".rstrip("/")
 
-    if created:
-        return JsonResponse({"success": True, "liked": True})
-    else:
-        like.delete()
+    existing = Like.objects.filter(
+        object__in=[object_fqid, object_fqid + "/"],
+        author__in=[author_fqid, author_fqid + "/"]
+    ).first()
+
+    if existing:
+        existing.delete()
         return JsonResponse({"success": True, "liked": False})
+
+    like = Like(object=object_fqid, author=author_fqid)
+    like.uuid = uuid.uuid4()
+    like.save()
+
+    return JsonResponse({"success": True, "liked": True})
 
 def add_remote_like(request, entry_id):
     if request.method == "POST":
