@@ -13,11 +13,11 @@
         section.connections__section {
             margin-top: 3em;
             display: flex;
-            flex-flow: row nowrap;
+            flex-flow: row wrap;
             justify-content: space-around;
-            gap: 3em;
-            padding-left: 4em;
-            padding-right: 4em;
+            gap: 2em;
+            padding-left: 2em;
+            padding-right: 2em;
         }
 
         h2.connections__h2 {
@@ -205,6 +205,75 @@
                         </div>
                     </section>
                 </li>
+                {% endfor %}
+            </ul>
+        </section>
+        <section class="connections__container" id="remote-followers">
+            <h2 class="connections__h2">Remote Followers</h2>
+            <ul>
+                {% for rf in remote_followers %}
+                <li>
+                    <section class="profile-card">
+                        <div class="profile-picture-container">
+                            <img class="profile-picture" src="{% static 'images/default_profile.jpg' %}" alt="Remote">
+                        </div>
+                        <div class="profile-information">
+                            <h3 title="{{ rf.actor_fqid }}">{{ rf.actor_display_name|default:"Remote author" }}</h3>
+                            <div class="button-container">
+                                <a href="{% url 'RemoteProfileDisplay' rf.actor_fqid %}">View</a>
+                                <a href="{% url 'RemoveRemoteFollower' rf.actor_fqid %}" class="follow-btn unfollow">Remove</a>
+                            </div>
+                        </div>
+                    </section>
+                </li>
+                {% empty %}
+                <li><p class="muted">No remote followers.</p></li>
+                {% endfor %}
+            </ul>
+        </section>
+        <section class="connections__container" id="remote-following">
+            <h2 class="connections__h2">Remote Following</h2>
+            <ul>
+                {% for rf in remote_followings %}
+                <li>
+                    <section class="profile-card">
+                        <div class="profile-picture-container">
+                            <img class="profile-picture" src="{% static 'images/default_profile.jpg' %}" alt="Remote">
+                        </div>
+                        <div class="profile-information">
+                            <h3 title="{{ rf.fqid }}">{{ rf.display_name|default:"Remote author" }}</h3>
+                            <div class="button-container">
+                                <a href="{% url 'RemoteProfileDisplay' rf.fqid %}">View</a>
+                                <a href="{% url 'UnfollowRemoteAuthor' rf.fqid %}" class="follow-btn unfollow">Unfollow</a>
+                            </div>
+                        </div>
+                    </section>
+                </li>
+                {% empty %}
+                <li><p class="muted">No remote authors followed.</p></li>
+                {% endfor %}
+            </ul>
+        </section>
+        <section class="connections__container" id="remote-friends">
+            <h2 class="connections__h2">Remote Friends</h2>
+            <ul>
+                {% for rf in remote_friends %}
+                <li>
+                    <section class="profile-card">
+                        <div class="profile-picture-container">
+                            <img class="profile-picture" src="{% static 'images/default_profile.jpg' %}" alt="Remote">
+                        </div>
+                        <div class="profile-information">
+                            <h3 title="{{ rf.fqid }}">{{ rf.display_name }}</h3>
+                            <div class="button-container">
+                                <a href="{% url 'RemoteProfileDisplay' rf.fqid %}">View</a>
+                                <a href="{% url 'UnfollowRemoteAuthor' rf.fqid %}" class="follow-btn unfollow">Unfriend</a>
+                            </div>
+                        </div>
+                    </section>
+                </li>
+                {% empty %}
+                <li><p class="muted">No remote friends.</p></li>
                 {% endfor %}
             </ul>
         </section>

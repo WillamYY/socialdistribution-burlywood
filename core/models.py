@@ -47,6 +47,52 @@ class FollowRequest(models.Model):
     class Meta:
         unique_together = ('requester', 'target')  # prevent duplicate requests
 
+
+class RemoteFollow(models.Model):
+    """
+    Local author following a remote author (by FQID).
+    Same semantics as Author.following for local authors.
+    """
+    follower = models.ForeignKey(Author, on_delete=models.CASCADE, related_name='remote_following')
+    followed_fqid = models.URLField(max_length=500)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('follower', 'followed_fqid')
+
+
+class RemoteFollowRequest(models.Model):
+    """
+    Follow request from a remote actor (they want to follow our local author).
+    Shows up in Follow Requests so the target can approve/deny.
+    actor_url: legacy/alternate column name (some deployments use this).
+    """
+    actor_fqid = models.URLField(max_length=500)
+    actor_url = models.URLField(max_length=500, blank=True, null=True, db_column="actor_url")  # alias for armdb compatibility
+    actor_display_name = models.CharField(max_length=255, blank=True, default="Remote author")
+    target = models.ForeignKey(Author, on_delete=models.CASCADE, related_name='remote_follow_requests')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('actor_fqid', 'target')
+
+
+class RemoteFollower(models.Model):
+    """
+    Remote actor follows our local author (approved).
+    Friends = mutual follow: we follow them (RemoteFollow) and they follow us (RemoteFollower).
+    actor_url: legacy/alternate column name (some deployments use this).
+    """
+    actor_fqid = models.URLField(max_length=500)
+    actor_url = models.URLField(max_length=500, blank=True, null=True, db_column="actor_url")  # armdb compatibility
+    actor_display_name = models.CharField(max_length=255, blank=True, default="Remote author")
+    target = models.ForeignKey(Author, on_delete=models.CASCADE, related_name='remote_followers')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('actor_fqid', 'target')
+
+
 """
 Creates a class for the request to create a new author
 """

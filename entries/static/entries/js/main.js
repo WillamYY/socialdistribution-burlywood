@@ -7,14 +7,10 @@ function isSameOrigin(url) {
     if (!url || typeof url !== 'string') return false;
     if (url.startsWith('/') && !url.startsWith('//')) return true;  // relative URL
     try {
-        // Use the DOM to parse the URL by creating a temporary anchor element
         const link = document.createElement('a');
         link.href = url;
-        
-        // Compare the parsed components against the current window's location
-        // This enforces the Same-Origin Policy
         return link.hostname === window.location.hostname &&
-                link.protocol === window.location.protocol;
+               link.protocol === window.location.protocol;
     } catch (_) {
         return false;
     }
@@ -26,8 +22,8 @@ function isSameOrigin(url) {
  */
 function escapeHtml(text) {
     const div = document.createElement("div");
-    div.textContent = text; // Browser handles encoding
-    return div.innerHTML; // Returns the safe string
+    div.textContent = text;
+    return div.innerHTML;
 }
 
 /**
@@ -43,24 +39,20 @@ function buildMarkdownImage(alt, url) {
  * Return a descriptive error string or an empty string if valid.
  */
 function validateMarkdownImageSyntax(value) {
-    // Check if user probably wants to use Markdown image syntax
     if (!value || !value.includes("![")) {
         return "";
     }
 
-    // If image marker ![ exists, but no proper ( after it
     const missingParenPattern = /!\[[^\]]*\](?!\()/;
     if (missingParenPattern.test(value)) {
         return "Invalid Markdown image syntax. Use the format: ![alt text](url)";
     }
 
-    // If no image URL in ()
     const emptyUrlPattern = /!\[[^\]]*\]\(\s*\)/;
     if (emptyUrlPattern.test(value)) {
         return "Markdown image URL cannot be empty. Use the format: ![alt text](url)";
     }
 
-    // If not enclose the URL with )
     const openPattern = /!\[[^\]]*\]\(/g;
     let match;
     while ((match = openPattern.exec(value)) !== null) {
@@ -69,8 +61,7 @@ function validateMarkdownImageSyntax(value) {
             return "Markdown image link is not enclosed with ')'. Use the format: ![alt text](url)";
         }
     }
-    
-    // Otherwise valid syntax
+
     return "";
 }
 
@@ -79,9 +70,7 @@ function validateMarkdownImageSyntax(value) {
  * Return an array of objects: { alt: string, url: string }
  */
 function extractMarkdownImages(value) {
-    // Note: Every regex match in JS is represented as [fullMatch, captureGroup1, captureGroup2, ...]
-    const matches = [...value.matchAll(/!\[([^\]]*)\]\(([^)\s]+)\)/g)];
-    // Decompose each matched pattern into alt and url
+    const matches = [...(value || "").matchAll(/!\[([^\]]*)\]\(([^)\s]+)\)/g)];
     return matches.map(match => ({
         alt: match[1],
         url: match[2]
@@ -89,25 +78,29 @@ function extractMarkdownImages(value) {
 }
 
 /**
- * This JavaScript makes any element with class clickable behave like a link 
+ * This JavaScript makes any element with class clickable behave like a link
  * by reading a URL stored in data-url and redirecting the browser when it is clicked.
- * ChatGPT, OpenAI, 2026-03-20, https://chatgpt.com/share/69abd12e-d60c-8012-9314-256ba8e7c590
+ * US#79: Only navigate to same-origin URLs to prevent XSS.
+ * Remote URLs (data-remote="true") open in new tab.
+ * ChatGPT, OpenAI, 2026-03-12, https://chatgpt.com/share/69abd12e-d60c-8012-9314-256ba8e7c590
  */
 document.addEventListener("DOMContentLoaded", function() {
     document.body.addEventListener('click', function(event) {
-        // Find the closest parent with the .clickable class
         const clickableEl = event.target.closest('.clickable');
-        
-        // Ignore clicks on interactive elements
+
         if (event.target.closest('a, button, input, textarea, select')) {
             return;
         }
 
         if (clickableEl) {
             const url = clickableEl.dataset.url;
-            if (url && isSameOrigin(url) && !url.startsWith('javascript:')) {
+            if (!url || typeof url !== 'string') return;
+            if (clickableEl.dataset.remote === 'true') {
                 event.preventDefault();
-                window.location.href = url; // Perform the redirection
+                window.open(url, '_blank', 'noopener,noreferrer');
+            } else if (isSameOrigin(url) && !url.startsWith('javascript:')) {
+                event.preventDefault();
+                window.location.href = url;
             }
         }
     });
@@ -129,7 +122,6 @@ document.addEventListener("DOMContentLoaded", function() {
     const markdownImageAltInput = document.getElementById("markdownImageAltInput");
     const insertMarkdownImageBtn = document.getElementById("insertMarkdownImageBtn");
 
-    // Ensure essential form elements exist before initializing logic
     if (select && textSection && imageSection) {
         /**
          * Record cursor position and insert text there.
@@ -146,7 +138,7 @@ document.addEventListener("DOMContentLoaded", function() {
             textarea.focus();
             textarea.setSelectionRange(newCursorPos, newCursorPos);
         }
-        
+
         /**
          * Update the visibility of help boxes and the live preview.
          */
@@ -159,7 +151,6 @@ document.addEventListener("DOMContentLoaded", function() {
                 return;
             }
 
-            // Hide all Markdown-related UI if the mode is not Markdown (like Image toggle)
             if (!isMarkdown || isImage || !textInput || textInput.disabled) {
                 markdownHelpBox.style.display = "none";
                 markdownHintBox.style.display = "none";
@@ -168,10 +159,8 @@ document.addEventListener("DOMContentLoaded", function() {
                 return;
             }
 
-            // Display general Markdown instructions
             markdownHelpBox.style.display = "block";
 
-            // Update error hints based on real-time validation
             const issue = validateMarkdownImageSyntax(value);
             if (issue) {
                 markdownHintBox.textContent = issue;
@@ -181,10 +170,8 @@ document.addEventListener("DOMContentLoaded", function() {
                 markdownHintBox.style.display = "none";
             }
 
-            // Render live preview of images found in the text
             const images = extractMarkdownImages(value);
             if (images.length > 0) {
-                // Map image data to <img> tags, ensuring URLs and Alts are escaped for safety
                 markdownPreviewContent.innerHTML = images
                     .map(img => `<img src="${escapeHtml(img.url)}" alt="${escapeHtml(img.alt)}">`)
                     .join("");
@@ -217,51 +204,46 @@ document.addEventListener("DOMContentLoaded", function() {
                 }
             }
 
-            // Sync the Markdown UI with the new section state
             updateMarkdownUi();
         }
 
-        // Event Listeners for the form
         select.addEventListener("change", toggleSections);
-        
+
         if (textInput) {
             textInput.addEventListener("input", updateMarkdownUi);
         }
 
         if (insertMarkdownImageBtn && textInput) {
             insertMarkdownImageBtn.addEventListener("click", function() {
-                // Extract the user input url and alt text
                 const url = markdownImageUrlInput ? markdownImageUrlInput.value.trim() : "";
                 const alt = markdownImageAltInput ? markdownImageAltInput.value.trim() : "";
 
-                // Check if any url provided
                 if (!url) {
-                    markdownHintBox.textContent = "Please enter an image URL before inserting.";
-                    markdownHintBox.style.display = "block";
+                    if (markdownHintBox) {
+                        markdownHintBox.textContent = "Please enter an image URL before inserting.";
+                        markdownHintBox.style.display = "block";
+                    }
                     return;
                 }
 
-                // Check if basic valid url provided
                 if (!/^https?:\/\//i.test(url) && !url.startsWith('/')) {
-                    markdownHintBox.textContent = "Image URL must start with http://, https://, or /";
-                    markdownHintBox.style.display = "block";
+                    if (markdownHintBox) {
+                        markdownHintBox.textContent = "Image URL must start with http://, https://, or /";
+                        markdownHintBox.style.display = "block";
+                    }
                     return;
                 }
 
-                // Initialize the syntax for Markdown image and insert it
                 const markdownImage = buildMarkdownImage(alt, url);
-                let textToInsert = markdownImage;
-                insertAtCursor(textInput, textToInsert);
+                insertAtCursor(textInput, markdownImage);
 
-                // Clean the last input
                 if (markdownImageUrlInput) markdownImageUrlInput.value = "";
                 if (markdownImageAltInput) markdownImageAltInput.value = "";
 
                 updateMarkdownUi();
             });
         }
-        
-        // Initialize state on load
+
         toggleSections();
     }
 });

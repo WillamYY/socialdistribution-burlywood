@@ -119,8 +119,19 @@
             <div class="stats">
                 <p><strong>Followers:</strong> {{ followers_count }} | <strong>Following:</strong> {{ following_count }}</p>
             </div>
+
+            {% if logged_in_id and author_fqid %}
+                {% if is_following %}
+                    <a href="{% url 'UnfollowRemoteAuthor' author_fqid %}" class="follow-btn unfollow">Unfollow</a>
+                {% elif request_sent %}
+                    <button class="follow-btn request-sent" disabled>Request Sent</button>
+                {% else %}
+                    <a href="{% url 'FollowRemoteAuthor' author_fqid %}" class="follow-btn follow">Follow</a>
+                {% endif %}
+                <a href="{% url 'RemoteProfileDisplay' author_fqid %}#entries" class="follow-btn view-entries">View Entries</a>
+            {% endif %}
         </div>
-        <section class="entry__container">
+        <section class="entry__container" id="entries">
             <h2 class="h2__container">Public entries</h2>
             {% for entry in public_entries %}
                 <div class="entry-card">
