@@ -208,29 +208,6 @@
                 {% endfor %}
             </ul>
         </section>
-        <section class="connections__container" id="remote-following">
-            <h2 class="connections__h2">Remote Following</h2>
-            <ul>
-                {% for rf in remote_followings %}
-                <li>
-                    <section class="profile-card">
-                        <div class="profile-picture-container">
-                            <img class="profile-picture" src="{% static 'images/default_profile.jpg' %}" alt="Remote">
-                        </div>
-                        <div class="profile-information">
-                            <h3 title="{{ rf.fqid }}">{{ rf.display_name|default:"Remote author" }}</h3>
-                            <div class="button-container">
-                                <a href="{% url 'RemoteProfileDisplay' rf.fqid %}">View</a>
-                                <a href="{% url 'UnfollowRemoteAuthor' rf.fqid %}" class="follow-btn unfollow">Unfollow</a>
-                            </div>
-                        </div>
-                    </section>
-                </li>
-                {% empty %}
-                <li><p class="muted">No remote authors followed.</p></li>
-                {% endfor %}
-            </ul>
-        </section>
         <section class="connections__container" id="remote-followers">
             <h2 class="connections__h2">Remote Followers</h2>
             <ul>
@@ -251,6 +228,29 @@
                 </li>
                 {% empty %}
                 <li><p class="muted">No remote followers.</p></li>
+                {% endfor %}
+            </ul>
+        </section>
+        <section class="connections__container" id="remote-following">
+            <h2 class="connections__h2">Remote Following</h2>
+            <ul>
+                {% for rf in remote_followings %}
+                <li>
+                    <section class="profile-card">
+                        <div class="profile-picture-container">
+                            <img class="profile-picture" src="{% static 'images/default_profile.jpg' %}" alt="Remote">
+                        </div>
+                        <div class="profile-information">
+                            <h3 title="{{ rf.fqid }}">{{ rf.display_name|default:"Remote author" }}</h3>
+                            <div class="button-container">
+                                <a href="{% url 'RemoteProfileDisplay' rf.fqid %}">View</a>
+                                <a href="{% url 'UnfollowRemoteAuthor' rf.fqid %}" class="follow-btn unfollow">Unfollow</a>
+                            </div>
+                        </div>
+                    </section>
+                </li>
+                {% empty %}
+                <li><p class="muted">No remote authors followed.</p></li>
                 {% endfor %}
             </ul>
         </section>
