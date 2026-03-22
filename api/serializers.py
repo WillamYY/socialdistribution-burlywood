@@ -278,33 +278,37 @@ class EntrySerializer(serializers.ModelSerializer):
         """
         Getter for the likes on this entry.
         """
-        base_url = self.get_id(obj).rstrip("/")
-        likes_url = f"{base_url}/likes"
-
-        possible_objects = [
-            base_url,
-            f"{base_url}/",
-            str(obj.id),
-        ]
-
-        # Fallback for older stored formats
-        entry_likes = Like.objects.filter(object__in=possible_objects)
-
-        if not entry_likes.exists():
-            search = re.search(r"entr(?:y|ies)/([^/]+)", base_url)
-            if search:
-                entry_id_part = search.group(1)
-                alt = entry_id_part[:-1] if entry_id_part.endswith("/") else f"{entry_id_part}/"
-                entry_likes = Like.objects.filter(object__endswith=entry_id_part) | Like.objects.filter(object__endswith=alt)
-
+        # Construct the base URL for the likes endpoint
+        base_url = self.get_id(obj)
+        
+        likes_url = f"{base_url}likes" 
+        # Handles both http and http requests
+        search = re.search("entr(?:y|ies)/([^/]+)",base_url)
+        # Prevents crashes
+        if not search:
+            entry_likes = []
+        else:
+            # Handles both the no slash and slash version
+            if search.group(1)[-1] == "/":
+                alt = search.group(1)[:-1]
+            else:
+                alt = search.group(1) + "/"
+            print(search.group(1),alt)
+            # Query the database for likes on this entry
+            entry_likes = Like.objects.filter(object__endswith=search.group(1)) | Like.objects.filter(object__endswith=alt)
+        
+        # Package the data for LikesSerializer
         likes_data = {
             "page_number": 1,
             "size": 50,
             "count": entry_likes.count(),
-            "src": entry_likes,
+            "src": entry_likes
         }
-
+        
+        # Instantiate LikesSerializer
         serializer = LikesSerializer(likes_data, context={"link": likes_url})
+        
+        # Return the fully formed JSON dictionary
         return serializer.data
 
     
