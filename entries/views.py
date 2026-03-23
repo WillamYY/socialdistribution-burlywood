@@ -293,11 +293,12 @@ def stream_view(request):
     friend_ids = list(viewer.friends().values_list("id", flat=True))
 
     # US#26: All PUBLIC entries from any author on the node
-    # US#27: UNLISTED from following; FRIENDS from friends only
+    # US#27: UNLISTED from following (and viewer's own); FRIENDS from friends (and viewer's own)
     # US#29: No DELETED (hard-delete removes from DB)
     local_entries = list(
         Entry.objects.filter(
             Q(visibility="PUBLIC")
+            | Q(author_id=viewer.id, visibility__in=["UNLISTED", "FRIENDS"])  # author sees own unlisted/friends
             | Q(author_id__in=following_ids, visibility="UNLISTED")
             | Q(author_id__in=friend_ids, visibility="FRIENDS")
         )
@@ -385,6 +386,7 @@ def stream_api(request, author_id):
     entries = (
         Entry.objects.filter(
             Q(visibility="PUBLIC")
+            | Q(author_id=viewer.id, visibility__in=["UNLISTED", "FRIENDS"])
             | Q(author_id__in=following_ids, visibility="UNLISTED")
             | Q(author_id__in=friend_ids, visibility="FRIENDS")
         )

@@ -216,10 +216,28 @@ def profile_view(request):
 
     author = Author.objects.get(id=request.session["author_id"])
 
-    followers_count = author.followers.exclude(id__in=author.following.values_list("id", flat=True)).count()
-    following_count = author.following.exclude(id__in=author.followers.values_list("id", flat=True)).count()
-    friends_count = author.friends().count()
+    # Local: followers (excl mutual), following (excl mutual), friends (mutual)
+    local_followers_only = author.followers.exclude(id__in=author.following.values_list("id", flat=True))
+    local_following_only = author.following.exclude(id__in=author.followers.values_list("id", flat=True))
+    local_friends = author.friends()
+
+    # Remote: same logic as connections view
+    remote_followings_raw = list(RemoteFollow.objects.filter(follower=author).order_by("created_at"))
+    remote_followers_raw = list(RemoteFollower.objects.filter(target=author).order_by("created_at"))
+    following_fqids = {_normalize_fqid(rf.followed_fqid) for rf in remote_followings_raw}
+    follower_by_fqid = {_normalize_fqid(r.actor_fqid): r for r in remote_followers_raw}
+    follower_fqids = set(follower_by_fqid)
+    remote_friends = [norm_fqid for norm_fqid in follower_fqids if norm_fqid in following_fqids]
+    mutual_fqids = set(remote_friends)
+    remote_followings_only = [rf for rf in remote_followings_raw if _normalize_fqid(rf.followed_fqid) not in mutual_fqids]
+    remote_followers_only = [r for r in remote_followers_raw if _normalize_fqid(r.actor_fqid) not in mutual_fqids]
+
+    followers_count = local_followers_only.count() + len(remote_followers_only)
+    following_count = local_following_only.count() + len(remote_followings_only)
+    friends_count = local_friends.count() + len(remote_friends)
+
     pending_requests_count = FollowRequest.objects.filter(target=author).count()
+    pending_requests_count += RemoteFollowRequest.objects.filter(target=author).count()
 
     return render(request, "profile.html", {
         "author": author,
