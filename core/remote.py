@@ -7,9 +7,8 @@ import re
 import requests
 from types import SimpleNamespace
 import logging
-import requests
 from api.serializers import EntrySerializer
-from core.models import RemoteFollow, RemoteFollower, EntryDelivery, OutgoingNode
+from core.models import RemoteFollow, RemoteFollower, EntryDelivery, IncomingNode
 
 logger = logging.getLogger(__name__)
 
@@ -60,14 +59,6 @@ def _normalize_fqid(s):
         s = "https" + s[4:]
     return s
 
-def _normalize_remote_fqid(fqid: str) -> str:
-    if not fqid:
-        return ""
-    fqid = str(fqid).strip().rstrip("/")
-    if fqid.startswith("http://"):
-        fqid = "https" + fqid[4:]
-    return fqid
-
 def fetch_remote_public_entries(following_remote_fqids=None, friends_remote_fqids=None, requested_by_fqid=None):
     """
     Fetch public entries from IncomingNode nodes.
@@ -76,8 +67,6 @@ def fetch_remote_public_entries(following_remote_fqids=None, friends_remote_fqid
     - requested_by_fqid: passed as X-Requested-By header so remote can include FRIENDS.
     Returns list of SimpleNamespace objects compatible with stream display.
     """
-    from core.models import IncomingNode
-
     following_remote_fqids = following_remote_fqids or []
     friends_remote_fqids = friends_remote_fqids or []
     following_normalized = {_normalize_fqid(f) for f in following_remote_fqids}
@@ -90,8 +79,16 @@ def fetch_remote_public_entries(following_remote_fqids=None, friends_remote_fqid
         base = node.url.rstrip("/")
         if not base:
             continue
+
+        # Use IncomingNode credentials because we are fetching from THEM
+        auth = (node.username, node.password)
+
         try:
-            resp = requests.get(f"{base}/api/authors/", timeout=10)
+            resp = requests.get(
+                f"{base}/api/authors/",
+                auth=auth,
+                timeout=10,
+            )
             if resp.status_code != 200:
                 continue
             data = resp.json()
@@ -121,7 +118,12 @@ def fetch_remote_public_entries(following_remote_fqids=None, friends_remote_fqid
                 entries_url = f"{node_base}/api/authors/{author_num_id}/entries/"
                 headers = {"X-Requested-By": requested_by_fqid} if (include_friends and requested_by_fqid) else {}
                 try:
-                    entry_resp = requests.get(entries_url, headers=headers, timeout=10)
+                    entry_resp = requests.get(
+                        entries_url,
+                        headers=headers,
+                        auth=auth,
+                        timeout=10,
+                    )
                     if entry_resp.status_code != 200:
                         continue
                     entry_data = entry_resp.json()
@@ -180,15 +182,19 @@ def fetch_remote_public_entries(following_remote_fqids=None, friends_remote_fqid
     return all_entries
 
 def _inbox_url_for_author_fqid(author_fqid: str) -> str:
+    """
+    Turn a remote author FQID to that author's inbox URL.
+    """
     return f"{author_fqid.rstrip('/')}/inbox"
 
 def _credentials_for_remote_author(author_fqid: str):
     """
-    Find matching OutgoingNode credentials based on the remote node base URL.
+    Find matching IncomingNode credentials based on the remote node base URL.
+    These are the credentials our node uses to authenticate to that remote node.
     """
-    author_fqid = _normalize_remote_fqid(author_fqid)
+    author_fqid = _normalize_fqid(author_fqid)
 
-    for node in OutgoingNode.objects.filter(is_active=True):
+    for node in IncomingNode.objects.all():
         base = (node.url or "").strip().rstrip("/")
         if not base:
             continue
@@ -197,44 +203,52 @@ def _credentials_for_remote_author(author_fqid: str):
 
     return None
 
-
 def get_remote_entry_recipients(author, visibility: str):
     """
     PUBLIC / UNLISTED -> remote followers + remote friends
     FRIENDS -> remote friends only
     DELETED is handled separately from delivery records
     """
+    # Fetch all remote following relationships
     remote_followers = {
-        _normalize_remote_fqid(x)
-        for x in RemoteFollower.objects.filter(target=author).values_list("actor_fqid", flat=True)
+        _normalize_fqid(x) for x in RemoteFollower.objects.filter(target=author).values_list("actor_fqid", flat=True)
     }
-
     remote_following = {
-        _normalize_remote_fqid(x)
-        for x in RemoteFollow.objects.filter(follower=author).values_list("followed_fqid", flat=True)
+        _normalize_fqid(x) for x in RemoteFollow.objects.filter(follower=author).values_list("followed_fqid", flat=True)
     }
 
+    # Intersect two sets to find friends (mutual following)
     remote_friends = remote_followers & remote_following
 
+    # Fetch recipients by different visibilities
     if visibility in {"PUBLIC", "UNLISTED"}:
         return sorted(remote_followers | remote_friends)
     if visibility == "FRIENDS":
         return sorted(remote_friends)
-
+    # If none of the above visibilities, no recipients (DELETED)
     return []
 
 
 def _post_entry_to_single_remote(entry, request, recipient_fqid: str) -> bool:
-    recipient_fqid = _normalize_remote_fqid(recipient_fqid)
+    """
+    Perform the action of POST request to an outgoing node.
+    Check success/failuree by response.
+    """
+    # Normalize the recipient's FQID and inbox/
+    recipient_fqid = _normalize_fqid(recipient_fqid)
     inbox_url = _inbox_url_for_author_fqid(recipient_fqid)
 
+    # Serialize the local entry as unified API Entry Object
     payload = EntrySerializer(entry, context={"request": request}).data
     payload["type"] = "entry"
 
+    # Find credentials for the corresponding outgoing node
     auth = _credentials_for_remote_author(recipient_fqid)
+    # Set up request headers (json)
     headers = {"Accept": "application/json", "Content-Type": "application/json"}
 
     try:
+        # POST
         response = requests.post(
             inbox_url,
             json=payload,
@@ -242,9 +256,11 @@ def _post_entry_to_single_remote(entry, request, recipient_fqid: str) -> bool:
             auth=auth,
             timeout=10,
         )
+        # Check status from the response
         if response.status_code in {200, 201, 202}:
-            return True
+            return True # Success
 
+        # Else Failure and log the failure info
         logger.warning(
             "Entry federation failed entry=%s recipient=%s status=%s body=%s",
             entry.id,
@@ -255,6 +271,7 @@ def _post_entry_to_single_remote(entry, request, recipient_fqid: str) -> bool:
         return False
 
     except requests.RequestException as exc:
+        # Else Failure and log the failure info
         logger.warning(
             "Entry federation request error entry=%s recipient=%s error=%s",
             entry.id,
@@ -263,6 +280,7 @@ def _post_entry_to_single_remote(entry, request, recipient_fqid: str) -> bool:
         )
         return False
 
+# THINKING: any retry model needed? Currently only log failures
 def federate_entry_create_or_update(entry, request):
     """
     Send the current entry to all currently eligible remote recipients.
@@ -271,8 +289,9 @@ def federate_entry_create_or_update(entry, request):
     recipients = get_remote_entry_recipients(entry.author, entry.visibility)
 
     for recipient_fqid in recipients:
-        ok = _post_entry_to_single_remote(entry, request, recipient_fqid)
-        if ok:
+        is_success = _post_entry_to_single_remote(entry, request, recipient_fqid)
+        if is_success:
+            # Record the corresponding delivery relation
             EntryDelivery.objects.get_or_create(
                 entry=entry,
                 recipient_fqid=recipient_fqid,
@@ -282,6 +301,7 @@ def federate_entry_deleted(entry, request):
     """
     Send deleted-state entry only to recipients that received it before.
     """
+    # Track all recipients from previous deliveries relations
     previous_recipients = list(
         entry.deliveries.values_list("recipient_fqid", flat=True)
     )
