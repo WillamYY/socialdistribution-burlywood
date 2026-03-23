@@ -681,8 +681,11 @@ def ApiEntries(request, author_id):
         serializer = EntrySerializer(new_entry, context={'request': request})
         return Response(serializer.data, status=201)
 
-# Returns a single specific entry
 @api_view(['GET', 'PUT', 'DELETE'])
+def HandleApiEntry(request, author_id, entry_id):
+    return ApiEntry(request, author_id, entry_id)
+
+# Returns a single specific entry
 def ApiEntry(request, author_id, entry_id):
     """
     URL: ://service/api/authors/{AUTHOR_SERIAL}/entries/{ENTRY_SERIAL}

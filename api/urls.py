@@ -19,7 +19,7 @@ urlpatterns = [
     path("authors/<path:author_fqid>/liked", views.ApiAuthorLikedLocal, name="ApiAuthorLikedLocal"),
     path("liked/<path:like_url>", views.ApiSingleLikeLocal, name="ApiSingleLikeLocal"),
     
-    path("authors/<int:author_id>/entries/<uuid:entry_id>", views.ApiEntry, name="ApiEntry"),
+    path("authors/<int:author_id>/entries/<uuid:entry_id>", views.HandleApiEntry, name="ApiEntry"),
     path("entries/<path:entry_fqid>/comments/", views.ApiEntryCommentsByFqid, name="ApiEntryCommentsByFqid"),
     #path("entries/<path:entry_fqid>/", views.ApiEntryGlobal, name="ApiEntryGlobal"),
     path("authors/<int:author_id>/entries/", views.ApiEntries, name="ApiEntries"),

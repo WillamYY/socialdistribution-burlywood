@@ -630,6 +630,7 @@ def RemoteEntry(request,fqid):
     index = fqid.index("/api/")
     logged_in_id = request.session.get("author_id")
     # Gets the entry
+    print(fqid[:index] + "/api/entries/" + fqid.rstrip("/"))
     entryInfo = requests.get(fqid[:index] + "/api/entries/" + fqid.rstrip("/"))
     entryInfo.raise_for_status()
     entry = json.loads(entryInfo.text)
