@@ -703,6 +703,7 @@ def ApiEntry(request, author_id, entry_id):
 
         # Check the visibility for the logged-in user
         logged_in_id = request.session.get("author_id")
+        print("============", entry, logged_in_id, check_visibility(entry, logged_in_id))
         if not check_visibility(entry, logged_in_id):
             return Response({"detail": "Forbidden"}, status=403)
         
