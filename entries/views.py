@@ -472,14 +472,15 @@ def view_my_entries(request):
         }
 
         for comment in entry.fetched_comments:
-            # extract author id from URL
-            author_id = comment.author.rstrip("/").split("/")[-1]
+            # Extract commenter id from author URL (commenter = who wrote comment, NOT entry.author)
+            match = re.search(r'/authors?/(\d+)/?$', comment.author)
+            commenter_id = match.group(1) if match else comment.author.rstrip("/").split("/")[-1]
 
             try:
-                author = Author.objects.get(id=author_id)
-                comment.author_name = author.name
-            except Author.DoesNotExist:
-                comment.author_name = comment.author  # fallback
+                commenter = Author.objects.get(id=commenter_id)
+                comment.author_name = commenter.name or commenter.username
+            except (Author.DoesNotExist, ValueError):
+                comment.author_name = comment.author
 
             comment_uuid = comment.id.rstrip("/").split("/")[-1]
 
@@ -582,15 +583,16 @@ def get_entry(request, entry_id):
     else:
         entry.liked_by_user = False
 
-    # Fetch data for each comment
+    # Fetch data for each comment (commenter is who wrote the comment, NOT entry.author)
     for comment in entry.fetched_comments:
-        # extract author id from FQID
-        author_id = comment.author.rstrip("/").split("/")[-1]
+        # Extract commenter id from author URL (e.g. .../api/authors/123 or .../authors/123)
+        match = re.search(r'/authors?/(\d+)/?$', comment.author)
+        commenter_id = match.group(1) if match else comment.author.rstrip("/").split("/")[-1]
 
         try:
-            author = Author.objects.get(id=author_id)
-            comment.author_name = author.username
-        except Author.DoesNotExist:
+            commenter = Author.objects.get(id=commenter_id)
+            comment.author_name = commenter.name or commenter.username
+        except (Author.DoesNotExist, ValueError):
             comment.author_name = comment.author
 
         comment_url = comment.id
