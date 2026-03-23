@@ -11,8 +11,10 @@ from urllib.parse import unquote
 from django.http import HttpResponse, HttpResponseForbidden
 from django.shortcuts import render, get_object_or_404
 from django.urls import path
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, authentication_classes, permission_classes
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from core.authentication import NodeBasicAuthentication
 from core.remote import federate_entry_create_or_update, federate_entry_deleted
 from core.models import Author, AuthorRequest, FollowRequest
 from entries.models import Entry
@@ -324,7 +326,10 @@ def ApiEntryLikes(request, entry_fqid):
     return Response(likesSerializer.data)
 
 # Unified Inbox (User Story #69): routes by object type
+@csrf_exempt
 @api_view(["POST"])
+@authentication_classes([NodeBasicAuthentication])
+@permission_classes([IsAuthenticated])
 def ApiInbox(request, author_id):
     """
     POST [remote]: Unified inbox accepts like, follow, comment, entry.
