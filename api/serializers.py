@@ -255,12 +255,7 @@ class EntrySerializer(serializers.ModelSerializer):
             f"{base_url}/",
             str(obj.id),
         ]
-
-        comments_qs = Comment.objects.none()
-
-        # If Comment model has an 'object' field, use it
-        if hasattr(Comment, "object"):
-            comments_qs = Comment.objects.filter(object__in=possible_objects).order_by("-published")
+        comments_qs = Comment.objects.filter(entry__endswith=obj.id).order_by("-published")
 
         serialized_comments = CommentSerializer(comments_qs[:50], many=True, context=self.context).data
 

@@ -13,6 +13,9 @@ from core.models import Author, AdminHostedImage
 from core.services import maybe_sync_github_for_stream
 from core.remote import federate_entry_create_or_update, federate_entry_deleted
 from interactions.models import Like, Comment
+from core.models import RemoteFollow, RemoteFollower
+import requests
+import json
 
 def check_visibility(entry, viewer_id, is_list=False):
     """
@@ -343,7 +346,7 @@ def stream_view(request):
         entry_url = f"{base_url}/api/authors/{entry.author.id}/entries/{entry.id}"
         
         # Fetch the count of interactions
-        entry.comment_count = Comment.objects.filter(entry=entry_url).count()
+        entry.comment_count = Comment.objects.filter(entry__endswith=entry.id).count()
         entry.like_count = Like.objects.filter(object=entry_url).count()
         
         if "author_id" in request.session:
@@ -455,7 +458,7 @@ def view_my_entries(request):
         entry.liked_by_user = Like.objects.filter(object=entry_url, author=user_fqid).exists()
 
         # fetch comments
-        entry.fetched_comments = Comment.objects.filter(entry=entry_url).order_by('published')
+        entry.fetched_comments = Comment.objects.filter(entry__endswith=entry.id).order_by('published')
 
         # all objects liked by current user
         liked_objects = Like.objects.filter(author=user_fqid).values_list("object", flat=True)
@@ -568,7 +571,7 @@ def get_entry(request, entry_id):
 
     # Base Entry Interactions
     entry.like_count = Like.objects.filter(object=entry_url).count()
-    entry.fetched_comments = Comment.objects.filter(entry=entry_url).order_by('published')
+    entry.fetched_comments = Comment.objects.filter(entry__endswith=entry_id).order_by('published')
 
     # Check if the logged-in user liked the this entry
     if logged_in_id:
@@ -606,6 +609,38 @@ def get_entry(request, entry_id):
         })
 
     return render(request, "entries/entry.html", {
+        "entry": entry,
+        "allowed": allowed,
+        "return_url": return_url,
+        "image_api_url": image_api_url,
+    })
+"""
+Handles displaying the page for remote entries
+"""
+def RemoteEntry(request,fqid):
+    # Gets where the host ends
+    index = fqid.index("/api/")
+    logged_in_id = request.session.get("author_id")
+    # Gets the entry
+    entryInfo = requests.get(fqid[:index] + "/api/entries/" + fqid)
+    entryInfo.raise_for_status()
+    entry = json.loads(entryInfo.text)
+    # Creates the list of allowed things to view
+    allowed_visibility = ["PUBLIC"]
+    if RemoteFollow.objects.filter(follower = logged_in_id,followed_fqid__endswith = entry.get("author").get("id").rstrip("/").split("/")[-1]).exists():
+        allowed_visibility.append("UNLISTED")
+        if RemoteFollower.objects.filter(actor_fqid__endswith = entry.get("author").get("id").rstrip("/").split("/")[-1],target = logged_in_id).exists():
+            allowed_visibility.append("FRIENDS")
+    allowed = entry.get("visibility") in allowed_visibility
+    # Image api url
+    image_api_url = None
+    if ";base64" in entry.get("contentType") and "image" in entry.get("contentType"):
+        image_api_url = fqid[:index] + "/api/entries/" + fqid + "/image"
+    entry["like_count"] = entry.get("likes").get("count")
+    entry["fetched_comments"] = entry.get("comments").get("src")
+
+    return_url = request.session.get('last_feed_url', reverse('stream'))
+    return render(request, "entries/remoteentry.html", {
         "entry": entry,
         "allowed": allowed,
         "return_url": return_url,
