@@ -166,8 +166,10 @@ def edit_profile(request):
 
         author.github = github if github else ""
 
-        picture_url = request.POST.get("picture_url")
+        picture_url = request.POST.get("picture_url", "").strip()
         if picture_url:
+            if not re.match(r'^https?:\/\/.*\.(jpg|jpeg|png|gif)$', picture_url, re.I):
+                return render(request, "edit_profile.html", {"author": author, "error": "Invalid image URL"})
             author.picture_url = picture_url
 
         author.save()

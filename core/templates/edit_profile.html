@@ -78,7 +78,7 @@
                 <textarea name="description" placeholder="Write something about yourself">{{ author.description }}</textarea>
 
                 <label>Profile Picture</label>
-                <input type="file" name="picture">
+                <input type="url" name="picture_url" placeholder="https://example.com/myphoto.jpg" value="{{ author.picture_url|default:'' }}">
 
                 <label>GitHub URL</label>
                 <input name="github" id="github-input" value="{{ author.github }}" type="url"
