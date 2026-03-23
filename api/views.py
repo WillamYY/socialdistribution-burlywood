@@ -682,6 +682,7 @@ def ApiEntries(request, author_id):
         return Response(serializer.data, status=201)
 
 @api_view(['GET', 'PUT', 'DELETE'])
+@authentication_classes([NodeBasicAuthentication])
 def HandleApiEntry(request, author_id, entry_id):
     return ApiEntry(request, author_id, entry_id)
 
