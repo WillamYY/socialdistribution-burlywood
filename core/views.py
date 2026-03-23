@@ -751,41 +751,58 @@ def RemoteProfileDisplay(request, fqid):
                 author_key = match_author.group(1)
                 fixed_name = None
 
-                # 1) try local DB by numeric id
-                if author_key.isdigit():
-                    local_author = Author.objects.filter(id=int(author_key)).first()
-                    if local_author:
-                        print("MATCHED LOCAL AUTHOR BY ID:", local_author.id, local_author.username, local_author.name)
-                        fixed_name = local_author.name or local_author.username
+                local_base = request.build_absolute_uri('/').rstrip('/').replace("http://", "https://")
+                for c in remote_comments:
+                    if not isinstance(c, dict):
+                        continue
 
-                # 2) try local DB by username
-                if not fixed_name:
-                    local_author = Author.objects.filter(username=display).first() or Author.objects.filter(username=author_key).first()
-                    if local_author:
-                        print("MATCHED LOCAL AUTHOR BY USERNAME:", local_author.id, local_author.username, local_author.name)
-                        fixed_name = local_author.name or local_author.username
+                    auth = c.get("author")
+                    if not isinstance(auth, dict):
+                        continue
 
-                # 3) final fallback: fetch the author profile directly
-                if not fixed_name:
-                    try:
-                        author_resp = requests.get(
-                            cid,
-                            headers={"Accept": "application/json"},
-                            timeout=5,
-                        )
-                        if author_resp.status_code == 200:
-                            author_data = author_resp.json()
-                            fixed_name = (
-                                author_data.get("displayName")
-                                or author_data.get("name")
-                                or author_data.get("username")
+                    cid = (auth.get("id") or "").rstrip("/")
+                    display = (auth.get("displayName") or "").strip()
+
+                    needs_fix = (
+                        not display
+                        or display.isdigit()
+                        or display.endswith("_author")
+                        or display == cid.split("/")[-1]
+                    )
+
+                    if not (cid and needs_fix):
+                        continue
+
+                    fixed_name = None
+
+                    if cid.startswith(f"{local_base}/api/authors/"):
+                        match_author = re.search(r"/api/authors/([^/]+)/?$", cid)
+                        if match_author:
+                            author_key = match_author.group(1)
+                            if author_key.isdigit():
+                                local_author = Author.objects.filter(id=int(author_key)).first()
+                                if local_author:
+                                    fixed_name = local_author.name or local_author.username
+
+                    if not fixed_name:
+                        try:
+                            author_resp = requests.get(
+                                cid,
+                                headers={"Accept": "application/json"},
+                                timeout=5,
                             )
-                            print("FETCHED REMOTE AUTHOR NAME:", cid, fixed_name)
-                    except Exception as e:
-                        print("REMOTE AUTHOR FETCH ERROR:", cid, str(e))
+                            if author_resp.status_code == 200:
+                                author_data = author_resp.json()
+                                fixed_name = (
+                                    author_data.get("displayName")
+                                    or author_data.get("name")
+                                    or author_data.get("username")
+                                )
+                        except Exception as e:
+                            print("REMOTE AUTHOR FETCH ERROR:", cid, str(e))
 
-                if fixed_name:
-                    auth["displayName"] = fixed_name
+                    if fixed_name:
+                        auth["displayName"] = fixed_name
 
         entry["fetched_comments"] = remote_comments
         entry["comment_count"] = len(remote_comments)
