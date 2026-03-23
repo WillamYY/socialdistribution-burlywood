@@ -3,16 +3,22 @@
 This document covers the authentication between two nodes and expected behavior for **Node management** user stories, referencing GitHub issues.
 
 Node management (#68, #72, #73, #74)
+Node management (#68, #72, #73, #74, #80)
 
 * **#68** As a node admin, I want to be able to connect to remote nodes by entering only the URL of the remote node, a username, and a password, so that I don't have to edit code.
 * **#72** As a node admin, I can prevent nodes from connecting to my node if they don't have a valid username and password.
 * **#73** As a node admin, node to node connections can be authenticated with HTTP Basic Auth, so that I don't have to deal with tokens.
 * **#74** As a node admin, I can disable the node to node interfaces for connections that I no longer want, in case another node goes bad.
+* **#80** As a node admin, I want the API objects (authors, entries, etc.) to be [identified by their full URL](https://uofa-cmput404.github.io/general/project.html#ids), to prevent collisions with other node's numbering schemes.
+
+node Management
+Click a value to filter the view
+
 
 ## Overview
 
 Suppose node A wants to share with node B, and node B agrees to receive information from node A. Then the node admin of node A and node B must create a one way connection from node A to node B. When a user accesses node B, they will obtain the information that was shared from node A on top of the information in node B. In order for this to happen, node B must request the information from node A's database. However, when node A receives the request from node B, node A must make sure the request is actually sent by node B by checking the Basic auth username and password in the request (**US #68, #73**). If the credentials in the request are invalid, then node A should not share its information in the response (**US #72**). At the same time, if node A does not wish to share its information with node B, node A could close its own end of the connection; if node B does not wish to receive information from node A, node B could its own end of the connection (**US #74**).
-
+Additionally, to support distributed systems: All shared API objects must be identified using full URLs instead of local IDs (**US #80**).
 ## How to use
 
 ### 1. Communication between node admins
@@ -96,3 +102,138 @@ This is the Authentication class that is used to setup Basic Auth within. The im
         - The node must also have that database entry be active
     - If any of the checks do not pass, the sender will return a status code of `403`
     - If all of the checks do pass, the sender will return the appropriate data that was requested
+
+# API Object Identification (US #80)
+## Overview
+
+In a distributed system with multiple nodes, different nodes may generate objects using their own local identifiers. This can lead to collisions when integrating data across nodes.
+
+To prevent this, all API objects must be identified using full URLs instead of local IDs.
+---
+
+## ID Format
+
+All API object IDs must follow the format:
+
+http[s]://service/resource-path/id
+---
+## Examples
+### Author
+http://nodeaaaa/api/authors/111
+### Entry (Post)
+http://nodebbbb/api/authors/222/entries/249
+### Comment
+http://nodeaaaa/api/authors/111/commented/130
+
+---
+
+## Requirements
+
+- All API objects must use full URLs as their id  
+- Local IDs must not be used alone in API responses  
+- IDs must remain consistent across all responses  
+- IDs must not be modified when shared between nodes  
+
+---
+
+## Cross-node Behavior
+
+When a node receives objects from another node:
+
+- The full URL IDs must be preserved  
+- IDs must not be replaced with local database IDs  
+- IDs must be used as the unique identifier for the object  
+
+---
+
+## Benefits
+
+- Prevents ID collisions across nodes  
+- Ensures global uniqueness  
+- Supports reliable data sharing between nodes  
+
+---
+
+## API Usage Examples
+
+### Fetch Authors
+
+#### Request
+```http
+GET /api/authors/ HTTP/1.1
+Host: nodeA.com
+Authorization: Basic dXNlcm5hbWU6cGFzc3dvcmQ=
+```
+#### Response
+```json
+{
+  "type": "authors",
+  "items": [
+    {
+      "type": "author",
+      "id": "http://nodeaaaa/api/authors/111",
+      "host": "http://nodeaaaa/api/",
+      "displayName": "Greg Johnson",
+      "github": "http://github.com/gjohnson",
+      "profileImage": "https://i.imgur.com/k7XVwpB.jpeg"
+    }
+  ]
+}
+```
+### Fetch Entries
+#### Request
+```http
+GET /api/authors/111/entries/ HTTP/1.1
+Host: nodeA.com
+Authorization: Basic dXNlcm5hbWU6cGFzc3dvcmQ=
+```
+#### Response
+```json
+{
+  "type": "entries",
+  "items": [
+    {
+      "type": "entry",
+      "id": "http://nodebbbb/api/authors/222/entries/249",
+      "author": {
+        "id": "http://nodeaaaa/api/authors/111"
+      },
+      "content": "Hello world"
+    }
+  ]
+}
+```
+## Fetch Comments
+#### Request
+```http
+GET /api/authors/111/entries/249/comments/ HTTP/1.1
+Host: nodeA.com
+Authorization: Basic dXNlcm5hbWU6cGFzc3dvcmQ=
+```
+#### Response
+
+```json
+{
+  "type": "comments",
+  "items": [
+    {
+      "type": "comment",
+      "id": "http://nodeaaaa/api/authors/111/commented/130",
+      "author": {
+        "type": "author",
+        "id": "http://nodeaaaa/api/authors/111",
+        "host": "http://nodeaaaa/api/",
+        "displayName": "Greg Johnson"
+      },
+      "comment": "Sick Olde English",
+      "contentType": "text/markdown",
+      "published": "2015-03-09T13:07:04+00:00",
+      "entry": "http://nodebbbb/api/authors/222/entries/249"
+    }
+  ]
+}
+Error Example (Invalid Credentials)
+{
+  "detail": "Invalid authentication credentials."
+}
+```
