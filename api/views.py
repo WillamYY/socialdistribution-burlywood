@@ -15,7 +15,7 @@ from rest_framework.decorators import api_view, authentication_classes, permissi
 from rest_framework.response import Response
 from core.authentication import NodeBasicAuthentication
 from core.remote import federate_entry_create_or_update, federate_entry_deleted
-from core.models import Author, AuthorRequest, FollowRequest
+from core.models import Author, AuthorRequest, FollowRequest, RemoteFollower, RemoteFollow
 from entries.models import Entry
 from interactions.models import Like, Comment
 from .serializers import AuthorSerializer, LikesSerializer, LikeSerializer, EntrySerializer, EntriesSerializer, CommentSerializer
@@ -782,10 +782,6 @@ def ApiEntryGlobal(request, entry_fqid):
     except (Entry.DoesNotExist, ValueError):
         return Response({"detail": "Not found."}, status=404)
 
-    # Check visibility
-    logged_in_id = request.session.get("author_id")
-    if not check_visibility(entry, logged_in_id):
-            return Response({"detail": "Forbidden"}, status=403)
 
     # Serialize and return
     serializer = EntrySerializer(entry, context={'request': request})

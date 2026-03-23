@@ -239,6 +239,13 @@ class AuthorEntryLikeEndpointTest(APITestCase):
 Creates a test for the entry ikes endpoint
 """
 class EntryLikeEndpointTest(APITestCase):
+    def setUp(self):
+        OutgoingNode.objects.create(url = "test", username = "test", password = "test")
+        encoded_creds = base64.b64encode("test:test".encode("utf-8")).decode("ascii")
+        self.header = {
+            "Authorization": f"Basic {encoded_creds}"
+        }
+
     def test_entry_get_likes(self):
         # Creates two users, one to make the entry and one to like it
         author1 = Author(username = "a",password = "b",name = "c",description = "d",host = "http://testserver/api/",web = "/app/authors/1")
@@ -255,7 +262,7 @@ class EntryLikeEndpointTest(APITestCase):
         like1.save()
         # Gets the info from the website
         like_url = reverse("api:ApiEntryLikes",kwargs = {"entry_fqid":object_fqid})
-        get1 = self.client.get(like_url,format="json")
+        get1 = self.client.get(like_url,format="json", headers=self.header)
         # Ensures there is exactly one like
         self.assertEqual(get1.data["count"],1)
         like = get1.data["src"][0]
@@ -286,7 +293,7 @@ class EntryLikeEndpointTest(APITestCase):
         like2.save()
         # Gets the info from the website
         like_url = f"{reverse("api:ApiEntryLikes",kwargs = {"entry_fqid":object_fqid})}?page_number=1&size=1"
-        get1 = self.client.get(like_url,format="json")
+        get1 = self.client.get(like_url,format="json", headers=self.header)
         self.assertEqual(get1.data["page_number"],1)
         self.assertEqual(get1.data["size"],1)
         self.assertEqual(get1.data["count"],2)
@@ -296,12 +303,12 @@ class EntryLikeEndpointTest(APITestCase):
         self.assertEqual(author["id"], author2_fqid)
 
         like_url = f"{reverse("api:ApiEntryLikes",kwargs = {"entry_fqid":object_fqid})}?page_number=0&size=0"
-        get1 = self.client.get(like_url,format="json")
+        get1 = self.client.get(like_url,format="json", headers=self.header)
         self.assertEqual(get1.data["page_number"],1)
         self.assertEqual(get1.data["size"],5)
 
         like_url = f"{reverse("api:ApiEntryLikes",kwargs = {"entry_fqid":object_fqid})}?page_number=500&size=5"
-        get1 = self.client.get(like_url,format="json")
+        get1 = self.client.get(like_url,format="json", headers=self.header)
         self.assertEqual(get1.data["page_number"],500)
         self.assertEqual(get1.data["size"],5)
         likes = get1.data["src"]
@@ -703,7 +710,7 @@ class EntryAPITest(APITestCase):
         entry = Entry.objects.create(author=self.author, title="Fetch Me", visibility="PUBLIC")
         url = reverse("api:ApiEntry", kwargs={"author_id": self.author.id, "entry_id": entry.id})
         
-        response = self.client.get(url)
+        response = self.client.get(url, headers=self.header)
         
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["type"], "entry")
@@ -732,7 +739,7 @@ class EntryAPITest(APITestCase):
         session.save()
         
         update_data = {"title": "New Title", "content": "Updated content"}
-        response = self.client.put(url, update_data, format="json")
+        response = self.client.put(url, update_data, format="json", headers=self.header)
         
         # Check if the response is successful
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -758,7 +765,7 @@ class EntryAPITest(APITestCase):
         session['author_id'] = self.author.id
         session.save()
 
-        response = self.client.delete(url)
+        response = self.client.delete(url, headers=self.header)
 
         # Check if the delete request was successful
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
@@ -772,7 +779,7 @@ class EntryAPITest(APITestCase):
         self.assertEqual(entry.visibility, "DELETED")
         
         # Check if it's no longer accessible via a GET request
-        get_response = self.client.get(url)
+        get_response = self.client.get(url, headers=self.header)
         self.assertEqual(get_response.status_code, status.HTTP_404_NOT_FOUND)
     
     def test_get_image_entry(self):
@@ -914,9 +921,9 @@ class EntryAPITest(APITestCase):
         session = self.client.session
         session['author_id'] = self.author.id
         session.save()
-        self.client.delete(entry_url1)
+        self.client.delete(entry_url1, headers=self.header)
         
-        response1 = self.client.get(entry_url1)
+        response1 = self.client.get(entry_url1, headers=self.header)
         self.assertEqual(response1.status_code, 404)
 
         # only the image entry should remain since it was not deleted
@@ -1058,6 +1065,12 @@ class VisibilityAPITest(TestCase):
             content=f"data:image/png;base64,{self.tiny_png_b64}",
             visibility="FRIENDS"
         )
+
+        OutgoingNode.objects.create(url = "test", username = "test", password = "test")
+        encoded_creds = base64.b64encode("test:test".encode("utf-8")).decode("ascii")
+        self.header = {
+            "Authorization": f"Basic {encoded_creds}"
+        }
     
     def test_api_public_access(self):
         """
@@ -1070,7 +1083,7 @@ class VisibilityAPITest(TestCase):
 
         # Try to access A's unlisted entry via API
         url = reverse('api:ApiEntry', kwargs={'author_id': self.author_a.id, 'entry_id': self.public_entry.id})
-        response = self.client.get(url)
+        response = self.client.get(url, headers=self.header)
 
         # Check if the status code is 200 OK
         self.assertEqual(response.status_code, 200)
@@ -1096,7 +1109,7 @@ class VisibilityAPITest(TestCase):
         self.author_b.followers.add(self.author_a)
 
         url = reverse('api:ApiEntry', kwargs={'author_id': self.author_a.id, 'entry_id': self.private_entry.id})
-        response = self.client.get(url)
+        response = self.client.get(url, headers=self.header)
         
         # Check if the status code is 200 OK
         self.assertEqual(response.status_code, 200)
