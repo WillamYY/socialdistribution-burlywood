@@ -1501,3 +1501,284 @@ class RemoteImageEntryFetchTests(TestCase):
             "https://remote.example/api/authors/9",
         )
         self.assertEqual(entries[0].author.username, "Remote User")
+
+class APIObjectsTest(APITestCase):
+    """
+    Test cases for US #80: As a node admin, I want the API objects (authors, entries, etc.) to be [identified by their full URL](https://uofa-cmput404.github.io/general/project.html#ids), to prevent collisions with other node's numbering schemes. ⧟ Part 3-5 only.
+    """
+    def setUp(self):
+        OutgoingNode.objects.create(url = "test", username = "test", password = "test")
+        encoded_creds = base64.b64encode("test:test".encode("utf-8")).decode("ascii")
+        self.header = {
+            "Authorization": f"Basic {encoded_creds}"
+        }
+
+    def test_get_author_fqid(self):
+        """
+        Testing getting an author by their FQID
+        """
+
+        # Author object on a Mock server with given URL
+        author = Author.objects.create(
+            username = "username",
+            password = "password",
+            name = "name",
+            description = "description",
+            github = "github",
+            host = f"https://testserver/"
+        )
+        author_fqid = f"{author.host}api/authors/{author.id}"
+        print(reverse("api:ApiAuthorByFqid", kwargs = {"author_fqid": author_fqid}))
+        response = self.client.get(reverse("api:ApiAuthorByFqid", kwargs = {"author_fqid": author_fqid}))
+        self.assertEqual(response.status_code, 200)
+
+    def test_get_following_foreign_author_fqid(self):
+        """
+        Test to see an author following another author
+        """
+        author1 = Author.objects.create(
+            username = "username1",
+            password = "password1",
+            name = "name1",
+            description = "description1",
+            github = "github1",
+            host = f"https://testserver/"
+        )
+
+        author2 = Author.objects.create(
+            username = "username2",
+            password = "password2",
+            name = "name2",
+            description = "description2",
+            github = "github2",
+            host = f"https://testserver/"
+        )
+
+        author1.followers.add(author2)
+
+        author_fqid = f"{author1.host}/api/authors/{author1.id}"
+        response = self.client.get(reverse("api:ApiAuthorByFqid", kwargs = {"author_fqid": author_fqid}))
+        self.assertEqual(response.status_code, 200)
+
+    def test_get_follower_foreign_author_fqid(self):
+        author1 = Author.objects.create(
+            username = "username1",
+            password = "password1",
+            name = "name1",
+            description = "description1",
+            github = "github1",
+            host = f"https://localhost:8000/",
+        )
+
+        author2 = Author.objects.create(
+            username = "username2",
+            password = "password2",
+            name = "name2",
+            description = "description2",
+            github = "github2",
+            host = f"https://localhost:8000/"
+        )
+
+        author2.followers.add(author1)
+
+        author1_fqid = f"{author1.host}/api/authors/{author1.id}"
+        response = self.client.get(reverse("api-follower-detail", kwargs = {"author_id": author2.id, "foreign_author_fqid": author1_fqid}))
+        self.assertEqual(response.status_code, 200)
+
+    def test_get_entry_fqid(self):
+        author = Author.objects.create(
+            username = "username",
+            password = "password",
+            name = "name",
+            description = "description",
+            github = "github",
+            host = f"https://testserver"
+        )
+
+        entry = Entry.objects.create(
+            title = "title",
+            description = "description",
+            contentType = "text/plain",
+            content = "content",
+            author = author,
+            visibility = "PUBLIC"
+        )
+
+        entry_fqid = f"{author.host}/api/authors/{author.id}/entries/{entry.id}"
+        response = self.client.get(reverse("api:ApiEntryByFqid", kwargs={"entry_fqid": entry_fqid}), headers=self.header)
+        self.assertEqual(response.status_code, 200)
+
+    def test_get_image_entry_fqid(self):
+        author = Author.objects.create(
+            username = "username",
+            password = "password",
+            name = "name",
+            description = "description",
+            github = "github",
+            host = f"https://testserver"
+        )
+
+        entry = Entry.objects.create(
+            title = "title",
+            description = "description",
+            contentType = "image/png;base64",
+            content = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="  ,
+            author = author,
+            visibility = "PUBLIC"
+        )
+
+        entry_fqid = f"{author.host}/api/authors/{author.id}/entries/{entry.id}"
+        response = self.client.get(reverse("api:ApiEntryImageGlobal", kwargs={"entry_fqid": entry_fqid}))
+        self.assertEqual(response.status_code, 200)
+
+    def test_get_remote_comment_fqid(self):
+        author = Author.objects.create(
+            username = "username",
+            password = "password",
+            name = "name",
+            description = "description",
+            github = "github",
+            host = f"https://testserver"
+        )
+
+        entry = Entry.objects.create(
+            title = "title",
+            description = "description",
+            contentType = "text/plain",
+            content = "content",
+            author = author,
+            visibility = "PUBLIC"
+        )
+
+        comment = Comment.objects.create(
+            author = author,
+            entry = entry,
+            comment = "comment",
+            contentType = "text/plain"
+        )
+
+        entry_fqid = f"{author.host}/api/authors/{author.id}/entries/{entry.id}"
+        response = self.client.get(reverse("api:ApiEntryCommentsByFqid", kwargs={"entry_fqid": entry_fqid}))
+        self.assertEqual(response.status_code, 200)
+
+    def test_get_likes_entry_fqid(self):
+        author1 = Author.objects.create(
+            username = "username",
+            password = "password",
+            name = "name",
+            description = "description",
+            github = "github",
+            host = f"https://testserver"
+        )
+
+        author2 = Author.objects.create(
+            username = "username2",
+            password = "password2",
+            name = "name2",
+            description = "description2",
+            github = "github2",
+            host = f"https://localhost:8000/"
+        )
+
+        entry = Entry.objects.create(
+            title = "title",
+            description = "description",
+            contentType = "text/plain",
+            content = "content",
+            author = author1,
+            visibility = "PUBLIC"
+        )
+
+        author_fqid = f"{author2.host}/api/authors/{author2.id}"
+        entry_fqid = f"{author1.host}/api/authors/{author1.id}/entries/{entry.id}"
+
+        like = Like.objects.create(
+            author = author_fqid,
+            object = entry_fqid
+        )
+
+        response = self.client.get(reverse("api:ApiEntryCommentsByFqid", kwargs={"entry_fqid": entry_fqid}))
+        self.assertEqual(response.status_code, 200)
+
+    def test_get_likes_author_fqid(self):
+        author1 = Author.objects.create(
+            username = "username",
+            password = "password",
+            name = "name",
+            description = "description",
+            github = "github",
+            host = f"https://testserver"
+        )
+
+        author2 = Author.objects.create(
+            username = "username2",
+            password = "password2",
+            name = "name2",
+            description = "description2",
+            github = "github2",
+            host = f"https://localhost:8000/"
+        )
+
+        entry = Entry.objects.create(
+            title = "title",
+            description = "description",
+            contentType = "text/plain",
+            content = "content",
+            author = author1,
+            visibility = "PUBLIC"
+        )
+
+        author_fqid = f"{author2.host}/api/authors/{author2.id}"
+        entry_fqid = f"{author1.host}/api/authors/{author1.id}/entries/{entry.id}"
+
+        like = Like.objects.create(
+            author = author_fqid,
+            object = entry_fqid
+        )
+
+        response = self.client.get(reverse("api:ApiAuthorLikedLocal", kwargs={"author_fqid": author_fqid}))
+        self.assertEqual(response.status_code, 200)
+
+    def test_get_like_fqid(self):
+        author1 = Author.objects.create(
+            username = "username",
+            password = "password",
+            name = "name",
+            description = "description",
+            github = "github",
+            host = f"https://testserver"
+        )
+
+        author2 = Author.objects.create(
+            username = "username2",
+            password = "password2",
+            name = "name2",
+            description = "description2",
+            github = "github2",
+            host = f"https://localhost:8000/"
+        )
+
+        entry = Entry.objects.create(
+            title = "title",
+            description = "description",
+            contentType = "text/plain",
+            content = "content",
+            author = author1,
+            visibility = "PUBLIC"
+        )
+
+        author_fqid = f"{author2.host}api/authors/{author2.id}"
+        entry_fqid = f"{author1.host}api/authors/{author1.id}/entries/{entry.id}"
+
+        uuid_id = uuid.uuid1()
+        like = Like.objects.create(
+            uuid = uuid_id,
+            author = author_fqid,
+            object = entry_fqid,
+            id = f"{author_fqid}/liked/{uuid_id}"
+        )
+        like.save()
+
+        like_fqid = f"{author_fqid}/liked/{like.uuid}"
+        response = self.client.get(reverse("api:ApiSingleLikeLocal", kwargs={"like_url": like.id}))
+        self.assertEqual(response.status_code, 200)
