@@ -151,6 +151,7 @@ def add_remote_comment(request, entry_id):
                 foreign_author.rstrip("/") + "/inbox",
                 json=payload,
                 timeout=10,
+                auth=(credentials.username, credentials.password)
             )
             print("REMOTE COMMENT POST STATUS:", resp.status_code)
             print("REMOTE COMMENT POST BODY:", resp.text)
