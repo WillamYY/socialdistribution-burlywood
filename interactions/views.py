@@ -74,7 +74,7 @@ def add_comment(request, entry_id):
             author_fqid = f"{base}/api/authors/{author_id}"
 
             Comment.objects.create(
-                id=f"{request.build_absolute_uri('/')[:-1]}/comments/{uuid.uuid4()}",
+                id=f"{request.build_absolute_uri('/')[:-1]}/api/authors/{author_id}/comments/{uuid.uuid4()}",
                 author=author_fqid,
                 entry=entry_fqid,
                 comment=comment_text,
@@ -182,73 +182,15 @@ def add_remote_comment_like(request, comment_id):
         author_id = request.session.get("author_id")
         if not author_id:
             return redirect('/app/login/')
-
-        remote_comment_url = comment_id.rstrip("/")
-        if remote_comment_url.startswith("http://"):
-            remote_comment_url = remote_comment_url.replace("http://", "https://")
-
-        raw_comment_author_id = (request.POST.get("comment_author_id") or "").strip()
-        foreign_author = raw_comment_author_id.rstrip("/")
-
-        if not foreign_author:
-            print("REMOTE COMMENT LIKE ERROR: missing comment author id")
-            return redirect(request.META.get('HTTP_REFERER', '/app/stream/'))
-
-        if foreign_author.startswith("http://127.0.0.1") or foreign_author.startswith("http://localhost"):
-            pass
-        elif foreign_author.startswith("http://"):
-            foreign_author = foreign_author.replace("http://", "https://")
-
-        # normalize to api author url
-        foreign_author = foreign_author.replace(
-            "://127.0.0.1:8000//authors/",
-            "://127.0.0.1:8000/api/authors/"
-        )
-        foreign_author = foreign_author.replace(
-            "://localhost:8000//authors/",
-            "://localhost:8000/api/authors/"
-        )
-        foreign_author = foreign_author.replace("//authors/", "/api/authors/")
-
-        if "/authors/" in foreign_author and "/api/authors/" not in foreign_author:
-            foreign_author = foreign_author.replace("/authors/", "/api/authors/")
-
-        inbox_url = foreign_author + "/inbox"
-
-        print("REMOTE COMMENT URL:", remote_comment_url)
-        print("COMMENT AUTHOR ID RAW:", raw_comment_author_id)
-        print("FOREIGN AUTHOR NORMALIZED:", foreign_author)
-        print("REMOTE COMMENT LIKE INBOX URL:", inbox_url)
-
-        author = get_object_or_404(Author, pk=author_id)
-
-        author_info = {
-            "type": "author",
-            "id": author.host + "/authors/" + str(author.id),
-            "host": author.host,
-            "displayName": author.name,
-            "github": author.github,
-            "profileImage": author.picture_url,
-            "web": author.web,
-        }
-
-        payload = {
-            "type": "like",
-            "author": author_info,
-            "published": datetime.now().isoformat(),
-            "id": "",
-            "object": remote_comment_url,
-        }
-
-        try:
-            resp = requests.post(
-                inbox_url,
-                json=payload,
-                timeout=10,
-            )
-            print("REMOTE COMMENT LIKE POST STATUS:", resp.status_code)
-            print("REMOTE COMMENT LIKE POST BODY:", resp.text)
-        except Exception as e:
-            print("REMOTE COMMENT LIKE ERROR:", str(e))
-
-    return redirect(request.META.get('HTTP_REFERER', '/app/stream/'))
+        # Gets the entry info and ensures its valid
+        commentInfo = requests.get(comment_id.rstrip("/"))
+        commentInfo.raise_for_status()
+        jsonEntry = json.loads(commentInfo.text)
+        foreignAuthor = jsonEntry["author"]["id"]
+        # Get author making request
+        if "https" not in comment_id:
+            comment_id = comment_id.replace("http","https")
+        author = get_object_or_404(Author, pk = author_id)
+        authorInfo = {"type":"author","id": author.host + "/authors/" + str(author.id),"host": author.host,"displayName": author.name, "github":author.github, "profileImage":author.picture_url,"web":author.web}
+        # Post the like to the inbox
+        post = requests.post(foreignAuthor + "/inbox",json = {"type": "like","author": authorInfo,"published":datetime.now().isoformat(),"id":"","object":comment_id})

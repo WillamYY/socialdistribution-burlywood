@@ -69,7 +69,7 @@
 
                     <div class="interaction-row" style="padding: 5px 0; border: none;" onclick="event.stopPropagation();">
                         {% if request.session.author_id %}
-                        <form method="POST" action="{% url 'interactions:add_comment_like' comment.id|extract_uuid %}">
+                        <form method="POST" action="{% url 'interactions:add_remote_comment_like' comment.id %}">
                             {% csrf_token %}
                             <button type="submit" class="stat-item {% if comment.liked_by_user %}liked{% endif %}">
                                 <span class="icon" style="font-size: 1rem;">
