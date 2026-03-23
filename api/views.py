@@ -137,6 +137,7 @@ def fetch_remote_image(remote_url):
         return HttpResponse(f"Error connecting to remote node: {str(e)}", status=502)
 
 @api_view(['GET'])
+@authentication_classes([NodeBasicAuthentication])
 def ApiAuthors(request):
     page = 1
     size = None
@@ -165,7 +166,7 @@ def ApiAuthors(request):
         data_authors = authors
     else:
         start = page * size
-        end = (page + 1) * size
+        end = (page - 1) * size
         data_authors = authors[start:end] if start < len(authors) else []
 
     return Response({
@@ -175,6 +176,7 @@ def ApiAuthors(request):
 
 # Single author API endpoint
 @api_view(['GET','PUT'])
+@authentication_classes([NodeBasicAuthentication])
 def HandleApiAuthor(request, id):
     return ApiAuthor(request, id)
 
@@ -609,6 +611,7 @@ def ApiSingleLikeLocal(request, like_url):
 
 # Returns a paginated list of entries for a specific author
 @api_view(['GET', 'POST'])
+@authentication_classes([NodeBasicAuthentication])
 def ApiEntries(request, author_id):
     """
     URL ://service/api/authors/{AUTHOR_SERIAL}/entries/
