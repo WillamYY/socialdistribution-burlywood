@@ -11,6 +11,7 @@ from django.db.models import Count, Q
 from .models import Entry
 from core.models import Author, AdminHostedImage
 from core.services import maybe_sync_github_for_stream
+from core.remote import federate_entry_create_or_update, federate_entry_deleted
 from interactions.models import Like, Comment
 from core.models import RemoteFollow, RemoteFollower
 import requests
@@ -213,6 +214,7 @@ def create_entry(request):
         
         # If successful, commit it to the database
         new_entry.save()
+        federate_entry_create_or_update(new_entry, request)
         return redirect("view_my_entries")
 
     # Show the empty form for GET requests
@@ -240,6 +242,7 @@ def edit_entry(request, entry_id):
         
         # Commit the updates to the database
         entry.save()
+        federate_entry_create_or_update(entry, request)
         return redirect("view_my_entries")
     
     return render(request, "entries/edit_entry.html", {"entry": entry, "admin_hosted_images": get_admin_hosted_images(request)})
@@ -261,6 +264,7 @@ def delete_entry(request, entry_id):
     # Soft delete by changing visibility to DELETED
     entry.visibility = "DELETED"
     entry.save()
+    federate_entry_deleted(entry, request)
 
     return redirect("view_my_entries")
 
