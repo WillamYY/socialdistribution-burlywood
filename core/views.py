@@ -715,6 +715,7 @@ def RemoteProfileDisplay(request, fqid):
         if not clean_id:
             continue
         entry["clean_id"] = clean_id
+
         remote_comments = ((entry.get("comments") or {}).get("src")) or []
         
         # Fix bad remote comment author display names
@@ -735,6 +736,12 @@ def RemoteProfileDisplay(request, fqid):
                 or display.endswith("_author")
                 or display == cid.split("/")[-1]
             )
+
+            print("HEROKU COMMENT RAW:", c)
+            print("HEROKU AUTHOR RAW:", auth)
+            print("HEROKU CID:", cid)
+            print("HEROKU DISPLAY BEFORE:", display)
+            print("HEROKU NEEDS FIX:", needs_fix)
 
             if cid and needs_fix:
                 match_author = re.search(r"/api/authors/([^/]+)/?$", cid)
