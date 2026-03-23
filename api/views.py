@@ -165,8 +165,8 @@ def ApiAuthors(request):
     if size is None:
         data_authors = authors
     else:
-        start = page * size
-        end = (page - 1) * size
+        start = (page - 1) * size
+        end = start + size
         data_authors = authors[start:end] if start < len(authors) else []
 
     return Response({
