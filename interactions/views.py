@@ -103,14 +103,6 @@ def add_remote_comment(request, entry_id):
         # keep a local copy so your side can still display it
         base = request.build_absolute_uri('/')[:-1].replace("http://", "https://")
         local_author_fqid = f"{base}/api/authors/{author.id}"
-        Comment.objects.create(
-            id=f"{base}/comments/{uuid.uuid4()}",
-            author=local_author_fqid,
-            entry=remote_entry_url,
-            comment=comment_text,
-            contentType="text/plain",
-        )
-
         try:
             # get remote entry first, same pattern as remote like
             entry_resp = requests.get(

@@ -690,37 +690,14 @@ def RemoteProfileDisplay(request, fqid):
         clean_id = (entry.get("id") or "").rstrip("/")
         if not clean_id:
             continue
-
-        clean_id = (entry.get("id") or "").rstrip("/")
-        if not clean_id:
-            continue
-
         entry["clean_id"] = clean_id
         remote_comments = ((entry.get("comments") or {}).get("src")) or []
-
-        entry_id_tail = clean_id.split("/")[-1]
-        local_comments = list(
-            (
-                Comment.objects.filter(entry=clean_id) |
-                Comment.objects.filter(entry=clean_id + "/") |
-                Comment.objects.filter(entry__endswith=entry_id_tail)
-            ).values("author", "comment")
-        )
-
-        merged_comments = list(remote_comments)
-        for c in local_comments:
-            merged_comments.append({
-                "author": {
-                    "displayName": c["author"].rstrip("/").split("/")[-1]
-                },
-                "comment": c["comment"],
-            })
 
         remote_likes_src = (entry.get("likes") or {}).get("src", [])
         remote_like_count = (entry.get("likes") or {}).get("count", 0)
 
-        entry["fetched_comments"] = merged_comments
-        entry["comment_count"] = len(merged_comments)
+        entry["fetched_comments"] = remote_comments
+        entry["comment_count"] = len(remote_comments)
 
         remote_user_liked = False
         for like in remote_likes_src:
