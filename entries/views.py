@@ -630,7 +630,8 @@ def RemoteEntry(request,fqid):
     index = fqid.index("/api/")
     logged_in_id = request.session.get("author_id")
     # Gets the entry
-    entryInfo = requests.get(fqid[:index] + "/api/entries/" + fqid)
+    print(fqid[:index] + "/api/entries/" + fqid.rstrip("/"))
+    entryInfo = requests.get(fqid[:index] + "/api/entries/" + fqid.rstrip("/"))
     entryInfo.raise_for_status()
     entry = json.loads(entryInfo.text)
     # Creates the list of allowed things to view
