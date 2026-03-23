@@ -44,6 +44,7 @@ def add_remote_like(request, entry_id):
         host = entry_id[:entry_id.index("api/")]
         remotenode = IncomingNode.objects.get(url = host)
         auth = (remotenode.username,remotenode.password)
+        print(auth)
         entryInfo = requests.get(entry_id.rstrip("/"), auth=auth)
         entryInfo.raise_for_status()
         jsonEntry = json.loads(entryInfo.text)
