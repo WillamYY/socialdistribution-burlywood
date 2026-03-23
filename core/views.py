@@ -14,7 +14,6 @@ import logging
 from api.serializers import EntrySerializer
 import re
 import base64
-from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
 
@@ -682,10 +681,7 @@ def RemoteProfileDisplay(request, fqid):
             remote_author_url,
             headers={"Accept": "application/json"},
             timeout=10,
-<<<<<<< HEAD
-=======
             auth=(credentials.username, credentials.password)
->>>>>>> 603264974ec6278e6dd9f6250967a9906d204bc6
         )
         authorInfo.raise_for_status()
         author = authorInfo.json()
@@ -713,10 +709,12 @@ def RemoteProfileDisplay(request, fqid):
         entry_json = {}
 
     user_fqid = None
-    local_base = request.build_absolute_uri("/").rstrip("/").replace("http://", "https://")
     if logged_in_id:
-        user_fqid = f"{local_base}/api/authors/{logged_in_id}"
+        base = request.build_absolute_uri('/')[:-1].replace("http://", "https://")
+        user_fqid = f"{base}/api/authors/{logged_in_id}"
+        
 
+    raw_entries = []
     if isinstance(entry_json, list):
         raw_entries = entry_json
     else:
@@ -735,110 +733,63 @@ def RemoteProfileDisplay(request, fqid):
         if not clean_id:
             continue
         entry["clean_id"] = clean_id
-
         remote_comments = ((entry.get("comments") or {}).get("src")) or []
 
-        for c in remote_comments:
-            if not isinstance(c, dict):
-                continue
-
-            auth = c.get("author") or {}
-            if isinstance(auth, str):
-                auth = {"id": auth, "displayName": auth.split("/")[-1]}
-
-            cid = (auth.get("id") or "").rstrip("/")
-            display = (auth.get("displayName") or "").strip()
-
-            local_base = request.build_absolute_uri('/').rstrip('/').replace("http://", "https://")
-            normalized_cid = cid.replace("http://", "https://")
-
-            needs_fix = (
-                not display
-                or display.isdigit()
-                or display.endswith("_author")
-                or display == cid.split("/")[-1]
-            )
-
-            if needs_fix:
-                fixed_name = None
-                match_author = re.search(r"/api/authors/([^/]+)/?$", cid)
-                author_key = match_author.group(1) if match_author else None
-
-                # 1. If this author URL belongs to THIS local node, trust local DB first
-                if cid.startswith(f"{local_base}/api/authors/") and author_key and author_key.isdigit():
-                    local_author = Author.objects.filter(id=int(author_key)).first()
-                    if local_author:
-                        print("MATCHED LOCAL AUTHOR BY ID:", local_author.id, local_author.username, local_author.name)
-                        fixed_name = local_author.name or local_author.username
-
-                # 2. If not fixed yet, try local DB by username ONLY for local URLs
-                if not fixed_name and cid.startswith(f"{local_base}/api/authors/"):
-                    local_author = (
-                        Author.objects.filter(username=display).first()
-                        or (Author.objects.filter(username=author_key).first() if author_key else None)
-                    )
-                    if local_author:
-                        print("MATCHED LOCAL AUTHOR BY USERNAME:", local_author.id, local_author.username, local_author.name)
-                        fixed_name = local_author.name or local_author.username
-
-                # 3. Otherwise fetch the author profile directly from the URL
-                if not fixed_name:
-                    try:
-                        author_resp = requests.get(
-                            cid,
-                            headers={"Accept": "application/json"},
-                            timeout=5,
-                        )
-                        if author_resp.status_code == 200:
-                            author_data = author_resp.json()
-                            fixed_name = (
-                                author_data.get("displayName")
-                                or author_data.get("name")
-                                or author_data.get("username")
-                                or display
-                            )
-                            print("FETCHED REMOTE AUTHOR NAME:", cid, fixed_name)
+        # Fix comment author: remote may return entry author instead of commenter.
+        # If comment author id matches our user, use our local display name.
+        if logged_in_id and user_fqid:
+            try:
+                me = Author.objects.get(id=logged_in_id)
+                my_display = me.name or me.username
+                for c in remote_comments:
+                    if not isinstance(c, dict):
+                        continue
+                    auth = c.get("author")
+                    if isinstance(auth, dict):
+                        cid = (auth.get("id") or "").rstrip("/")
+                    else:
+                        cid = str(auth or "").rstrip("/")
+                    if cid and _normalize_fqid(cid) == _normalize_fqid(user_fqid):
+                        if isinstance(auth, dict):
+                            auth["displayName"] = my_display
                         else:
-                            print("AUTHOR FETCH NON-200:", cid, author_resp.status_code, author_resp.text)
-                    except Exception as e:
-                        print("REMOTE AUTHOR FETCH ERROR:", cid, str(e))
+                            c["author"] = {"id": cid, "displayName": my_display}
+            except Author.DoesNotExist:
+                pass
 
-                if fixed_name:
-                    auth["displayName"] = fixed_name
-
-            c["author"] = auth
+        remote_likes_src = (entry.get("likes") or {}).get("src", [])
+        remote_like_count = (entry.get("likes") or {}).get("count", 0)
 
         entry["fetched_comments"] = remote_comments
         entry["comment_count"] = len(remote_comments)
 
-        remote_likes_src = (entry.get("likes") or {}).get("src", [])
-
         remote_user_liked = False
         for like in remote_likes_src:
-            like_author = ((like.get("author") or {}).get("id") or "").rstrip("/")
-            like_author = like_author.replace("http://", "https://")
-            if user_fqid and _normalize_fqid(user_fqid) == _normalize_fqid(like_author):
+            like_author = (like.get("author") or {}).get("id")
+            # Compare by author ID number only, as host varies
+            if user_fqid == like_author:
                 remote_user_liked = True
                 break
 
         entry["liked_by_user"] = remote_user_liked
-        entry["like_count"] = (entry.get("likes") or {}).get("count", 0)
 
+        entry["like_count"] = entry["likes"]["count"]
         public_entries.append(entry)
 
     is_following = False
     if logged_in_id and normalized_fqid:
         is_following = RemoteFollow.objects.filter(
-            follower_id=logged_in_id,
-            followed_fqid=normalized_fqid,
+            follower_id=logged_in_id, followed_fqid=normalized_fqid
         ).exists()
+
+    request_sent = False
 
     context = {
         "author": author,
         "followers_count": 0,
         "following_count": 0,
         "is_following": is_following,
-        "request_sent": False,
+        "request_sent": request_sent,
         "logged_in_id": logged_in_id,
         "public_entries": public_entries,
         "author_fqid": normalized_fqid,
