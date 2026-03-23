@@ -69,31 +69,26 @@ def NodeDisplay(request):
     """
     Displays all authors in the node.
     """
-    node_authors = Author.objects.all()
-    other_node_authors = []
-
+    authors = []
     for node in IncomingNode.objects.all():
-        resp = requests.get(node.url.rstrip("/") + "/api/authors/", timeout=10)
-        if resp.status_code != 200:
-            continue
-        data = resp.json()
-        authors = data.get("authors") or []
-        if not isinstance(authors, list):
-            continue
-        base = node.url.rstrip("/")
-        for author in authors:
-            if not isinstance(author, dict):
+        try:
+            resp = requests.get(
+                node.url.rstrip("/") + "/api/authors/",
+                auth=(node.username, node.password),
+                headers={"Accept": "application/json"},
+                timeout=10,
+            )
+            if resp.status_code != 200:
                 continue
-            aid = author.get("id")
-            if aid and not str(aid).startswith("http"):
-                author = dict(author)
-                author["id"] = f"{base}/api/authors/{aid}"
-            other_node_authors.append(author)
+                
+            data = resp.json()
+            remote_authors = data.get("authors") or data.get("src") or []
+            if isinstance(remote_authors, list):
+                authors.extend(remote_authors)
+        except (requests.RequestException, ValueError):
+            continue
 
-    return render(request, "node.html", {
-        "users": node_authors,
-        "other_users": other_node_authors
-    })
+    return render(request, "core/node_display.html", {"authors": authors})
 
 def login_view(request):
     """

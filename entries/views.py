@@ -2,6 +2,7 @@ import base64
 import re
 import markdown
 import bleach
+import logging
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import HttpResponse, JsonResponse
 from django.urls import reverse, resolve, Resolver404
@@ -16,6 +17,8 @@ from interactions.models import Like, Comment
 from core.models import RemoteFollow, RemoteFollower
 import requests
 import json
+
+logger = logging.getLogger(__name__)
 
 def check_visibility(entry, viewer_id, is_list=False):
     """
@@ -324,6 +327,7 @@ def stream_view(request):
         friends_remote_fqids=friends_remote_fqids,
         requested_by_fqid=viewer_fqid,
     )
+    logger.info("STREAM VIEW viewer=%s local_entries=%s remote_entries=%s", viewer.id, len(local_entries), len(remote_entries))
 
     # Combine and sort by published (newest first)
     def _sort_key(e):

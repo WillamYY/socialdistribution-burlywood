@@ -23,10 +23,18 @@
             <div class="entry-content">
                 {% if "image" in entry.contentType %}
                     {% if entry.is_remote %}
-                        <img src="{% if entry.content|slice:':5' == 'data:' or entry.content|slice:':4' == 'http' %}{{ entry.content }}{% else %}data:image/png;base64,{{ entry.content }}{% endif %}" class="entry-image" alt="{{ entry.title }}" onerror="this.style.display='none'">
+                        {% if entry.content|slice:':5' == 'data:' or entry.content|slice:':4' == 'http' %}
+                            <img src="{{ entry.content }}" class="entry-image" alt="{{ entry.title }}" onerror="this.style.display='none'">
+                        {% else %}
+                            <img src="data:{{ entry.contentType|cut:';base64' }};base64,{{ entry.content }}"
+                                class="entry-image"
+                                alt="{{ entry.title }}"
+                                onerror="this.style.display='none'">
+                        {% endif %}
                     {% else %}
-                        <img src="{% url 'api:ApiEntryImage' author_id=entry.author.id entry_id=entry.id %}" 
-                             class="entry-image" alt="{{ entry.title }}">
+                        <img src="{% url 'api:ApiEntryImage' author_id=entry.author.id entry_id=entry.id %}"
+                            class="entry-image"
+                            alt="{{ entry.title }}">
                     {% endif %}
                 {% elif entry.contentType == "text/markdown" %}
                     <div class="entry-markdown">{{ entry.content|safe }}</div>

@@ -11,8 +11,9 @@ from urllib.parse import unquote
 from django.http import HttpResponse, HttpResponseForbidden
 from django.shortcuts import render, get_object_or_404
 from django.urls import path
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, authentication_classes, permission_classes
 from rest_framework.response import Response
+from core.authentication import NodeBasicAuthentication
 from core.remote import federate_entry_create_or_update, federate_entry_deleted
 from core.models import Author, AuthorRequest, FollowRequest
 from entries.models import Entry
@@ -136,6 +137,7 @@ def fetch_remote_image(remote_url):
         return HttpResponse(f"Error connecting to remote node: {str(e)}", status=502)
 
 @api_view(['GET'])
+@authentication_classes([NodeBasicAuthentication])
 def ApiAuthors(request):
     page = 1
     size = None
@@ -163,8 +165,8 @@ def ApiAuthors(request):
     if size is None:
         data_authors = authors
     else:
-        start = page * size
-        end = (page + 1) * size
+        start = (page - 1) * size
+        end = start + size
         data_authors = authors[start:end] if start < len(authors) else []
 
     return Response({
@@ -174,6 +176,7 @@ def ApiAuthors(request):
 
 # Single author API endpoint
 @api_view(['GET','PUT'])
+@authentication_classes([NodeBasicAuthentication])
 def HandleApiAuthor(request, id):
     return ApiAuthor(request, id)
 
@@ -325,6 +328,7 @@ def ApiEntryLikes(request, entry_fqid):
 
 # Unified Inbox (User Story #69): routes by object type
 @api_view(["POST"])
+@authentication_classes([NodeBasicAuthentication])
 def ApiInbox(request, author_id):
     """
     POST [remote]: Unified inbox accepts like, follow, comment, entry.
@@ -607,6 +611,7 @@ def ApiSingleLikeLocal(request, like_url):
 
 # Returns a paginated list of entries for a specific author
 @api_view(['GET', 'POST'])
+@authentication_classes([NodeBasicAuthentication])
 def ApiEntries(request, author_id):
     """
     URL ://service/api/authors/{AUTHOR_SERIAL}/entries/
