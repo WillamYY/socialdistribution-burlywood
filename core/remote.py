@@ -76,24 +76,33 @@ def fetch_remote_public_entries(following_remote_fqids=None, friends_remote_fqid
     seen_ids = set()
 
     for node in IncomingNode.objects.all():
-        base = node.url.rstrip("/")
+        base = (node.url or "").rstrip("/")
         if not base:
             continue
 
         # Use IncomingNode credentials because we are fetching from THEM
         auth = (node.username, node.password)
+        logger.info("STREAM FETCH authors node=%s username=%s", base, node.username)
 
         try:
             resp = requests.get(
                 f"{base}/api/authors/",
                 auth=auth,
+                headers={"Accept": "application/json"},
                 timeout=10,
+            )
+            logger.info(
+                "STREAM FETCH authors response node=%s status=%s body=%s",
+                base,
+                resp.status_code,
+                resp.text[:200] if resp.text else "",
             )
             if resp.status_code != 200:
                 continue
             data = resp.json()
-            authors = data.get("authors") or []
+            authors = data.get("authors") or data.get("src") or []
             if not isinstance(authors, list):
+                logger.warning("STREAM FETCH authors bad-shape node=%s data=%s", base, str(data)[:200])
                 continue
 
             for author in authors:
@@ -116,7 +125,10 @@ def fetch_remote_public_entries(following_remote_fqids=None, friends_remote_fqid
                 include_friends = author_fqid in friends_normalized
 
                 entries_url = f"{node_base}/api/authors/{author_num_id}/entries/"
-                headers = {"X-Requested-By": requested_by_fqid} if (include_friends and requested_by_fqid) else {}
+                headers = {"Accept": "application/json"}
+                if include_friends and requested_by_fqid:
+                    headers["X-Requested-By"] = requested_by_fqid
+
                 try:
                     entry_resp = requests.get(
                         entries_url,
@@ -124,10 +136,27 @@ def fetch_remote_public_entries(following_remote_fqids=None, friends_remote_fqid
                         auth=auth,
                         timeout=10,
                     )
+                    logger.info(
+                        "STREAM FETCH entries author=%s url=%s status=%s body=%s",
+                        author_fqid,
+                        entries_url,
+                        entry_resp.status_code,
+                        entry_resp.text[:200] if entry_resp.text else "",
+                    )
                     if entry_resp.status_code != 200:
                         continue
                     entry_data = entry_resp.json()
-                    items = entry_data.get("src") or []
+                    items = entry_data.get("src") or entry_data.get("entries") or []
+                    if not isinstance(items, list):
+                        logger.warning(
+                            "STREAM FETCH entries bad-shape author=%s data=%s",
+                            author_fqid,
+                            str(entry_data)[:200],
+                        )
+                        continue
+
+                    added_for_author = 0
+
                     for item in items:
                         if not isinstance(item, dict):
                             continue
@@ -174,11 +203,28 @@ def fetch_remote_public_entries(following_remote_fqids=None, friends_remote_fqid
                             liked_by_user=False,
                         )
                         all_entries.append(entry)
-                except (requests.RequestException, ValueError, KeyError):
+                        added_for_author += 1
+
+                    logger.info(
+                        "STREAM FETCH entries accepted author=%s count=%s",
+                        author_fqid,
+                        added_for_author,
+                    )
+
+                except (requests.RequestException, ValueError, KeyError) as exc:
+                    logger.warning(
+                        "STREAM FETCH entries error author=%s url=%s error=%s",
+                        author_fqid,
+                        entries_url,
+                        exc,
+                    )
                     continue
-        except (requests.RequestException, ValueError):
+                    
+        except (requests.RequestException, ValueError) as exc:
+            logger.warning("STREAM FETCH authors error node=%s error=%s", base, exc)
             continue
 
+    logger.info("STREAM FETCH total remote entries=%s", len(all_entries))
     return all_entries
 
 def _inbox_url_for_author_fqid(author_fqid: str) -> str:
