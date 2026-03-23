@@ -283,6 +283,7 @@ def ApiAuthorAndEntryLikes(request,author_id,entry_id):
 
 # Returns who liked a specific entry with no author
 @api_view(["GET"])
+@authentication_classes([NodeBasicAuthentication])
 def ApiEntryLikes(request, entry_fqid):
     # Ensures the entry exists before accessing it
     # From https://stackoverflow.com/questions/150505/how-to-get-get-request-values-in-django by camlfan, downloaded 2026-03-01
