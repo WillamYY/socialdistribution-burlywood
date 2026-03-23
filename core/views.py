@@ -717,8 +717,8 @@ def RemoteProfileDisplay(request, fqid):
         entry["clean_id"] = clean_id
 
         remote_comments = ((entry.get("comments") or {}).get("src")) or []
-        
-        # Fix bad remote comment author display names
+        local_base = request.build_absolute_uri('/').rstrip('/').replace("http://", "https://")
+
         for c in remote_comments:
             if not isinstance(c, dict):
                 continue
@@ -730,79 +730,54 @@ def RemoteProfileDisplay(request, fqid):
             cid = (auth.get("id") or "").rstrip("/")
             display = (auth.get("displayName") or "").strip()
 
+            if not cid:
+                continue
+
             needs_fix = (
                 not display
                 or display.isdigit()
-                or display.endswith("_author")
                 or display == cid.split("/")[-1]
             )
 
-            print("HEROKU COMMENT RAW:", c)
-            print("HEROKU AUTHOR RAW:", auth)
-            print("HEROKU CID:", cid)
-            print("HEROKU DISPLAY BEFORE:", display)
-            print("HEROKU NEEDS FIX:", needs_fix)
+            if not needs_fix:
+                continue
 
-            if cid and needs_fix:
+            fixed_name = None
+
+            # 1. only resolve through local DB if this author is actually from THIS site
+            if cid.startswith(f"{local_base}/api/authors/"):
                 match_author = re.search(r"/api/authors/([^/]+)/?$", cid)
-                if not match_author:
-                    continue
+                if match_author:
+                    author_key = match_author.group(1)
+                    if author_key.isdigit():
+                        local_author = Author.objects.filter(id=int(author_key)).first()
+                        if local_author:
+                            fixed_name = local_author.name or local_author.username
 
-                author_key = match_author.group(1)
-                fixed_name = None
+            # 2. never try to fetch localhost authors from Heroku
+            elif "127.0.0.1" in cid or "localhost" in cid:
+                pass
 
-                local_base = request.build_absolute_uri('/').rstrip('/').replace("http://", "https://")
-                for c in remote_comments:
-                    if not isinstance(c, dict):
-                        continue
-
-                    auth = c.get("author")
-                    if not isinstance(auth, dict):
-                        continue
-
-                    cid = (auth.get("id") or "").rstrip("/")
-                    display = (auth.get("displayName") or "").strip()
-
-                    needs_fix = (
-                        not display
-                        or display.isdigit()
-                        or display.endswith("_author")
-                        or display == cid.split("/")[-1]
+            # 3. real remote public author profile
+            else:
+                try:
+                    author_resp = requests.get(
+                        cid,
+                        headers={"Accept": "application/json"},
+                        timeout=5,
                     )
+                    if author_resp.status_code == 200:
+                        author_data = author_resp.json()
+                        fixed_name = (
+                            author_data.get("displayName")
+                            or author_data.get("name")
+                            or author_data.get("username")
+                        )
+                except Exception as e:
+                    print("REMOTE AUTHOR FETCH ERROR:", cid, str(e))
 
-                    if not (cid and needs_fix):
-                        continue
-
-                    fixed_name = None
-
-                    if cid.startswith(f"{local_base}/api/authors/"):
-                        match_author = re.search(r"/api/authors/([^/]+)/?$", cid)
-                        if match_author:
-                            author_key = match_author.group(1)
-                            if author_key.isdigit():
-                                local_author = Author.objects.filter(id=int(author_key)).first()
-                                if local_author:
-                                    fixed_name = local_author.name or local_author.username
-
-                    if not fixed_name:
-                        try:
-                            author_resp = requests.get(
-                                cid,
-                                headers={"Accept": "application/json"},
-                                timeout=5,
-                            )
-                            if author_resp.status_code == 200:
-                                author_data = author_resp.json()
-                                fixed_name = (
-                                    author_data.get("displayName")
-                                    or author_data.get("name")
-                                    or author_data.get("username")
-                                )
-                        except Exception as e:
-                            print("REMOTE AUTHOR FETCH ERROR:", cid, str(e))
-
-                    if fixed_name:
-                        auth["displayName"] = fixed_name
+            if fixed_name:
+                auth["displayName"] = fixed_name
 
         entry["fetched_comments"] = remote_comments
         entry["comment_count"] = len(remote_comments)
