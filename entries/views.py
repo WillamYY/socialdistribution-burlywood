@@ -339,7 +339,7 @@ def stream_view(request):
         entry_url = f"{base_url}/api/authors/{entry.author.id}/entries/{entry.id}"
         
         # Fetch the count of interactions
-        entry.comment_count = Comment.objects.filter(entry=entry_url).count()
+        entry.comment_count = Comment.objects.filter(entry__endswith=entry.id).count()
         entry.like_count = Like.objects.filter(object=entry_url).count()
         
         if "author_id" in request.session:
@@ -451,7 +451,7 @@ def view_my_entries(request):
         entry.liked_by_user = Like.objects.filter(object=entry_url, author=user_fqid).exists()
 
         # fetch comments
-        entry.fetched_comments = Comment.objects.filter(entry=entry_url).order_by('published')
+        entry.fetched_comments = Comment.objects.filter(entry__endswith=entry.id).order_by('published')
 
         # all objects liked by current user
         liked_objects = Like.objects.filter(author=user_fqid).values_list("object", flat=True)
@@ -564,7 +564,7 @@ def get_entry(request, entry_id):
 
     # Base Entry Interactions
     entry.like_count = Like.objects.filter(object=entry_url).count()
-    entry.fetched_comments = Comment.objects.filter(entry=entry_url).order_by('published')
+    entry.fetched_comments = Comment.objects.filter(entry__endswith=entry_id).order_by('published')
 
     # Check if the logged-in user liked the this entry
     if logged_in_id:
