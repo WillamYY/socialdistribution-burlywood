@@ -166,8 +166,9 @@ def edit_profile(request):
 
         author.github = github if github else ""
 
-        if request.FILES.get("picture"):
-            author.picture = request.FILES["picture"]
+        picture_url = request.POST.get("picture_url")
+        if picture_url:
+            author.picture_url = picture_url
 
         author.save()
 
