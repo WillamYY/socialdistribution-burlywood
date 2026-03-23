@@ -632,6 +632,7 @@ def RemoteEntry(request,fqid):
     # Gets the entry
     print(fqid[:index] + "/api/entries/" + fqid.rstrip("/"))
     node_credentials = get_object_or_404(IncomingNode, url=fqid[:index] + "/")
+    print(node_credentials.username, node_credentials.password)
     entryInfo = requests.get(fqid[:index] + "/api/entries/" + fqid.rstrip("/"), auth=(node_credentials.username, node_credentials.password))
     entryInfo.raise_for_status()
     entry = json.loads(entryInfo.text)
