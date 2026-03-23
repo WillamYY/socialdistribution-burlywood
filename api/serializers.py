@@ -146,6 +146,7 @@ class CommentSerializer(serializers.ModelSerializer):
     type = serializers.CharField(default="comment", read_only=True)
     author = serializers.SerializerMethodField()
     id = serializers.SerializerMethodField()
+    likes = serializers.SerializerMethodField()
 
     class Meta:
         model = Comment
@@ -156,6 +157,7 @@ class CommentSerializer(serializers.ModelSerializer):
             "comment",
             "contentType",
             "published",
+            "likes",
         ]
 
     def get_id(self, obj):
@@ -199,6 +201,23 @@ class CommentSerializer(serializers.ModelSerializer):
             }
 
         return None
+    
+    # Gets the likes of an object
+    def get_likes(self, obj):
+        likes = Like.objects.filter(object__endswith = obj.id) | Like.objects.filter(object__endswith = str(obj.id) + "/")
+                # Package the data for LikesSerializer
+        likes_data = {
+            "page_number": 1,
+            "size": 50,
+            "count": likes.count(),
+            "src": likes
+        }
+        likes_url = self.get_id(obj).rstrip("/") + "/likes" 
+        # Instantiate LikesSerializer
+        serializer = LikesSerializer(likes_data, context={"link": likes_url})
+        return serializer.data
+
+
     
 class EntrySerializer(serializers.ModelSerializer):
     """
