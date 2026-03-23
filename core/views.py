@@ -168,9 +168,14 @@ def edit_profile(request):
 
         picture_url = request.POST.get("picture_url", "").strip()
         if picture_url:
-            if not re.match(r'^https?:\/\/.*\.(jpg|jpeg|png|gif)$', picture_url, re.I):
-                return render(request, "edit_profile.html", {"author": author, "error": "Invalid image URL"})
-            author.picture_url = picture_url
+            # Accept only URLs ending with common image extensions
+            if picture_url.lower().endswith((".jpg", ".jpeg", ".png", ".gif")):
+                author.picture_url = picture_url
+            else:
+                return render(request, "edit_profile.html", {
+                    "author": author,
+                    "error": "Please enter a direct image URL ending with .jpg, .jpeg, .png, or .gif"
+                })
 
         author.save()
 
