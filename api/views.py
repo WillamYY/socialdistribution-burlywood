@@ -19,7 +19,6 @@ from entries.models import Entry
 from interactions.models import Like, Comment
 from .serializers import AuthorSerializer, LikesSerializer, LikeSerializer, EntrySerializer, EntriesSerializer, CommentSerializer
 
-# Create your views here.
 def _normalize_fqid_for_check(s):
     """Normalize FQID for comparison."""
     if not s:
@@ -629,7 +628,7 @@ def ApiEntries(request, author_id):
         # Query the entries by checking visibility (logged-in user or remote friend)
         visible_entries = [
             e for e in all_entries
-            if check_visibility(e, logged_in_id, is_list=True, requested_by_fqid=requested_by_fqid)
+            if check_visibility(e, logged_in_id, requested_by_fqid=requested_by_fqid)
         ]
         
         # Paginate the queryset
@@ -1001,8 +1000,6 @@ def ApiAddComment(request, author_id, entry_id):
     return Response(serializer.data, status=201)
 
 @api_view(['GET'])
-# TODO: Currently, this API returns only local public entries.
-# Once the inbox feature is implemented in the next phase, this API should merge those entries into the response
 def ApiBrowsePublicEntries(request):
     """
     Browse all public entries (local only for now)
@@ -1011,28 +1008,27 @@ def ApiBrowsePublicEntries(request):
     # Pagination parameters
     page = int(request.query_params.get('page', 1))
     size = int(request.query_params.get('size', 5))
-    
+
     # Logged-in user
     logged_in_id = request.session.get("author_id")
-    
-    # Fetch all local public entries (exclude deleted)
+
+    # Local public entries
     public_entries = Entry.objects.filter(visibility="PUBLIC").exclude(visibility="DELETED").order_by('-published')
-    
-    # filter by visibility logic if needed (for friends/followers)
+
+    # Filter entries by visibility logic if needed
     visible_entries = [e for e in public_entries if check_visibility(e, logged_in_id)]
-    
+
     # Pagination
     start = (page - 1) * size
     end = start + size
     paginated_entries = visible_entries[start:end]
-    
-    # Build response
-    data = {
+
+    # Serialize entries
+    serializer = EntrySerializer(paginated_entries, many=True, context={'request': request})
+
+    return Response({
         "page_number": page,
         "size": size,
         "count": len(visible_entries),
-        "src": paginated_entries
-    }
-    
-    serializer = EntriesSerializer(data, context={'request': request})
-    return Response(serializer.data)
+        "src": serializer.data
+    })
