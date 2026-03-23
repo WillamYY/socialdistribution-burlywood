@@ -828,6 +828,7 @@ def _parse_author_fqid(author_fqid):
 
 
 @api_view(['GET'])
+@authentication_classes([NodeBasicAuthentication])
 def ApiEntryByFqid(request, entry_fqid):
     """GET [local]: Retrieve entry by FQID. URL: /api/entries/{ENTRY_FQID}"""
     author_id, entry_id = _parse_entry_fqid(entry_fqid, request)
