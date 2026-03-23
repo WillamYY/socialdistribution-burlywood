@@ -70,13 +70,13 @@
     <div class="page">
       <div class="card profile-card">
         <h2>{{ author.name|default:author.username }}</h2>
-        {% if author.picture %}
-          <img src="{{ author.picture.url }}" class="profile-pic" alt="Profile Picture">
-        {% elif author.picture_url %}
-          <img src="{{ author.picture_url}}" class="profile-pic" alt="Profile Picture">
+        {% if author.picture_url %}
+          <img src="{{ author.picture_url }}" class="profile-pic">
+        {% elif author.picture and author.picture.url %}
+          <img src="{{ author.picture.url }}" class="profile-pic">
         {% else %}
           <img src="{% static 'images/default_profile.jpg' %}" class="profile-pic" alt="Profile Picture"> 
-        {% endif %}
+      {% endif %}
 
         <p><strong>Username:</strong> {{ author.username }}</p>
         <p><strong>Description:</strong> {{ author.description|default:"No description yet." }}</p>

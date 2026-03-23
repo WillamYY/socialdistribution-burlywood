@@ -12,10 +12,10 @@ Following/Friends (#48, #50, #51, #52, #53, #54)
 * **#48** Follow local authors to see their entries
 * **#50** Approve/deny other authors following me
 * **#51** See pending follow requests
-* **#52** Unfollow authors I am following
-* **#53** Mutual following makes us friends
+* **#52** Unfollow authors I am following.
+* **#53** Mutual following makes us friends.
 * **#54** Unfriend authors by unfollowing
-* **#55** Keep track of my followers, followings, and friends
+* **#55** Keep track of my followers, followings, and friends.
 
 # Common Notes
 

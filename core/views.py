@@ -1,7 +1,7 @@
 from django.http import HttpResponse, Http404
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
-from .models import Author, FollowRequest, AuthorRequest, IncomingNode, RemoteFollow, RemoteFollowRequest, RemoteFollower, HostedImage
+from .models import Author, FollowRequest, AuthorRequest, IncomingNode, RemoteFollow, RemoteFollowRequest, RemoteFollower, AdminHostedImage
 from entries.models import Entry
 from interactions.models import Like, Comment
 from django.contrib.auth.hashers import check_password
@@ -13,6 +13,7 @@ import json
 import logging
 from api.serializers import EntrySerializer
 import re
+import base64
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +57,7 @@ def SignUpProcessing(request):
         new_author = AuthorRequest(
             username=username,
             name=username,
-            host=f"http://{request.get_host()}/api",
+            host=f"https://{request.get_host()}/api",
             password=password,
         )
         new_author.save()
@@ -165,8 +166,16 @@ def edit_profile(request):
 
         author.github = github if github else ""
 
-        if request.FILES.get("picture"):
-            author.picture = request.FILES["picture"]
+        picture_url = request.POST.get("picture_url", "").strip()
+        if picture_url:
+            # Accept only URLs ending with common image extensions
+            if picture_url.lower().endswith((".jpg", ".jpeg", ".png", ".gif")):
+                author.picture_url = picture_url
+            else:
+                return render(request, "edit_profile.html", {
+                    "author": author,
+                    "error": "Please enter a direct image URL ending with .jpg, .jpeg, .png, or .gif"
+                })
 
         author.save()
 
@@ -207,10 +216,28 @@ def profile_view(request):
 
     author = Author.objects.get(id=request.session["author_id"])
 
-    followers_count = author.followers.exclude(id__in=author.following.values_list("id", flat=True)).count()
-    following_count = author.following.exclude(id__in=author.followers.values_list("id", flat=True)).count()
-    friends_count = author.friends().count()
+    # Local: followers (excl mutual), following (excl mutual), friends (mutual)
+    local_followers_only = author.followers.exclude(id__in=author.following.values_list("id", flat=True))
+    local_following_only = author.following.exclude(id__in=author.followers.values_list("id", flat=True))
+    local_friends = author.friends()
+
+    # Remote: same logic as connections view
+    remote_followings_raw = list(RemoteFollow.objects.filter(follower=author).order_by("created_at"))
+    remote_followers_raw = list(RemoteFollower.objects.filter(target=author).order_by("created_at"))
+    following_fqids = {_normalize_fqid(rf.followed_fqid) for rf in remote_followings_raw}
+    follower_by_fqid = {_normalize_fqid(r.actor_fqid): r for r in remote_followers_raw}
+    follower_fqids = set(follower_by_fqid)
+    remote_friends = [norm_fqid for norm_fqid in follower_fqids if norm_fqid in following_fqids]
+    mutual_fqids = set(remote_friends)
+    remote_followings_only = [rf for rf in remote_followings_raw if _normalize_fqid(rf.followed_fqid) not in mutual_fqids]
+    remote_followers_only = [r for r in remote_followers_raw if _normalize_fqid(r.actor_fqid) not in mutual_fqids]
+
+    followers_count = local_followers_only.count() + len(remote_followers_only)
+    following_count = local_following_only.count() + len(remote_followings_only)
+    friends_count = local_friends.count() + len(remote_friends)
+
     pending_requests_count = FollowRequest.objects.filter(target=author).count()
+    pending_requests_count += RemoteFollowRequest.objects.filter(target=author).count()
 
     return render(request, "profile.html", {
         "author": author,
@@ -240,12 +267,16 @@ def ProfileDisplay(request, id):
     public_entries = Entry.objects.filter(author=author, visibility="PUBLIC")
     base_url = request.build_absolute_uri('/')[:-1]
     for entry in public_entries:
-        entry_url = entry.fqid if hasattr(entry, "fqid") and entry.fqid else \
-            f"{base_url}/api/authors/{entry.author.id}/entries/{entry.id}"
-        entry.like_count = Like.objects.filter(object=entry_url).count()
+        entry_url = f"{base_url}/api/authors/{entry.author.id}/entries/{entry.id}"
+        # Tries both securea and insecure
+        if "https" in entry_url:
+            alt_url = entry_url.replace("https","http")
+        else:
+            alt_url = entry_url.replace('http',"https")
+        entry.like_count = Like.objects.filter(object=entry_url).count() + Like.objects.filter(object=alt_url).count()
         entry.comment_count = Comment.objects.filter(entry=entry_url).count()
         if user_fqid:
-            entry.liked_by_user = Like.objects.filter(object=entry_url, author=user_fqid).exists()
+            entry.liked_by_user = Like.objects.filter(object=entry_url, author=user_fqid).exists() or Like.objects.filter(object=alt_url, author=user_fqid).exists()
         else:
             entry.liked_by_user = False
 
@@ -467,20 +498,16 @@ def connections(request):
 def get_admin_hosted_image(request, image_id):
     """
     Serve hosted image by id for Markdown embedding.
-    Uses HostedImage model (ImageField).
+    Uses AdminHostedImage model (ImageField).
     """
-    hosted = get_object_or_404(HostedImage, id=image_id)
-    if not hosted.image:
+    hosted = get_object_or_404(AdminHostedImage, id=image_id)
+    if not hosted.content or not hosted.content_type:
         return HttpResponse(status=404)
     try:
-        with hosted.image.open("rb") as f:
-            content = f.read()
-        content_type = "image/png"
-        if hasattr(hosted.image, "content_type") and hosted.image.content_type:
-            content_type = hosted.image.content_type
-        return HttpResponse(content, content_type=content_type)
-    except (IOError, OSError):
+        binary_data = base64.b64decode(hosted.content)
+    except (ValueError, TypeError):
         return HttpResponse(status=404)
+    return HttpResponse(binary_data, content_type=hosted.content_type)
 
 
 def _normalize_fqid(s):
@@ -621,7 +648,6 @@ def remove_remote_follower(request, fqid):
         messages.info(request, "Follower was already removed.", extra_tags="follow")
     return redirect("connections")
 
-
 def RemoteProfileDisplay(request, fqid):
     """
     Displays the profile of a remote author. Fetches author and entries from remote node.
@@ -639,6 +665,7 @@ def RemoteProfileDisplay(request, fqid):
             remote_author_url,
             headers={"Accept": "application/json"},
             timeout=10,
+            
         )
         authorInfo.raise_for_status()
         author = authorInfo.json()
@@ -667,6 +694,7 @@ def RemoteProfileDisplay(request, fqid):
     if logged_in_id:
         base = request.build_absolute_uri('/')[:-1].replace("http://", "https://")
         user_fqid = f"{base}/api/authors/{logged_in_id}"
+        
 
     raw_entries = []
     if isinstance(entry_json, list):
@@ -686,47 +714,48 @@ def RemoteProfileDisplay(request, fqid):
         clean_id = (entry.get("id") or "").rstrip("/")
         if not clean_id:
             continue
-
         entry["clean_id"] = clean_id
         remote_comments = ((entry.get("comments") or {}).get("src")) or []
-        local_comments = list(Comment.objects.filter(entry=clean_id).values("author", "comment"))
 
-        merged_comments = list(remote_comments)
-        for c in local_comments:
-            merged_comments.append({
-                "author": {
-                    "displayName": c["author"].rstrip("/").split("/")[-1]
-                },
-                "comment": c["comment"],
-            })
+        # Fix comment author: remote may return entry author instead of commenter.
+        # If comment author id matches our user, use our local display name.
+        if logged_in_id and user_fqid:
+            try:
+                me = Author.objects.get(id=logged_in_id)
+                my_display = me.name or me.username
+                for c in remote_comments:
+                    if not isinstance(c, dict):
+                        continue
+                    auth = c.get("author")
+                    if isinstance(auth, dict):
+                        cid = (auth.get("id") or "").rstrip("/")
+                    else:
+                        cid = str(auth or "").rstrip("/")
+                    if cid and _normalize_fqid(cid) == _normalize_fqid(user_fqid):
+                        if isinstance(auth, dict):
+                            auth["displayName"] = my_display
+                        else:
+                            c["author"] = {"id": cid, "displayName": my_display}
+            except Author.DoesNotExist:
+                pass
 
         remote_likes_src = (entry.get("likes") or {}).get("src", [])
         remote_like_count = (entry.get("likes") or {}).get("count", 0)
 
-        entry["fetched_comments"] = merged_comments
-        entry["comment_count"] = len(merged_comments)
+        entry["fetched_comments"] = remote_comments
+        entry["comment_count"] = len(remote_comments)
 
         remote_user_liked = False
         for like in remote_likes_src:
             like_author = (like.get("author") or {}).get("id")
-            if user_fqid and like_author == user_fqid:
+            # Compare by author ID number only, as host varies
+            if user_fqid == like_author:
                 remote_user_liked = True
                 break
 
-        local_user_liked = False
-        if user_fqid and Like.objects.filter(author=user_fqid, object=clean_id).exists():
-            local_user_liked = True
+        entry["liked_by_user"] = remote_user_liked
 
-        entry["liked_by_user"] = local_user_liked
-
-        display_like_count = remote_like_count
-
-        if local_user_liked and not remote_user_liked:
-            display_like_count += 1
-        elif not local_user_liked and remote_user_liked:
-            display_like_count = max(0, display_like_count - 1)
-
-        entry["like_count"] = display_like_count
+        entry["like_count"] = entry["likes"]["count"]
         public_entries.append(entry)
 
     is_following = False

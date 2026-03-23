@@ -240,9 +240,9 @@ class EntrySerializer(serializers.ModelSerializer):
         request = self.context.get('request')
         if request:
             # URL of the user's HTML profile page
-             return request.build_absolute_uri(f"/app/authors/{obj.author.id}/entries/{obj.id}/")
+             return request.build_absolute_uri(f"/app/entry/{obj.id}/")
         # Fallback if no request context
-        return f"/app/authors/{obj.author.id}/entries/{obj.id}/"
+        return f"/app/entry/{obj.id}/"
 
     def get_comments(self, obj):
         """
@@ -257,9 +257,7 @@ class EntrySerializer(serializers.ModelSerializer):
             f"{base_url}/",
             str(obj.id),
         ]
-
-        entry_fqid = self.get_id(obj).rstrip("/")
-        comments_qs = Comment.objects.filter(entry=entry_fqid).order_by("-published")
+        comments_qs = Comment.objects.filter(entry__endswith=obj.id).order_by("-published")
 
         serialized_comments = CommentSerializer(comments_qs[:50], many=True, context=self.context).data
 
@@ -277,34 +275,37 @@ class EntrySerializer(serializers.ModelSerializer):
         """
         Getter for the likes on this entry.
         """
-        base_url = self.get_id(obj).rstrip("/")
-        likes_url = f"{base_url}/likes"
-
-        possible_objects = [
-            base_url,
-            f"{base_url}/",
-            str(obj.id),
-        ]
-
-        # Fallback for older stored formats
-        entry_fqid = self.get_id(obj).rstrip("/")
-        entry_likes = Like.objects.filter(object=entry_fqid)
-
-        if not entry_likes.exists():
-            search = re.search(r"entr(?:y|ies)/([^/]+)", base_url)
-            if search:
-                entry_id_part = search.group(1)
-                alt = entry_id_part[:-1] if entry_id_part.endswith("/") else f"{entry_id_part}/"
-                entry_likes = Like.objects.filter(object__endswith=entry_id_part) | Like.objects.filter(object__endswith=alt)
-
+        # Construct the base URL for the likes endpoint
+        base_url = self.get_id(obj)
+        
+        likes_url = f"{base_url}likes" 
+        # Handles both http and http requests
+        search = re.search("entr(?:y|ies)/([^/]+)",base_url)
+        # Prevents crashes
+        if not search:
+            entry_likes = []
+        else:
+            # Handles both the no slash and slash version
+            if search.group(1)[-1] == "/":
+                alt = search.group(1)[:-1]
+            else:
+                alt = search.group(1) + "/"
+            print(search.group(1),alt)
+            # Query the database for likes on this entry
+            entry_likes = Like.objects.filter(object__endswith=search.group(1)) | Like.objects.filter(object__endswith=alt)
+        
+        # Package the data for LikesSerializer
         likes_data = {
             "page_number": 1,
             "size": 50,
             "count": entry_likes.count(),
-            "src": entry_likes,
+            "src": entry_likes
         }
-
+        
+        # Instantiate LikesSerializer
         serializer = LikesSerializer(likes_data, context={"link": likes_url})
+        
+        # Return the fully formed JSON dictionary
         return serializer.data
 
     

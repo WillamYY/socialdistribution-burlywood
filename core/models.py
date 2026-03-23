@@ -108,6 +108,9 @@ class AuthorRequest(models.Model):
     web = models.URLField(blank=True)
 
 class AdminHostedImage(models.Model):
+    """
+    Model for admin hosted images.
+    """
     title = models.CharField(max_length=255)
     content_type = models.CharField(max_length=50, blank=True, null=True)
     content = models.TextField(blank=True, null=True)    # base64 string
@@ -115,6 +118,26 @@ class AdminHostedImage(models.Model):
     
     def __str__(self):
         return self.title
+
+class EntryDelivery(models.Model):
+    """
+    Model for delivery information.
+    Track which remote author inboxes have already received a local entry.
+    This helps resend edits and deleted-state updates later.
+    """
+    entry = models.ForeignKey(
+        "entries.Entry",
+        on_delete=models.CASCADE,
+        related_name="deliveries",
+    )
+    recipient_fqid = models.URLField(max_length=500)
+    delivered_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("entry", "recipient_fqid")
+
+    def __str__(self):
+        return f"{self.entry_id} -> {self.recipient_fqid}"
 
 """
 Creates a class that handles the nodes that we want to pull information from
