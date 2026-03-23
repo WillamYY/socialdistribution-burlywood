@@ -670,7 +670,6 @@ def RemoteProfileDisplay(request, fqid):
     if logged_in_id:
         base = request.build_absolute_uri('/')[:-1].replace("http://", "https://")
         user_fqid = f"{base}/api/authors/{logged_in_id}"
-        
 
     raw_entries = []
     if isinstance(entry_json, list):
@@ -690,26 +689,47 @@ def RemoteProfileDisplay(request, fqid):
         clean_id = (entry.get("id") or "").rstrip("/")
         if not clean_id:
             continue
-        entry["clean_id"] = clean_id
-        remote_comments = ((entry.get("comments") or {}).get("src")) or []
 
+        entry["clean_id"] = clean_id
+
+        remote_comments = ((entry.get("comments") or {}).get("src")) or []
         remote_likes_src = (entry.get("likes") or {}).get("src", [])
         remote_like_count = (entry.get("likes") or {}).get("count", 0)
 
-        entry["fetched_comments"] = remote_comments
-        entry["comment_count"] = len(remote_comments)
+        merged_comments = []
+        for c in remote_comments:
+            comment_id = (c.get("id") or "").rstrip("/")
+            comment_uuid = comment_id.split("/")[-1] if comment_id else ""
+            comment_like_count = Like.objects.filter(object=comment_id).count() if comment_id else 0
+            comment_liked_by_user = False
+            if user_fqid and comment_id:
+                comment_liked_by_user = Like.objects.filter(
+                    author=user_fqid,
+                    object=comment_id
+                ).exists()
+
+            merged_comments.append({
+                "id": comment_id,
+                "comment_uuid": comment_uuid,
+                "author": c.get("author") or {"displayName": "Unknown"},
+                "author_id": ((c.get("author") or {}).get("id") or "").rstrip("/"),
+                "comment": c.get("comment", ""),
+                "like_count": comment_like_count,
+                "liked_by_user": comment_liked_by_user,
+            })
+
+        entry["fetched_comments"] = merged_comments
+        entry["comment_count"] = len(merged_comments)
 
         remote_user_liked = False
         for like in remote_likes_src:
             like_author = (like.get("author") or {}).get("id")
-            # Compare by author ID number only, as host varies
             if user_fqid == like_author:
                 remote_user_liked = True
                 break
 
         entry["liked_by_user"] = remote_user_liked
-
-        entry["like_count"] = entry["likes"]["count"]
+        entry["like_count"] = remote_like_count
         public_entries.append(entry)
 
     is_following = False

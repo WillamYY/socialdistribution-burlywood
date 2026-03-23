@@ -201,14 +201,36 @@
                     <div class="comments-list" style="margin:12px 0 0 0;">
                         {% for comment in entry.fetched_comments %}
                         <div style="padding:8px 12px; margin-bottom:8px; background:#f3f4f6; border-radius:8px;">
-                            <strong>
-                                {% if comment.author.displayName %}
-                                    {{ comment.author.displayName }}
+                            <div style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
+                                <div>
+                                    <strong>
+                                        {% if comment.author.displayName %}
+                                            {{ comment.author.displayName }}
+                                        {% else %}
+                                            Unknown
+                                        {% endif %}
+                                    </strong>
+                                    : {{ comment.comment }}
+                                </div>
+
+                                {% if request.session.author_id and comment.id %}
+                                <form method="POST" action="{% url 'interactions:add_remote_comment_like' comment.id %}" style="margin:0;">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="comment_author_id" value="{{ comment.author_id }}">
+                                    <button type="submit" class="stat-item" style="border:none; background:none; cursor:pointer;">
+                                        <span class="icon">
+                                            {% if comment.liked_by_user %}❤️{% else %}🤍{% endif %}
+                                        </span>
+                                        <span class="count">{{ comment.like_count|default:0 }}</span>
+                                    </button>
+                                </form>
                                 {% else %}
-                                    Unknown
+                                <div class="stat-item">
+                                    <span class="icon">🤍</span>
+                                    <span class="count">{{ comment.like_count|default:0 }}</span>
+                                </div>
                                 {% endif %}
-                            </strong>
-                            : {{ comment.comment }}
+                            </div>
                         </div>
                         {% endfor %}
                     </div>

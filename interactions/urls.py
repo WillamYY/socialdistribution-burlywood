@@ -10,4 +10,5 @@ urlpatterns = [
     #path('remote/like/<path:entry_id>', views.add_remote_like, name='add_remote_like'),
     path("like-remote/<path:entry_id>/", views.add_remote_like, name="add_remote_like"),
     path("comment-remote/<path:entry_id>/", views.add_remote_comment, name="add_remote_comment"),
+    path("like-comment-remote/<path:comment_id>/", views.add_remote_comment_like, name="add_remote_comment_like"),
 ]
