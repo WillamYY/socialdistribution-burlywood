@@ -665,7 +665,6 @@ def RemoteProfileDisplay(request, fqid):
             remote_author_url,
             headers={"Accept": "application/json"},
             timeout=10,
-            
         )
         authorInfo.raise_for_status()
         author = authorInfo.json()
@@ -691,12 +690,10 @@ def RemoteProfileDisplay(request, fqid):
         entry_json = {}
 
     user_fqid = None
+    local_base = request.build_absolute_uri("/").rstrip("/").replace("http://", "https://")
     if logged_in_id:
-        base = request.build_absolute_uri('/')[:-1].replace("http://", "https://")
-        user_fqid = f"{base}/api/authors/{logged_in_id}"
-        
+        user_fqid = f"{local_base}/api/authors/{logged_in_id}"
 
-    raw_entries = []
     if isinstance(entry_json, list):
         raw_entries = entry_json
     else:
@@ -717,17 +714,22 @@ def RemoteProfileDisplay(request, fqid):
         entry["clean_id"] = clean_id
 
         remote_comments = ((entry.get("comments") or {}).get("src")) or []
-        local_base = request.build_absolute_uri('/').rstrip('/').replace("http://", "https://")
 
         for c in remote_comments:
             if not isinstance(c, dict):
                 continue
 
             auth = c.get("author")
+
+            # normalize string author -> dict
+            if isinstance(auth, str):
+                auth = {"id": auth.rstrip("/"), "displayName": ""}
+                c["author"] = auth
+
             if not isinstance(auth, dict):
                 continue
 
-            cid = (auth.get("id") or "").rstrip("/")
+            cid = (auth.get("id") or "").rstrip("/").replace("http://", "https://")
             display = (auth.get("displayName") or "").strip()
 
             if not cid:
@@ -744,7 +746,7 @@ def RemoteProfileDisplay(request, fqid):
 
             fixed_name = None
 
-            # 1. only resolve through local DB if this author is actually from THIS site
+            # 1. Only use local DB if the author URL belongs to THIS site
             if cid.startswith(f"{local_base}/api/authors/"):
                 match_author = re.search(r"/api/authors/([^/]+)/?$", cid)
                 if match_author:
@@ -754,11 +756,11 @@ def RemoteProfileDisplay(request, fqid):
                         if local_author:
                             fixed_name = local_author.name or local_author.username
 
-            # 2. never try to fetch localhost authors from Heroku
+            # 2. Never try to fetch localhost authors from Heroku
             elif "127.0.0.1" in cid or "localhost" in cid:
-                pass
+                fixed_name = display or cid.split("/")[-1]
 
-            # 3. real remote public author profile
+            # 3. Real remote public author profile
             else:
                 try:
                     author_resp = requests.get(
@@ -772,9 +774,10 @@ def RemoteProfileDisplay(request, fqid):
                             author_data.get("displayName")
                             or author_data.get("name")
                             or author_data.get("username")
+                            or display
                         )
-                except Exception as e:
-                    print("REMOTE AUTHOR FETCH ERROR:", cid, str(e))
+                except requests.RequestException:
+                    fixed_name = display or cid.split("/")[-1]
 
             if fixed_name:
                 auth["displayName"] = fixed_name
@@ -783,35 +786,33 @@ def RemoteProfileDisplay(request, fqid):
         entry["comment_count"] = len(remote_comments)
 
         remote_likes_src = (entry.get("likes") or {}).get("src", [])
-        remote_like_count = (entry.get("likes") or {}).get("count", 0)
 
         remote_user_liked = False
         for like in remote_likes_src:
-            like_author = (like.get("author") or {}).get("id")
-            # Compare by author ID number only, as host varies
-            if user_fqid == like_author:
+            like_author = ((like.get("author") or {}).get("id") or "").rstrip("/")
+            like_author = like_author.replace("http://", "https://")
+            if user_fqid and _normalize_fqid(user_fqid) == _normalize_fqid(like_author):
                 remote_user_liked = True
                 break
 
         entry["liked_by_user"] = remote_user_liked
+        entry["like_count"] = (entry.get("likes") or {}).get("count", 0)
 
-        entry["like_count"] = entry["likes"]["count"]
         public_entries.append(entry)
 
     is_following = False
     if logged_in_id and normalized_fqid:
         is_following = RemoteFollow.objects.filter(
-            follower_id=logged_in_id, followed_fqid=normalized_fqid
+            follower_id=logged_in_id,
+            followed_fqid=normalized_fqid,
         ).exists()
-
-    request_sent = False
 
     context = {
         "author": author,
         "followers_count": 0,
         "following_count": 0,
         "is_following": is_following,
-        "request_sent": request_sent,
+        "request_sent": False,
         "logged_in_id": logged_in_id,
         "public_entries": public_entries,
         "author_fqid": normalized_fqid,
