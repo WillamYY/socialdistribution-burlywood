@@ -716,34 +716,75 @@ def RemoteProfileDisplay(request, fqid):
             continue
         entry["clean_id"] = clean_id
         remote_comments = ((entry.get("comments") or {}).get("src")) or []
+        
+        # Fix bad remote comment author display names
+        for c in remote_comments:
+            if not isinstance(c, dict):
+                continue
 
-        # Fix comment author: remote may return entry author instead of commenter.
-        # If comment author id matches our user, use our local display name.
-        if logged_in_id and user_fqid:
-            try:
-                me = Author.objects.get(id=logged_in_id)
-                my_display = me.name or me.username
-                for c in remote_comments:
-                    if not isinstance(c, dict):
-                        continue
-                    auth = c.get("author")
-                    if isinstance(auth, dict):
-                        cid = (auth.get("id") or "").rstrip("/")
-                    else:
-                        cid = str(auth or "").rstrip("/")
-                    if cid and _normalize_fqid(cid) == _normalize_fqid(user_fqid):
-                        if isinstance(auth, dict):
-                            auth["displayName"] = my_display
-                        else:
-                            c["author"] = {"id": cid, "displayName": my_display}
-            except Author.DoesNotExist:
-                pass
+            auth = c.get("author")
+            if not isinstance(auth, dict):
+                continue
 
-        remote_likes_src = (entry.get("likes") or {}).get("src", [])
-        remote_like_count = (entry.get("likes") or {}).get("count", 0)
+            cid = (auth.get("id") or "").rstrip("/")
+            display = (auth.get("displayName") or "").strip()
+
+            needs_fix = (
+                not display
+                or display.isdigit()
+                or display.endswith("_author")
+                or display == cid.split("/")[-1]
+            )
+
+            if cid and needs_fix:
+                match_author = re.search(r"/api/authors/([^/]+)/?$", cid)
+                if not match_author:
+                    continue
+
+                author_key = match_author.group(1)
+                fixed_name = None
+
+                # 1) try local DB by numeric id
+                if author_key.isdigit():
+                    local_author = Author.objects.filter(id=int(author_key)).first()
+                    if local_author:
+                        print("MATCHED LOCAL AUTHOR BY ID:", local_author.id, local_author.username, local_author.name)
+                        fixed_name = local_author.name or local_author.username
+
+                # 2) try local DB by username
+                if not fixed_name:
+                    local_author = Author.objects.filter(username=display).first() or Author.objects.filter(username=author_key).first()
+                    if local_author:
+                        print("MATCHED LOCAL AUTHOR BY USERNAME:", local_author.id, local_author.username, local_author.name)
+                        fixed_name = local_author.name or local_author.username
+
+                # 3) final fallback: fetch the author profile directly
+                if not fixed_name:
+                    try:
+                        author_resp = requests.get(
+                            cid,
+                            headers={"Accept": "application/json"},
+                            timeout=5,
+                        )
+                        if author_resp.status_code == 200:
+                            author_data = author_resp.json()
+                            fixed_name = (
+                                author_data.get("displayName")
+                                or author_data.get("name")
+                                or author_data.get("username")
+                            )
+                            print("FETCHED REMOTE AUTHOR NAME:", cid, fixed_name)
+                    except Exception as e:
+                        print("REMOTE AUTHOR FETCH ERROR:", cid, str(e))
+
+                if fixed_name:
+                    auth["displayName"] = fixed_name
 
         entry["fetched_comments"] = remote_comments
         entry["comment_count"] = len(remote_comments)
+
+        remote_likes_src = (entry.get("likes") or {}).get("src", [])
+        remote_like_count = (entry.get("likes") or {}).get("count", 0)
 
         remote_user_liked = False
         for like in remote_likes_src:

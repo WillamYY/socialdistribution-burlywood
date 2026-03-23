@@ -120,7 +120,7 @@ def add_remote_comment(request, entry_id):
         # build author info in the same style as add_remote_like
         author_info = {
             "type": "author",
-            "id": author.host + "/authors/" + str(author.id),
+            "id": local_author_fqid,
             "host": author.host,
             "displayName": author.name,
             "github": author.github,

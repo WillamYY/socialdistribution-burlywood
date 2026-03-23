@@ -172,26 +172,33 @@ class CommentSerializer(serializers.ModelSerializer):
     def get_author(self, obj):
         author_value = getattr(obj, "author", None)
 
-        # If author is already a local Author object
+        # local Author object
         if isinstance(author_value, Author):
             return AuthorSerializer(author_value).data
 
-        # If author is stored as a URL string
+        # author stored as fqid string
         if isinstance(author_value, str):
             author_url = author_value.rstrip("/")
-            author_url = author_url.replace("://", "§§TEMP§§").replace("//", "/").replace("§§TEMP§§", "://")
-            author_id_part = author_url.split("/")[-1]
 
-            if author_id_part.isdigit():
-                author_obj = Author.objects.filter(id=int(author_id_part)).first()
-                if author_obj:
-                    return AuthorSerializer(author_obj).data
+            request = self.context.get("request")
+            local_base = ""
+            if request:
+                local_base = request.build_absolute_uri('/').rstrip('/')
 
+            # only resolve to local DB if this is clearly a local author URL
+            if local_base and author_url.startswith(f"{local_base}/api/authors/"):
+                author_id_part = author_url.split("/")[-1]
+                if author_id_part.isdigit():
+                    author_obj = Author.objects.filter(id=int(author_id_part)).first()
+                    if author_obj:
+                        return AuthorSerializer(author_obj).data
+
+            # remote or unresolved local author
             return {
                 "type": "author",
-                "id": author_value,
-                "host": "",
-                "displayName": author_id_part if author_id_part else "Unknown",
+                "id": author_url,
+                "host": author_url.split("/api/authors/")[0] if "/api/authors/" in author_url else "",
+                "displayName": "Unknown Author",
                 "github": "",
                 "profileImage": "",
                 "web": ""
