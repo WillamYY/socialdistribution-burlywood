@@ -51,7 +51,19 @@ def add_remote_like(request, entry_id):
         author = get_object_or_404(Author, pk = author_id)
         # Print the likes
         print(jsonEntry["likes"]["count"])
-        authorInfo = {"type":"author","id": author.host + "/authors/" + str(author.id),"host": author.host,"displayName": author.name, "github":author.github, "profileImage":author.picture_url,"web":author.web}
+        host = (author.host or "").rstrip("/")
+        if not host.endswith("/api"):
+            host = f"{host}/api"
+
+        authorInfo = {
+            "type": "author",
+            "id": f"{host}/authors/{author.id}",
+            "host": host,
+            "displayName": author.name or author.username,
+            "github": author.github,
+            "profileImage": author.picture_url,
+            "web": author.web,
+        }
         # Post the like to the inbox
         post = requests.post(foreignAuthor + "/inbox",json = {"type": "like","author": authorInfo,"published":datetime.now().isoformat(),"id":"","object":entry_id})
 
@@ -122,7 +134,7 @@ def add_remote_comment(request, entry_id):
             "type": "author",
             "id": local_author_fqid,
             "host": author.host,
-            "displayName": author.name,
+            "displayName": author.name or author.username,
             "github": author.github,
             "profileImage": author.picture_url,
             "web": author.web,
@@ -137,7 +149,13 @@ def add_remote_comment(request, entry_id):
             "contentType": "text/plain",
             "object": remote_entry_url,
         }
-
+        print("SESSION AUTHOR_ID:", author_id)
+        print("LOCAL AUTHOR OBJ ID:", author.id)
+        print("LOCAL AUTHOR USERNAME:", author.username)
+        print("LOCAL AUTHOR NAME:", author.name)
+        print("LOCAL AUTHOR HOST:", author.host)
+        print("REMOTE COMMENT PAYLOAD AUTHOR:", payload["author"])
+        print("REMOTE COMMENT FULL PAYLOAD:", payload)
         try:
             resp = requests.post(
                 foreign_author.rstrip("/") + "/inbox",

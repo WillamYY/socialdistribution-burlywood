@@ -14,6 +14,7 @@ import logging
 from api.serializers import EntrySerializer
 import re
 import base64
+from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
 
@@ -719,68 +720,71 @@ def RemoteProfileDisplay(request, fqid):
             if not isinstance(c, dict):
                 continue
 
-            auth = c.get("author")
-
-            # normalize string author -> dict
+            auth = c.get("author") or {}
             if isinstance(auth, str):
-                auth = {"id": auth.rstrip("/"), "displayName": ""}
-                c["author"] = auth
+                auth = {"id": auth, "displayName": auth.split("/")[-1]}
 
-            if not isinstance(auth, dict):
-                continue
-
-            cid = (auth.get("id") or "").rstrip("/").replace("http://", "https://")
+            cid = (auth.get("id") or "").rstrip("/")
             display = (auth.get("displayName") or "").strip()
 
-            if not cid:
-                continue
+            local_base = request.build_absolute_uri('/').rstrip('/').replace("http://", "https://")
+            normalized_cid = cid.replace("http://", "https://")
 
             needs_fix = (
                 not display
                 or display.isdigit()
+                or display.endswith("_author")
                 or display == cid.split("/")[-1]
             )
 
-            if not needs_fix:
-                continue
-
-            fixed_name = None
-
-            # 1. Only use local DB if the author URL belongs to THIS site
-            if cid.startswith(f"{local_base}/api/authors/"):
+            if needs_fix:
+                fixed_name = None
                 match_author = re.search(r"/api/authors/([^/]+)/?$", cid)
-                if match_author:
-                    author_key = match_author.group(1)
-                    if author_key.isdigit():
-                        local_author = Author.objects.filter(id=int(author_key)).first()
-                        if local_author:
-                            fixed_name = local_author.name or local_author.username
+                author_key = match_author.group(1) if match_author else None
 
-            # 2. Never try to fetch localhost authors from Heroku
-            elif "127.0.0.1" in cid or "localhost" in cid:
-                fixed_name = display or cid.split("/")[-1]
+                # 1. If this author URL belongs to THIS local node, trust local DB first
+                if cid.startswith(f"{local_base}/api/authors/") and author_key and author_key.isdigit():
+                    local_author = Author.objects.filter(id=int(author_key)).first()
+                    if local_author:
+                        print("MATCHED LOCAL AUTHOR BY ID:", local_author.id, local_author.username, local_author.name)
+                        fixed_name = local_author.name or local_author.username
 
-            # 3. Real remote public author profile
-            else:
-                try:
-                    author_resp = requests.get(
-                        cid,
-                        headers={"Accept": "application/json"},
-                        timeout=5,
+                # 2. If not fixed yet, try local DB by username ONLY for local URLs
+                if not fixed_name and cid.startswith(f"{local_base}/api/authors/"):
+                    local_author = (
+                        Author.objects.filter(username=display).first()
+                        or (Author.objects.filter(username=author_key).first() if author_key else None)
                     )
-                    if author_resp.status_code == 200:
-                        author_data = author_resp.json()
-                        fixed_name = (
-                            author_data.get("displayName")
-                            or author_data.get("name")
-                            or author_data.get("username")
-                            or display
-                        )
-                except requests.RequestException:
-                    fixed_name = display or cid.split("/")[-1]
+                    if local_author:
+                        print("MATCHED LOCAL AUTHOR BY USERNAME:", local_author.id, local_author.username, local_author.name)
+                        fixed_name = local_author.name or local_author.username
 
-            if fixed_name:
-                auth["displayName"] = fixed_name
+                # 3. Otherwise fetch the author profile directly from the URL
+                if not fixed_name:
+                    try:
+                        author_resp = requests.get(
+                            cid,
+                            headers={"Accept": "application/json"},
+                            timeout=5,
+                        )
+                        if author_resp.status_code == 200:
+                            author_data = author_resp.json()
+                            fixed_name = (
+                                author_data.get("displayName")
+                                or author_data.get("name")
+                                or author_data.get("username")
+                                or display
+                            )
+                            print("FETCHED REMOTE AUTHOR NAME:", cid, fixed_name)
+                        else:
+                            print("AUTHOR FETCH NON-200:", cid, author_resp.status_code, author_resp.text)
+                    except Exception as e:
+                        print("REMOTE AUTHOR FETCH ERROR:", cid, str(e))
+
+                if fixed_name:
+                    auth["displayName"] = fixed_name
+
+            c["author"] = auth
 
         entry["fetched_comments"] = remote_comments
         entry["comment_count"] = len(remote_comments)
