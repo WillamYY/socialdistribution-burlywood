@@ -1,24 +1,43 @@
 # Create your views here.
 import base64
+import json
+import logging
 from email.mime import base
 import uuid
+
+logger = logging.getLogger(__name__)
 import requests
 from urllib.parse import unquote
 from django.http import HttpResponse, HttpResponseForbidden
 from django.shortcuts import render, get_object_or_404
 from django.urls import path
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, authentication_classes, permission_classes
 from rest_framework.response import Response
-from core.models import Author, AuthorRequest, FollowRequest
+from core.authentication import NodeBasicAuthentication
+from core.remote import federate_entry_create_or_update, federate_entry_deleted
+from core.models import Author, AuthorRequest, FollowRequest, RemoteFollower, RemoteFollow
 from entries.models import Entry
 from interactions.models import Like, Comment
-from .serializers import LikesSerializer, LikeSerializer, EntrySerializer, EntriesSerializer, CommentSerializer
+from .serializers import AuthorSerializer, LikesSerializer, LikeSerializer, EntrySerializer, EntriesSerializer, CommentSerializer
 
-# Create your views here.
-def check_visibility(entry, viewer_id, is_list=False):
+def _normalize_fqid_for_check(s):
+    """Normalize FQID for comparison."""
+    if not s:
+        return ""
+    s = str(s).strip().rstrip("/")
+    if s.startswith("http://"):
+        s = "https" + s[4:]
+    return s
+
+
+def check_visibility(entry, viewer_id, is_list=False, requested_by_fqid=None):
     """
     Helper function to verify if a user can see an entry.
+    viewer_id: local author id (from session).
+    requested_by_fqid: remote author URL (from X-Requested-By header) for server-to-server requests.
     """
+    from core.models import RemoteFollow, RemoteFollower
+
     # Not found if entry is DELETED
     if entry.visibility == "DELETED":
         return False
@@ -31,32 +50,42 @@ def check_visibility(entry, viewer_id, is_list=False):
             return True
         else:
             # If from list, only the author or a follower can see it in a feed
-            if not viewer_id:
-                return False
-            if str(entry.author.id) == str(viewer_id):
-                return True
-            if entry.author.followers.filter(id=viewer_id).exists():
-                return True
+            if viewer_id:
+                if str(entry.author.id) == str(viewer_id):
+                    return True
+                if entry.author.followers.filter(id=viewer_id).exists():
+                    return True
+            if requested_by_fqid:
+                norm = _normalize_fqid_for_check(requested_by_fqid)
+                if norm and RemoteFollower.objects.filter(actor_fqid=norm, target=entry.author).exists():
+                    return True
             return False
 
-    # If not logged in, cannot see anything else
-    if not viewer_id:
+    # For FRIENDS, need either local viewer or remote friend
+    if not viewer_id and not requested_by_fqid:
         return False
-        
+
     # Author can always see their own non-deleted stuff
-    if str(entry.author.id) == str(viewer_id):
+    if viewer_id and str(entry.author.id) == str(viewer_id):
         return True
-        
-    # Friends check for mutual followers
+
+    # Friends check: mutual followers (local) or mutual follow with remote (RemoteFollow + RemoteFollower)
     if entry.visibility == "FRIENDS":
-        try:
-            viewer = Author.objects.get(id=viewer_id)
-            entry_author = Author.objects.get(id=entry.author.id)
-            # Check if the viewer is in entry author's friends list
-            return viewer in entry_author.friends()
-        except Author.DoesNotExist:
+        if viewer_id:
+            try:
+                viewer = Author.objects.get(id=viewer_id)
+                return viewer in entry.author.friends()
+            except Author.DoesNotExist:
+                pass
+        if requested_by_fqid:
+            norm = _normalize_fqid_for_check(requested_by_fqid)
+            if norm:
+                # Remote friend = they follow us AND we follow them
+                they_follow_us = RemoteFollower.objects.filter(actor_fqid=norm, target=entry.author).exists()
+                we_follow_them = RemoteFollow.objects.filter(follower=entry.author, followed_fqid=norm).exists()
+                return they_follow_us and we_follow_them
             return False
-            
+
     return False
 
 def is_remote_fqid(fqid, request):
@@ -108,56 +137,62 @@ def fetch_remote_image(remote_url):
         return HttpResponse(f"Error connecting to remote node: {str(e)}", status=502)
 
 @api_view(['GET'])
+@authentication_classes([NodeBasicAuthentication])
 def ApiAuthors(request):
-    query_string = request.META["QUERY_STRING"].split("&")
     page = 1
     size = None
-    for query in query_string:
-        # Gets the page number from query string
-        if query.split("=")[0] == "page":
-            if query.split("=")[1].isdigit():
-                page = int(query.split("=")[1])
-        # Gets the size  from query string
-        if query.split("=")[0] == "size":
-            if query.split("=")[1].isdigit():
-                size = int(query.split("=")[1])
-    # gets all the authors
+    if request.GET.get("page") and request.GET.get("page").isdigit():
+        page = int(request.GET.get("page"))
+    if request.GET.get("size") and request.GET.get("size").isdigit():
+        size = int(request.GET.get("size"))
+
     allAuthors = Author.objects.all()
-    data = {"type":"authors"} 
     authors = []
-    # Gets the relevant information from each author
+    base_url = request.build_absolute_uri("/api/").rstrip("/")
     for author in allAuthors:
-        # Gets the authors info
-        authorID = author.host + "authors/" + str(author.id)
-        authorInfo = {"type":"author","id": authorID,"host": author.host,"displayName": author.name, "github":author.github, "profileImage":author.picture_url,"web":author.web}
-        authors.append(authorInfo)
-    # If size is not specified returns all authors
-    if size == None:
-        data["authors"] = authors
-    else:
-        if page  * size < len(authors):
-            # For case when we can make a full page of that size
-            if (page + 1) * size < len(authors):
-                data["authors"] = authors[page * size:(page + 1) * size]
-            # Case where the page is not complete because it encounters the end of the list
-            else:
-                data["authors"] = authors[page * size:]
-        # Returns empty if page and size are out of range
+        # Build canonical author URL (must be absolute HTTPS for federation)
+        host = (author.host or "").strip().rstrip("/")
+        if host and host.startswith("http"):
+            author_base = host if "/api" in host else f"{host.rstrip('/')}/api"
         else:
-            data["authors"] = []
-    return Response(data)
+            author_base = base_url
+        if author_base.startswith("http://"):
+            author_base = "https" + author_base[4:]
+        authorID = f"{author_base}/authors/{author.id}"
+        authorInfo = {"type":"author","id": authorID,"host": author_base,"displayName": author.name or author.username,"github":author.github or "","profileImage":author.picture_url or "","web":author.web or ""}
+        authors.append(authorInfo)
+
+    if size is None:
+        data_authors = authors
+    else:
+        start = (page - 1) * size
+        end = start + size
+        data_authors = authors[start:end] if start < len(authors) else []
+
+    return Response({
+        "type": "authors",
+        "authors": data_authors
+    })
 
 # Single author API endpoint
 @api_view(['GET','PUT'])
+@authentication_classes([NodeBasicAuthentication])
 def HandleApiAuthor(request, id):
     return ApiAuthor(request, id)
 
 def ApiAuthor(request,id):
     if request.method == "GET":
         author = get_object_or_404(Author,pk=id) # Gets the author
-        authorID = author.host + "authors/" + str(author.id)
-        # Creates the information that will be returned
-        authorInfo = {"type":"author","id": authorID,"host": author.host,"displayName": author.name, "github":author.github, "profileImage":author.picture_url,"web":author.web}
+        base_url = request.build_absolute_uri("/api/").rstrip("/")
+        host = (author.host or "").strip().rstrip("/")
+        if host and host.startswith("http"):
+            author_base = host if "/api" in host else f"{host.rstrip('/')}/api"
+        else:
+            author_base = base_url
+        if author_base.startswith("http://"):
+            author_base = "https" + author_base[4:]
+        authorID = f"{author_base}/authors/{author.id}"
+        authorInfo = {"type":"author","id": authorID,"host": author_base,"displayName": author.name or author.username,"github":author.github or "","profileImage":author.picture_url or "","web":author.web or ""}
         return Response(authorInfo)
     elif request.method == "PUT":
         # Replaces the object if it is put on top of
@@ -167,7 +202,7 @@ def ApiAuthor(request,id):
                 # Creates an author request with the information
                 author = AuthorRequest(id = id,username = request.data.get("displayName"),name = request.data.get("displayName"),github = request.data.get("github"),web = request.data.get("web"), host = request.data.get("host"),picture_url = request.data.get("profileImage"))
                 author.save()
-                authorID = author.host + "authors/" + str(author.id)
+                authorID = author.host + "/authors/" + str(author.id)
                 return Response({"type":"author","id": authorID,"host": author.host,"displayName": author.name, "github":author.github, "profileImage":author.picture_url,"web":author.web},status = 201)
             # If the authors Id is invalid return a 400 respose
             else:
@@ -191,7 +226,7 @@ def ApiAuthor(request,id):
                 author.picture_url = request.data.get("profileImage")
                 author.save()
                 # Turns the authors id into it's string
-                authorID = author.host + "authors/" + str(author.id)
+                authorID = author.host + "/authors/" + str(author.id)
                 return Response({"type":"author","id": authorID,"host": author.host,"displayName": author.name, "github":author.github, "profileImage":author.picture_url,"web":author.web})
             else:
                 return Response(status = 400)
@@ -248,6 +283,7 @@ def ApiAuthorAndEntryLikes(request,author_id,entry_id):
 
 # Returns who liked a specific entry with no author
 @api_view(["GET"])
+@authentication_classes([NodeBasicAuthentication])
 def ApiEntryLikes(request, entry_fqid):
     # Ensures the entry exists before accessing it
     # From https://stackoverflow.com/questions/150505/how-to-get-get-request-values-in-django by camlfan, downloaded 2026-03-01
@@ -293,50 +329,123 @@ def ApiEntryLikes(request, entry_fqid):
 
 # Unified Inbox (User Story #69): routes by object type
 @api_view(["POST"])
+@authentication_classes([NodeBasicAuthentication])
 def ApiInbox(request, author_id):
     """
     POST [remote]: Unified inbox accepts like, follow, comment, entry.
     Routes to appropriate handler by request body type.
     """
-    obj_type = (request.data.get("type") or "like").lower()
-    if obj_type == "follow":
-        return _inbox_handle_follow(request, author_id)
-    if obj_type == "comment":
-        return _inbox_handle_comment(request, author_id)
-    if obj_type == "entry":
-        return _inbox_handle_entry(request, author_id)
-    return _inbox_handle_like(request, author_id)
+    try:
+        # Parse body - DRF may not parse application/ld+json; fallback to raw body
+        data = getattr(request, "data", None)
+        if not data and request.body:
+            try:
+                data = json.loads(request.body.decode("utf-8"))
+            except (ValueError, UnicodeDecodeError):
+                data = {}
+        data = data or {}
+        if not isinstance(data, dict):
+            data = {}
+        obj_type = str(data.get("type") or "like").lower()
+        logger.info("Inbox POST author_id=%s type=%s", author_id, obj_type)
+        if obj_type == "follow":
+            return _inbox_handle_follow(request, author_id, data)
+        if obj_type == "accept":
+            return _inbox_handle_accept(request, author_id, data)
+        if obj_type == "comment":
+            return _inbox_handle_comment(request, author_id, data)
+        if obj_type == "entry":
+            return _inbox_handle_entry(request, author_id, data)
+        return _inbox_handle_like(request, author_id, data)
+    except Exception as e:
+        logger.exception("Inbox error: %s", e)
+        return Response(
+            {"detail": "Inbox error", "error": str(e)},
+            status=500,
+        )
 
 
-def _inbox_handle_follow(request, author_id):
+def _inbox_handle_follow(request, author_id, data=None):
     """Handle follow request: actor wants to follow object (our author)."""
+    from core.models import RemoteFollowRequest
+
+    data = data or request.data or {}
     target = get_object_or_404(Author, id=author_id)
-    actor_data = request.data.get("actor") or {}
+    actor_raw = data.get("actor")
+    if isinstance(actor_raw, str):
+        actor_data = {"id": actor_raw}
+    else:
+        actor_data = (actor_raw or {}) if isinstance(actor_raw, dict) else {}
     actor_id_str = (actor_data.get("id") or "").strip().rstrip("/")
     if not actor_id_str:
         return Response({"detail": "Missing actor"}, status=400)
-    # For local actor: extract id and get Author
-    try:
-        actor_local_id = int(actor_id_str.split("/")[-1])
-        actor = Author.objects.filter(id=actor_local_id).first()
-    except (ValueError, IndexError):
-        actor = None
-    if not actor:
-        return Response({"detail": "Actor author not found on this node"}, status=404)
-    if actor.id == author_id:
-        return Response({"detail": "Author cannot follow themselves"}, status=400)
-    if FollowRequest.objects.filter(requester=actor, target=target).exists():
-        return Response({"detail": "Follow request already sent"}, status=409)
-    if actor.following.filter(id=target.id).exists():
-        return Response({"detail": "Already following"}, status=409)
-    FollowRequest.objects.create(requester=actor, target=target)
+
+    base = request.build_absolute_uri("/")[:-1]
+    is_local_actor = actor_id_str.startswith(base) or (
+        request.get_host() in actor_id_str and "/api/authors/" in actor_id_str
+    )
+
+    if is_local_actor:
+        try:
+            actor_local_id = int(actor_id_str.split("/")[-1])
+            actor = Author.objects.filter(id=actor_local_id).first()
+        except (ValueError, IndexError):
+            actor = None
+        if not actor:
+            return Response({"detail": "Actor author not found on this node"}, status=404)
+        if actor.id == author_id:
+            return Response({"detail": "Author cannot follow themselves"}, status=400)
+        if FollowRequest.objects.filter(requester=actor, target=target).exists():
+            return Response({"detail": "Follow request already sent"}, status=409)
+        if actor.following.filter(id=target.id).exists():
+            return Response({"detail": "Already following"}, status=409)
+        FollowRequest.objects.create(requester=actor, target=target)
+    else:
+        actor_fqid = actor_id_str
+        if actor_fqid.startswith("http://"):
+            actor_fqid = "https" + actor_fqid[4:]
+        actor_display_name = str(actor_data.get("displayName") or actor_data.get("username") or "Remote author")[:255]
+        if RemoteFollowRequest.objects.filter(actor_fqid=actor_fqid, target=target).exists():
+            return Response({"detail": "Follow request already sent"}, status=409)
+        RemoteFollowRequest.objects.create(
+            actor_fqid=actor_fqid,
+            actor_url=actor_fqid,  # armdb uses actor_url as NOT NULL column
+            actor_display_name=actor_display_name,
+            target=target,
+        )
+        logger.info("Created RemoteFollowRequest actor=%s target=%s", actor_fqid[:60], target.id)
     return Response({"detail": "Follow request received"}, status=202)
 
 
-def _inbox_handle_comment(request, author_id):
+def _inbox_handle_accept(request, author_id, data=None):
+    """Handle Accept: remote node approved our follow. Create RemoteFollow so Remote Following updates."""
+    from core.models import RemoteFollow
+
+    data = data or request.data or {}
+    follower = get_object_or_404(Author, id=author_id)
+    actor_raw = data.get("actor")
+    if isinstance(actor_raw, str):
+        followed_fqid = actor_raw.strip().rstrip("/")
+    elif isinstance(actor_raw, dict):
+        followed_fqid = (actor_raw.get("id") or "").strip().rstrip("/")
+    else:
+        return Response({"detail": "Missing actor"}, status=400)
+    if followed_fqid.startswith("http://"):
+        followed_fqid = "https" + followed_fqid[4:]
+    if not followed_fqid:
+        return Response({"detail": "Missing actor"}, status=400)
+    RemoteFollow.objects.get_or_create(
+        follower=follower, followed_fqid=followed_fqid,
+    )
+    logger.info("Accept: created RemoteFollow follower=%s followed=%s", follower.id, followed_fqid[:50])
+    return Response({"detail": "Accept received"}, status=202)
+
+
+def _inbox_handle_comment(request, author_id, data=None):
     """Handle comment: add comment to an entry."""
+    data = data or request.data or {}
     target_author = get_object_or_404(Author, id=author_id)
-    entry_url = request.data.get("entry") or (request.data.get("object") if isinstance(request.data.get("object"), str) else None)
+    entry_url = data.get("entry") or (data.get("object") if isinstance(data.get("object"), str) else None)
     if not entry_url:
         return Response({"detail": "Missing entry"}, status=400)
     entry_uuid = entry_url.rstrip("/").split("/")[-1]
@@ -346,9 +455,9 @@ def _inbox_handle_comment(request, author_id):
         return Response({"detail": "Entry not found"}, status=404)
     if entry.visibility == "DELETED":
         return Response({"detail": "Entry not found"}, status=404)
-    author_data = request.data.get("author") or {}
+    author_data = data.get("author") or {}
     author_url = author_data.get("id") or ""
-    comment_text = request.data.get("comment") or ""
+    comment_text = data.get("comment") or ""
     if not comment_text or not author_url:
         return Response({"detail": "Missing author or comment"}, status=400)
     base = request.build_absolute_uri("/")[:-1]
@@ -358,19 +467,20 @@ def _inbox_handle_comment(request, author_id):
         author=author_url,
         entry=entry_fqid,
         comment=comment_text,
-        contentType=request.data.get("contentType", "text/plain"),
+        contentType=data.get("contentType", "text/plain"),
     )
     return Response({"detail": "Comment received"}, status=202)
 
 
-def _inbox_handle_entry(request, author_id):
+def _inbox_handle_entry(request, author_id, data=None):
     """Handle incoming entry: store for stream (basic support)."""
     return Response({"detail": "Entry received (inbox storage not yet implemented)"}, status=202)
 
 
-def _inbox_handle_like(request, author_id):
+def _inbox_handle_like(request, author_id, data=None):
     """Handle like: existing like logic."""
-    obj_url = request.data.get("object")
+    data = data or request.data or {}
+    obj_url = data.get("object")
     if not obj_url:
         return Response({"detail": "Missing object"}, status=400)
     obj_url = obj_url.rstrip("/")
@@ -381,14 +491,13 @@ def _inbox_handle_like(request, author_id):
         return Response(status=404)
     if entry.visibility == "DELETED":
         return Response(status=404)
-    if entry.author.id != author_id:
-        return Response(status=400)
-    author_data = request.data.get("author") or {}
+    author_data = data.get("author") or {}
     author_url = (author_data.get("id") if isinstance(author_data, dict) else None) or ""
     if not author_url:
         return Response(status=400)
     if Like.objects.filter(author=author_url, object=obj_url.rstrip("/")).exists():
-        return Response(status=409)
+        Like.objects.filter(author=author_url, object=obj_url.rstrip("/")).delete()
+        return Response(status=204)
     like = Like(
         author=author_url,
         object=obj_url.rstrip("/"),
@@ -503,6 +612,7 @@ def ApiSingleLikeLocal(request, like_url):
 
 # Returns a paginated list of entries for a specific author
 @api_view(['GET', 'POST'])
+@authentication_classes([NodeBasicAuthentication])
 def ApiEntries(request, author_id):
     """
     URL ://service/api/authors/{AUTHOR_SERIAL}/entries/
@@ -515,12 +625,17 @@ def ApiEntries(request, author_id):
         page = int(request.query_params.get('page', 1))
         size = int(request.query_params.get('size', 5))
         logged_in_id = request.session.get("author_id")
-        
+        # X-Requested-By: remote author FQID for server-to-server (e.g. friend fetching FRIENDS entries)
+        requested_by_fqid = (request.META.get("HTTP_X_REQUESTED_BY") or "").strip() or None
+
         # Fetch all non-deleted entries
         all_entries = Entry.objects.filter(author=author).exclude(visibility="DELETED").order_by('-published')
-        
-        # Query the entries by checking visibility for logged-in user
-        visible_entries = [e for e in all_entries if check_visibility(e, logged_in_id, is_list=True)]
+
+        # Query the entries by checking visibility (logged-in user or remote friend)
+        visible_entries = [
+            e for e in all_entries
+            if check_visibility(e, logged_in_id, requested_by_fqid=requested_by_fqid)
+        ]
         
         # Paginate the queryset
         start = (page - 1) * size
@@ -560,12 +675,19 @@ def ApiEntries(request, author_id):
             visibility=request.data.get("visibility", "PUBLIC")
         )
         
-        # Return the newly created entry using your teammate's serializer
+        # Notify remote nodes
+        federate_entry_create_or_update(new_entry, request)
+
+        # Srialize and return
         serializer = EntrySerializer(new_entry, context={'request': request})
         return Response(serializer.data, status=201)
 
-# Returns a single specific entry
 @api_view(['GET', 'PUT', 'DELETE'])
+@authentication_classes([NodeBasicAuthentication])
+def HandleApiEntry(request, author_id, entry_id):
+    return ApiEntry(request, author_id, entry_id)
+
+# Returns a single specific entry
 def ApiEntry(request, author_id, entry_id):
     """
     URL: ://service/api/authors/{AUTHOR_SERIAL}/entries/{ENTRY_SERIAL}
@@ -580,9 +702,6 @@ def ApiEntry(request, author_id, entry_id):
             return Response({"detail": "Not found."}, status=404)
 
         # Check the visibility for the logged-in user
-        logged_in_id = request.session.get("author_id")
-        if not check_visibility(entry, logged_in_id):
-            return Response({"detail": "Forbidden"}, status=403)
         
         # Serialize and return
         serializer = EntrySerializer(entry, context={'request': request})
@@ -617,7 +736,10 @@ def ApiEntry(request, author_id, entry_id):
         entry.content = request.data.get("content", entry.content)
         entry.visibility = request.data.get("visibility", entry.visibility)
         entry.save()
-        
+
+        # Notify remote nodes
+        federate_entry_create_or_update(entry, request)
+
         # Serialize and return
         serializer = EntrySerializer(entry, context={'request': request})
         return Response(serializer.data, status=200)
@@ -634,6 +756,9 @@ def ApiEntry(request, author_id, entry_id):
         # Soft delete by changing visibility to DELETED
         entry.visibility = "DELETED"
         entry.save()
+        
+        # Notify remote nodes
+        federate_entry_deleted(entry, request)
         
         return Response(status=204)
 
@@ -657,10 +782,6 @@ def ApiEntryGlobal(request, entry_fqid):
     except (Entry.DoesNotExist, ValueError):
         return Response({"detail": "Not found."}, status=404)
 
-    # Check visibility
-    logged_in_id = request.session.get("author_id")
-    if not check_visibility(entry, logged_in_id):
-            return Response({"detail": "Forbidden"}, status=403)
 
     # Serialize and return
     serializer = EntrySerializer(entry, context={'request': request})
@@ -702,6 +823,7 @@ def _parse_author_fqid(author_fqid):
 
 
 @api_view(['GET'])
+@authentication_classes([NodeBasicAuthentication])
 def ApiEntryByFqid(request, entry_fqid):
     """GET [local]: Retrieve entry by FQID. URL: /api/entries/{ENTRY_FQID}"""
     author_id, entry_id = _parse_entry_fqid(entry_fqid, request)
@@ -882,8 +1004,6 @@ def ApiAddComment(request, author_id, entry_id):
     return Response(serializer.data, status=201)
 
 @api_view(['GET'])
-# TODO: Currently, this API returns only local public entries.
-# Once the inbox feature is implemented in the next phase, this API should merge those entries into the response
 def ApiBrowsePublicEntries(request):
     """
     Browse all public entries (local only for now)
@@ -892,28 +1012,27 @@ def ApiBrowsePublicEntries(request):
     # Pagination parameters
     page = int(request.query_params.get('page', 1))
     size = int(request.query_params.get('size', 5))
-    
+
     # Logged-in user
     logged_in_id = request.session.get("author_id")
-    
-    # Fetch all local public entries (exclude deleted)
+
+    # Local public entries
     public_entries = Entry.objects.filter(visibility="PUBLIC").exclude(visibility="DELETED").order_by('-published')
-    
-    # filter by visibility logic if needed (for friends/followers)
+
+    # Filter entries by visibility logic if needed
     visible_entries = [e for e in public_entries if check_visibility(e, logged_in_id)]
-    
+
     # Pagination
     start = (page - 1) * size
     end = start + size
     paginated_entries = visible_entries[start:end]
-    
-    # Build response
-    data = {
+
+    # Serialize entries
+    serializer = EntrySerializer(paginated_entries, many=True, context={'request': request})
+
+    return Response({
         "page_number": page,
         "size": size,
         "count": len(visible_entries),
-        "src": paginated_entries
-    }
-    
-    serializer = EntriesSerializer(data, context={'request': request})
-    return Response(serializer.data)
+        "src": serializer.data
+    })

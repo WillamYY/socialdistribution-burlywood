@@ -47,6 +47,52 @@ class FollowRequest(models.Model):
     class Meta:
         unique_together = ('requester', 'target')  # prevent duplicate requests
 
+
+class RemoteFollow(models.Model):
+    """
+    Local author following a remote author (by FQID).
+    Same semantics as Author.following for local authors.
+    """
+    follower = models.ForeignKey(Author, on_delete=models.CASCADE, related_name='remote_following')
+    followed_fqid = models.URLField(max_length=500)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('follower', 'followed_fqid')
+
+
+class RemoteFollowRequest(models.Model):
+    """
+    Follow request from a remote actor (they want to follow our local author).
+    Shows up in Follow Requests so the target can approve/deny.
+    actor_url: legacy/alternate column name (some deployments use this).
+    """
+    actor_fqid = models.URLField(max_length=500)
+    actor_url = models.URLField(max_length=500, blank=True, null=True, db_column="actor_url")  # alias for armdb compatibility
+    actor_display_name = models.CharField(max_length=255, blank=True, default="Remote author")
+    target = models.ForeignKey(Author, on_delete=models.CASCADE, related_name='remote_follow_requests')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('actor_fqid', 'target')
+
+
+class RemoteFollower(models.Model):
+    """
+    Remote actor follows our local author (approved).
+    Friends = mutual follow: we follow them (RemoteFollow) and they follow us (RemoteFollower).
+    actor_url: legacy/alternate column name (some deployments use this).
+    """
+    actor_fqid = models.URLField(max_length=500)
+    actor_url = models.URLField(max_length=500, blank=True, null=True, db_column="actor_url")  # armdb compatibility
+    actor_display_name = models.CharField(max_length=255, blank=True, default="Remote author")
+    target = models.ForeignKey(Author, on_delete=models.CASCADE, related_name='remote_followers')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('actor_fqid', 'target')
+
+
 """
 Creates a class for the request to create a new author
 """
@@ -61,14 +107,55 @@ class AuthorRequest(models.Model):
     host = models.URLField(blank=True)
     web = models.URLField(blank=True)
 
-class HostedImage(models.Model):
+class AdminHostedImage(models.Model):
+    """
+    Model for admin hosted images.
+    """
     title = models.CharField(max_length=255)
-    image = models.ImageField(upload_to='hosted_images/')
+    content_type = models.CharField(max_length=50, blank=True, null=True)
+    content = models.TextField(blank=True, null=True)    # base64 string
     uploaded_at = models.DateTimeField(auto_now_add=True)
-
+    
     def __str__(self):
         return self.title
-        
-    def get_markdown_link(self):
-        # A handy property to show the admin exactly what to copy/paste
-        return f"![{self.title}](/media/{self.image.name})"
+
+class EntryDelivery(models.Model):
+    """
+    Model for delivery information.
+    Track which remote author inboxes have already received a local entry.
+    This helps resend edits and deleted-state updates later.
+    """
+    entry = models.ForeignKey(
+        "entries.Entry",
+        on_delete=models.CASCADE,
+        related_name="deliveries",
+    )
+    recipient_fqid = models.URLField(max_length=500)
+    delivered_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("entry", "recipient_fqid")
+
+    def __str__(self):
+        return f"{self.entry_id} -> {self.recipient_fqid}"
+
+"""
+Creates a class that handles the nodes that we want to pull information from
+"""
+class IncomingNode(models.Model):
+    id = models.AutoField(primary_key = True)
+    url = models.URLField(unique = True)
+    # Credentials of mine to access their nodes
+    username = models.CharField(max_length = 30, default = "")
+    password = models.CharField(max_length = 30, default = "")
+
+"""
+Creates a class that handles the nodes that want to pull information from us
+"""
+class OutgoingNode(models.Model):
+    id = models.AutoField(primary_key = True)
+    url = models.URLField(unique = True)
+    # Credentials of theirs to acceses my node
+    username = models.CharField(max_length = 30, default = "")
+    password = models.CharField(max_length = 30, default = "")
+    is_active = models.BooleanField(default=True)

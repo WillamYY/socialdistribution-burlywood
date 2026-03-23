@@ -1,6 +1,6 @@
 # Entries and Image API Documentation
 
-This document covers the API implementation and expected behavior for **Entries and Visibility** user stories, referencing GitHub issues. The following content in this document is mainly generated via the generative AI: Gemini 3 Flash, Google, 2026-03-15, https://gemini.google.com/u/0/app/48a83dd17d81fcf7?pageId=none
+This document covers the API implementation and expected behavior for **Entries and Visibility** user stories, referencing GitHub issues. The following content in this document is mainly generated with the help of the generative AI: Gemini 3 Flash, Google, 2026-03-23, https://gemini.google.com/u/0/app/48a83dd17d81fcf7?pageId=none
 
 ### User Stories Covered
 * **#6**: As an author, I want my profile page to show my public entries (most recent first), so they can decide if they want to follow me.
@@ -24,7 +24,10 @@ This document covers the API implementation and expected behavior for **Entries 
 * **#65**: As a node admin, images can be hosted on my node, so that my users can use them in their CommonMark entries.
 * **#78**: As a node admin, I want deleted entries stay in the database and only be removed from the UI and API, so I can see what was deleted.
 * **#91**: As an author, entries I create should always be visible to me until they are deleted.
-
+* **#11**: As an author, I want my node to send my entries to my remote followers and friends.
+* **#13**: As an author, I want my node to re-send entries I've edited to everywhere they were already sent.
+* **#23**: As an author, I want my node to re-send entries I've deleted to everyone they were already sent.
+* **#45**: As a node admin, I want to push images to users on other nodes.
 
 ---
 
@@ -268,6 +271,12 @@ This endpoint allows an author to edit their own entry content, description, tit
 **US #22:**
 This endpoint is owner-protected. Another author cannot update someone else’s entry.
 
+**US #13:** 
+Successfully updating a local entry triggers an immediate re-push to all remote followers.
+
+**US #45:** 
+If the `contentType` is an image, the base64 payload is pushed to remote inboxes, allowing remote authors to view the image locally on their node.
+
 ### Expected Status Codes
 
 * **`200 OK`**: The entry was successfully updated.
@@ -300,6 +309,8 @@ Once deleted, the entry is hidden from ordinary readers and normal entry APIs.
 
 **US #78:**
 Deletion is implemented as a **soft delete**, not a hard delete. The entry remains in the database, but it is removed from normal API/UI access.
+
+**US #23:** Unlike a standard API, this triggers an outgoing `POST` to remote nodes. It uses the `EntryDelivery` model to ensure that *only* those who originally saw the post are notified of its deletion.
 
 ### Expected Status Codes
 
@@ -436,6 +447,7 @@ This endpoint supports browsing the public posts of the local node beyond only a
 
 **URL 1:** `GET /api/authors/{AUTHOR_SERIAL}/entries/{ENTRY_SERIAL}/image`
 **URL 2:** `GET /api/entries/{ENTRY_FQID}/image`
+
 **Relevant User Stories:** #16, #18, #41, #65
 
 * **When to use it:** Use this to render an image entry directly inside an HTML `<img>` tag, or to embed images within a CommonMark entry.
@@ -448,13 +460,18 @@ This endpoint supports browsing the public posts of the local node beyond only a
 Image entries are stored as base64 content in an entry and exposed through this endpoint as real image bytes.
 
 **US #18:**
-Markdown entries can link to image-entry URLs from this endpoint, which allows images to appear inside CommonMark-rendered content.
+Markdown entries can link to image-entry URLs or valid external image URLs, which allows images to appear inside CommonMark-rendered content.
 
 **US #41:**
 If the image belongs to a friends-only entry, the image endpoint applies the same visibility restrictions and prevents strangers from accessing it.
 
 **US #65:**
-This node can host images locally as image entries. Authors can upload images through the web interface or create image entries through the API using base64 image content. Those images are then served from this node through the image endpoint, so they can be reused in CommonMark entries with stable local URLs.
+This node can host images locally as image entries. Node admins can upload images through the web interface or create image entries through the API using base64 image content. 
+1. **Author-hosted image entries** — authors can upload images as image entries (`image/png;base64` or `image/jpeg;base64`). These are served through the image API endpoint and can be reused in Markdown with stable local URLs.
+
+2. **Admin-hosted images** — the node admin can also upload shared hosted images (`image/png;base64` or `image/jpeg;base64`). These are exposed in the entry authoring form as reusable local image URLs (`app/hosted-images/<int:image_id>/image/`), so authors can paste or insert them into CommonMark content.
+
+This means users can embed both their own image-entry URLs and admin-provided hosted image URLs in Markdown while keeping the images hosted on the local node. 
 
 ### Expected Status Codes
 
@@ -463,16 +480,26 @@ This node can host images locally as image entries. Authors can upload images th
 * **`404 Not Found`**: The entry does not exist, is `DELETED`, or is not an image entry.
 * **`500 Internal Server Error`**: The image content exists but could not be decoded.
 
----
+### Example
+**Direct Local Access:**
+Use this when you know the local author and entry serial.
+```
+GET http://nodeaaaa/api/authors/111/entries/1145141919810/image
+```
+**FQID Proxy Access:**
+Use this when you have the Fully Qualified ID of an entry from a remote node and want your local node to proxy the image for you.
+```
+GET http://nodebbbb/api/entries/http%3A%2F%2Fnodeaaaa%2Fapi%2Fauthors%2F111%2Fentries%2F1145141919810/image
+```
 
 ## Markdown Support
 
-**Relevant User Stories:** #15, #18, #21
+**Relevant User Stories:** #15, #18, #21, #65
 
 * **When to use it:** For entries whose `contentType` is `text/markdown`.
 * **How it works in the web UI:** Markdown is rendered into safe HTML for browser display.
 * **How it works in the API:** The API stores and returns markdown content as entry content. Clients can render it appropriately.
-* **Why to use it:** Supports rich text authoring while still allowing safe browser-based viewing.
+* **Why to use it:** Supports rich text authoring and image rendering while still allowing safe browser-based viewing.
 
 ### Story Behavior Notes
 
@@ -480,7 +507,7 @@ This node can host images locally as image entries. Authors can upload images th
 Markdown entries are supported as a distinct content type from plain text entries. This allows authors to write formatted posts using CommonMark syntax.
 
 **US #18:**
-Markdown content can include image links, and those links can point to image-entry endpoints.
+Markdown content can include image links, and those links can point to image-entry endpoints, preset node-admin hosted images, or valid external image URLs.
 
 **US #21:**
 In the web UI, markdown can be authored in the browser and rendered safely for display.
@@ -495,7 +522,9 @@ Node-hosted images can be referenced from Markdown using the local image-entry e
     "title": "Markdown Example",
     "description": "Testing markdown",
     "contentType": "text/markdown",
-    "content": "# Hello\n\nThis is **bold** and this is ![an image](http://node/api/authors/123/entries/456/image)",
+    "content": "# Hello\n\nThis is **bold** and this is ![an image](http://node/api/authors/123/entries/456/image)
+    # Admin Hosted Image:
+    ![](http://127.0.0.1:8000/app/hosted-images/6/image/)",
     "visibility": "PUBLIC"
 }
 ```
@@ -597,6 +626,9 @@ Entries remain visible to their owner until they are deleted. After deletion, th
 | `size` | `integer` | `5` | Number of items in the current response. |
 | `count` | `integer` | `24` | Total number of entries available for this query. |
 | `src` | `array` | `[...]` | The actual list of `Entry` objects. |
+| `is_remote` | `boolean` | `true` | Internal flag used by the stream to identify content pulled from other nodes. |
+| `remote_web` | `string` | `"http://nodeb/..."` | The original browser-facing URL of a remote post. |
+
 
 ### Entry Object (Request & Response)
 
@@ -622,3 +654,86 @@ Entries remain visible to their owner until they are deleted. After deletion, th
 * `UNLISTED` entries are visible through direct links, which is important for **US #35**, **US #40**, and **US #44**.
 * `PUT` currently supports both updating an existing entry and creating a new one with a specific ID, but in the current implementation it returns `200 OK` for both cases.
 * `GET /api/entries/public/` currently returns **local public entries only**.
+
+## Entry Federation (The "Push" Logic)
+### Automated Federation Logic
+Whenever an entry is created, updated, or deleted via the API, the server automatically triggers federation to remote nodes.
+
+* **Creation & Updates (US #11, #13, #45):** * The system identifies all remote followers and mutual friends.
+    * The entry (including image data if applicable) is serialized into the standard JSON Entry Object.
+    * The node performs a `POST` request to the remote author's `/inbox`.
+* **Deletion (US #23):** * The system looks up the `EntryDelivery` table to find every remote recipient who previously received the entry.
+    * It re-sends the entry with the `visibility` set to `DELETED` to ensure the remote node removes it from their UI/Cache.
+
+### Expected Federation Behavior
+| Action | Method | Destination | Content |
+| :--- | :--- | :--- | :--- |
+| **New Post** | `POST` | `/api/authors/{ID}/inbox/` | Full Entry Object |
+| **Edit Post** | `POST` | `/api/authors/{ID}/inbox/` | Updated Entry Object |
+| **Delete Post** | `POST` | `/api/authors/{ID}/inbox/` | Entry Object with `visibility: DELETED` |
+
+---
+
+## Remote Fetching (Incoming Node)
+**Relevant User Story:** #46 (Remote aspect)
+
+**Internal Function:** `fetch_remote_public_entries`
+
+While the Inbox receives "pushed" content, this logic is used to actively "pull" content from other nodes for a user's stream.
+
+* **How it works:** 
+    1. The node iterates through all configured `IncomingNode` objects.
+    2. It authenticates using stored credentials and fetches the author list from `{node}/api/authors/`.
+    3. For each author, it fetches their public entries.
+    4. **Advanced Visibility:** If the local user is a friend of the remote author, the node includes the `X-Requested-By` header (containing the local user's FQID). This tells the remote node it is safe to return `FRIENDS` visibility posts.
+
+### Request Header for Friend Access
+```http
+GET /api/authors/{REMOTE_ID}/entries/ HTTP/1.1
+Host: remote-node.com
+Accept: application/json
+X-Requested-By: https://your-node.com/api/authors/your-id
+```
+
+---
+
+## Entry Federation (Outgoing Node)
+
+### Purpose
+To ensure that content created on a local node is automatically distributed to authorized remote followers and friends without them needing to pull the data manually.
+
+### How it works
+Whenever a local entry is **created, updated, or deleted**, the server triggers a background federation process:
+
+1.  **Recipient Discovery:** The system identifies remote recipients based on the entry's `visibility`:
+    * **PUBLIC / UNLISTED:** Sent to all remote followers and mutual friends.
+    * **FRIENDS:** Sent only to remote mutual friends (local follows remote AND remote follows local).
+    * **DELETED:** Sent to every remote author who previously received a version of this entry (tracked via `EntryDelivery` records).
+2.  **Serialization:** The entry is converted to the standard JSON Entry Object.
+3.  **Delivery:** The node performs a `POST` request to each recipient's **Inbox** (`/api/authors/{AUTHOR_FQID}/inbox/`).
+4.  **Authentication:** Our node authenticates to the remote node using credentials stored in the `IncomingNode` table.
+
+
+### Expected Federation Behavior
+| Action | Triggering Endpoint | Federation Method | Payload `visibility` |
+| :--- | :--- | :--- | :--- |
+| **Create** | `POST /api/authors/.../entries/` | `POST` to Inbox | `PUBLIC`, `FRIENDS`, or `UNLISTED` |
+| **Edit** | `PUT /api/authors/.../entries/{id}` | `POST` to Inbox | Updated visibility status |
+| **Delete** | `DELETE /api/authors/.../entries/{id}` | `POST` to Inbox | `DELETED` |
+
+---
+
+## Inbox API
+
+**URL:** `POST /api/authors/{AUTHOR_SERIAL}/inbox/`
+
+* **When to use it:** When a remote node wants to send an entry, like, comment, or follow request to a local author.
+* **Behavior for Entries:** Currently, the inbox receives the object and returns a `202 Accepted` status.
+* **Note:** Per current implementation, `_inbox_handle_entry` logs the receipt but does not yet persist the remote entry into the local database.
+
+### Expected Status Codes
+* **`202 Accepted`**: The object was received and routed to the correct handler.
+* **`401 Unauthorized`**: The remote node failed to provide valid `Basic Auth` credentials matching an `IncomingNode` entry.
+* **`404 Not Found`**: The target local author does not exist.
+
+---

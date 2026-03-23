@@ -1,4 +1,5 @@
 from django.urls import path, include
+from django.views.decorators.csrf import csrf_exempt
 from . import views
 from django.contrib import admin
 
@@ -8,7 +9,8 @@ app_name = "api"
 urlpatterns = [
     path("authors/", views.ApiAuthors, name="ApiAuthors"),
     path("authors/<int:id>/", views.HandleApiAuthor, name="ApiAuthor"),
-    path("authors/<int:author_id>/inbox", views.ApiInbox, name="ApiSendLike"),
+    path("authors/<int:author_id>/inbox", csrf_exempt(views.ApiInbox), name="ApiSendLike"),
+    path("authors/<int:author_id>/inbox/", csrf_exempt(views.ApiInbox), name="ApiSendLikeSlash"),
     path("authors/<int:author_id>/entries/<uuid:entry_id>/likes",views.ApiAuthorAndEntryLikes,name="ApiAuthorAndEntryLikes"),
     path("entries/<path:entry_fqid>/likes",views.ApiEntryLikes, name="ApiEntryLikes"),
 
@@ -17,10 +19,9 @@ urlpatterns = [
     path("authors/<path:author_fqid>/liked", views.ApiAuthorLikedLocal, name="ApiAuthorLikedLocal"),
     path("liked/<path:like_url>", views.ApiSingleLikeLocal, name="ApiSingleLikeLocal"),
     
-    path('entries/public/', views.ApiBrowsePublicEntries, name='browse_public_entries'),
-    path("authors/<int:author_id>/entries/<uuid:entry_id>", views.ApiEntry, name="ApiEntry"),
+    path("authors/<int:author_id>/entries/<uuid:entry_id>", views.HandleApiEntry, name="ApiEntry"),
     path("entries/<path:entry_fqid>/comments/", views.ApiEntryCommentsByFqid, name="ApiEntryCommentsByFqid"),
-    path("entries/<path:entry_fqid>/", views.ApiEntryGlobal, name="ApiEntryGlobal"),
+    #path("entries/<path:entry_fqid>/", views.ApiEntryGlobal, name="ApiEntryGlobal"),
     path("authors/<int:author_id>/entries/", views.ApiEntries, name="ApiEntries"),
     path("authors/<int:author_id>/entries/<uuid:entry_id>/image", views.ApiEntryImage, name="ApiEntryImage"),
     path("entries/<path:entry_fqid>/image", views.ApiEntryImage, name="ApiEntryImageGlobal"),

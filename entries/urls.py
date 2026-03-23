@@ -9,7 +9,7 @@ urlpatterns = [
     path('edit/<uuid:entry_id>/', views.edit_entry, name='edit_entry'),
     path('delete/<uuid:entry_id>/', views.delete_entry, name='delete_entry'),
     path("entry/<uuid:entry_id>/", views.get_entry, name="get_entry"),
-
+    path("remote/entry/<path:fqid>", views.RemoteEntry, name="remote_entry"),
     # Include interactions app logic
     path("interactions/", include("interactions.urls", namespace="interactions")),
 ]

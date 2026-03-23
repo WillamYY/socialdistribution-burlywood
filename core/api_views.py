@@ -217,7 +217,6 @@ def api_follower_detail(request, author_id, foreign_author_fqid):
 
     return Response(status=405)
 
-
 @api_view(['GET', 'PUT'])
 def api_edit_profile(request, author_id):
     """
@@ -243,7 +242,7 @@ def api_edit_profile(request, author_id):
         name = request.data.get('name')
         description = request.data.get('description')
         github = request.data.get('github')
-        picture = request.FILES.get('picture')
+        picture_url = request.data.get('picture')  
 
         if name is not None:
             me.name = name
@@ -251,8 +250,8 @@ def api_edit_profile(request, author_id):
             me.description = description
         if github is not None:
             me.github = github
-        if picture:
-            me.picture = picture
+        if picture_url:
+            me.picture = picture_url  # store the URL directly in your ImageField/TextField
 
         me.save()
         return Response({"detail": "Profile updated successfully"}, status=status.HTTP_200_OK)

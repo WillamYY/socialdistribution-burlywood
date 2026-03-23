@@ -1,7 +1,6 @@
-from django.test import TestCase, Client
+from django.test import TestCase, Client, LiveServerTestCase
 from django.urls import reverse
-from core.models import Author, FollowRequest, HostedImage
-from core.admin import HostedImageAdmin
+from core.models import Author, FollowRequest, AdminHostedImage, OutgoingNode, IncomingNode
 from interactions.models import Like, Comment
 from entries.models import Entry
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -9,6 +8,8 @@ from django.contrib.postgres.fields import ArrayField
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.contrib.admin.sites import AdminSite
 import uuid
+import base64
+import requests
 
 class UnfollowAPITestCase(TestCase):
     """
@@ -163,7 +164,7 @@ class EditProfileAPITestCase(TestCase):
             description='Initial description'
         )
         self.client = Client()
-        self.url = reverse('EditProfileView') 
+        self.url = reverse('EditProfileView')  
 
         # Set session for logged-in user
         session = self.client.session
@@ -193,21 +194,21 @@ class EditProfileAPITestCase(TestCase):
         self.assertEqual(self.author.description, "New description")
         self.assertEqual(self.author.github, "https://github.com/new")
 
-    def test_edit_profile_picture(self):
-        img = SimpleUploadedFile("test.png", b"file_content", content_type="image/png")
-        response = self.client.post(
-            self.url,
-            {
-                "picture": img,
-                "name": "Test Name",
-                "description": "Test Description",
-                "github": "",
-            },
-            format='multipart'
-        )
+    def test_edit_profile_picture_url(self):
+        """
+        Test updating profile picture via URL input.
+        """
+        data = {
+            "name": "Test Name",
+            "description": "Test Description",
+            "github": "",
+            "picture_url": "https://example.com/test.png"
+        }
+        response = self.client.post(self.url, data)
         self.assertEqual(response.status_code, 200)
+
         self.author.refresh_from_db()
-        self.assertTrue(self.author.picture)
+        self.assertEqual(self.author.picture_url, "https://example.com/test.png")
 
     def test_edit_profile_forbidden(self):
         """
@@ -360,46 +361,79 @@ class AdminUserStoryTestCase(TestCase):
         # Ensures no likes have arrayfields
         for field in Like._meta.get_fields():
             self.assertFalse(isinstance(field,ArrayField))
-    
-    def test_hosted_image_generates_markdown_link_and_is_registered_in_admin(self):
-        """
-        User Story #65: As a node admin, images can be hosted on my node, 
-        so that my users can use them in their CommonMark entries.
 
-        ChatGPT, OpenAI, 2026-03-15, https://chatgpt.com/share/69b78062-384c-8011-b02b-fa8e5afeb9ab
-        """
-        image_file = SimpleUploadedFile(
-            "tiny.png",
-            (
-                b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01"
-                b"\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde\x00"
-                b"\x00\x00\x0cIDAT\x08\x99c\xf8\xff\xff?\x00\x05\xfe"
-                b"\x02\xfeA\xdd\x8d\xb1\x00\x00\x00\x00IEND\xaeB`\x82"
-            ),
+from entries.views import get_admin_hosted_images
+class AdminHostedImagesInEntryFormTests(TestCase):
+    """
+    Partial US #65 related to admin-hosted images.
+    """
+    def setUp(self):
+        self.author = Author.objects.create(
+            username="entry_user",
+            name="Entry User"
+        )
+
+        self.tiny_png_bytes = base64.b64decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+        )
+        self.hosted = AdminHostedImage.objects.create(
+            title="Bracket ] Test",
             content_type="image/png",
+            content=base64.b64encode(self.tiny_png_bytes).decode("utf-8"),
         )
 
-        hosted = HostedImage.objects.create(
-            title="Tiny Test Image",
-            image=image_file,
+    def test_get_admin_hosted_images_returns_absolute_url_and_markdown(self):
+        request = self.client.get("/app/entry/create/").wsgi_request
+        request.session["author_id"] = self.author.id
+
+        images = get_admin_hosted_images(request)
+        self.assertEqual(len(images), 1)
+
+        img = images[0]
+
+        # Title is correct
+        self.assertEqual(img["title"], "Bracket ] Test")
+
+        # URL correctness
+        expected_suffix = reverse(
+            "admin_hosted_image_file",
+            kwargs={"image_id": self.hosted.id}
         )
+        self.assertTrue(img["absolute_url"].endswith(expected_suffix))
 
-        # Model behavior
-        link = hosted.get_markdown_link()
-        self.assertEqual(str(hosted), "Tiny Test Image")
-        self.assertIn("![Tiny Test Image](", link)
-        self.assertIn("/media/hosted_images/", link)
-        self.assertTrue(link.endswith(".png)"))
+        # Markdown structure (loose)
+        markdown = img["markdown"]
+        self.assertIn("![", markdown)
+        self.assertIn("](", markdown)
+        self.assertIn(img["absolute_url"], markdown)
 
-        # Admin configuration behavior
-        admin_obj = HostedImageAdmin(HostedImage, AdminSite())
-        self.assertIn("title", admin_obj.list_display)
-        self.assertIn("uploaded_at", admin_obj.list_display)
-        self.assertIn("image", admin_obj.list_display)
-        self.assertIn("get_markdown_link", admin_obj.list_display)
-        self.assertIn("get_markdown_link", admin_obj.readonly_fields)
-        self.assertIn("title", admin_obj.search_fields)
+        # Alt text contains the title (loose)
+        self.assertIn("Bracket", markdown)
 
+    def test_create_entry_page_shows_node_hosted_image_picker(self):
+        session = self.client.session
+        session["author_id"] = self.author.id
+        session.save()
+
+        response = self.client.get(reverse("create_entry"))
+        self.assertEqual(response.status_code, 200)
+
+        hosted_url = reverse(
+            "admin_hosted_image_file",
+            kwargs={"image_id": self.hosted.id}
+        )
+        
+        # Section header exists
+        self.assertContains(response, "Node-hosted images")
+
+        # Title appears
+        self.assertContains(response, self.hosted.title)
+
+        # URL appears (absolute or relative)
+        self.assertIn(hosted_url, response.content.decode())
+
+        # At least one <img> tag exists
+        self.assertContains(response, "<img", html=False)
 
 class SameOriginSecurityMiddlewareTestCase(TestCase):
     """
@@ -427,3 +461,163 @@ class SameOriginSecurityMiddlewareTestCase(TestCase):
         """Referrer-Policy limits referrer leakage."""
         response = self.client.get("/")
         self.assertIsNotNone(response.get("Referrer-Policy"))
+
+# from https://docs.djangoproject.com/en/6.0/topics/testing/tools/, Django Software Foundation, downloaded 2026-03-22
+class NodeAuthenticationTests(LiveServerTestCase):
+    def setUp(self):
+        self.outgoing_id = OutgoingNode.objects.create(
+            url = "test_url",
+            username = "correct_username",
+            password = "correct_password",
+            is_active = True
+        ).id  # sender node OutgoingNode database
+
+        self.incoming_id = IncomingNode.objects.create(
+            url = f"{self.live_server_url}/",
+            username = "correct_username",
+            password = "correct_password"
+        ).id  # receiver node IncomingNode database
+
+    def test_node_connection(self):
+        """
+        Test case for US #68: As a node admin, I want to be able to connect to remote nodes by entering only the URL of the remote node, a username, and a password, so that I don't have to edit code. ⧟ Part 3-5 only.
+        """
+        for node in IncomingNode.objects.all():
+            header = {
+            }
+            response = requests.get(
+                f"{node.url.rstrip("/")}/api/authors",  # url of the remote node
+                auth=(node.username, node.password),  # username and password
+                headers=header
+            )
+            self.assertEqual(response.status_code, 200)
+
+            # checking that both methods of authentication work
+            credentials = base64.b64encode(f"{node.username}:{node.password}".encode("utf-8")).decode("ascii")
+            header["Authorization"] = f"Basic {credentials}"
+            response = requests.get(
+                f"{node.url.rstrip("/")}/api/authors",
+                headers=header
+            )
+            self.assertEqual(response.status_code, 200)
+
+    def test_node_connection_unauthenticated(self):
+        """
+        Test case for US #72: As a node admin, I can prevent nodes from connecting to my node if they don't have a valid username and password. ⧟ Part 3-5 only.
+        """
+        for node in IncomingNode.objects.all():
+            # the sender node only formed a connection with url "test_url"
+            response = requests.get(
+                f"{node.url.rstrip("/")}/api/authors",
+                auth=("bad_username", node.password),  # incorrect username
+            )
+            self.assertEqual(response.status_code, 403)
+
+            header = {
+            }
+            response = requests.get(
+                f"{node.url.rstrip("/")}/api/authors",
+                auth=(node.username, "bad_password"),  # incorrect password
+            )
+            self.assertEqual(response.status_code, 403)
+
+    def test_node_connection_basic_auth(self):
+        """
+        Test case for US #73: As a node admin, node to node connections can be authenticated with HTTP Basic Auth, so that I don't have to deal with tokens. ⧟ Part 3-5 only.
+        """
+        for node in IncomingNode.objects.all():
+            credentials = base64.b64encode(f"{node.username}:{node.password}".encode("utf-8")).decode("ascii")
+
+            # Authorization header is missing
+            response = requests.get(
+                f"{node.url.rstrip("/")}/api/authors",
+            )
+            self.assertEqual(response.status_code, 403)
+
+            # trying a different authentication method
+            header = {
+                "Authorization": f"Bearer {credentials}"
+            }
+            response = requests.get(
+                f"{node.url.rstrip("/")}/api/authors",
+                headers=header
+            )
+            self.assertEqual(response.status_code, 403)
+
+            # have Authorization header, but content is empty
+            header = {
+                "Authorization": ""
+            }
+            response = requests.get(
+                f"{node.url.rstrip("/")}/api/authors",
+                headers=header
+            )
+            self.assertEqual(response.status_code, 403)
+
+            response = requests.get(
+                f"{node.url.rstrip("/")}/api/authors",
+                auth=("", "")
+            )
+            self.assertEqual(response.status_code, 403)
+
+            # Authorization header is gibberish
+            header = {
+                "Authorization": "dsafadsfsafsdf"
+            }
+            response = requests.get(
+                f"{node.url.rstrip("/")}/api/authors",
+                headers=header
+            )
+            self.assertEqual(response.status_code, 403)
+
+    def test_node_connection_disabled(self):
+        """
+        Test case for US #74: As a node admin, I can disable the node to node interfaces for connections that I no longer want, in case another node goes bad. ⧟ Part 3-5 only.
+        """
+        # The sender no longer wants to form a connection with the receiver
+        outgoing_object = OutgoingNode.objects.get(id = self.outgoing_id)
+        outgoing_object.is_active = False
+        outgoing_object.save()
+        for node in IncomingNode.objects.all():
+            header = {
+            }
+            response = requests.get(
+                f"{node.url.rstrip("/")}/api/authors",
+                auth=(node.username, node.password),
+                headers=header
+            )
+            self.assertEqual(response.status_code, 403)
+        # resetting the sender interface
+        outgoing_object = OutgoingNode.objects.get(id = self.outgoing_id)
+        outgoing_object.is_active = True
+        outgoing_object.save()
+
+        # Sender deletes its connection with receiver
+        OutgoingNode.objects.get(id = self.outgoing_id).delete()
+        for node in IncomingNode.objects.all():
+            credentials = base64.b64encode(f"{node.username}:{node.password}".encode("utf-8")).decode("ascii")
+            header = {
+                "Authorization": f"Basic {credentials}"
+            }
+            response = self.client.get("/api/authors/", headers=header)
+            self.assertEqual(response.status_code, 403)
+
+        # resetting the sender interface and response
+        response = None
+        OutgoingNode.objects.create(
+            url = "test_url",
+            username = "correct_username",
+            password = "correct_password",
+            is_active = True
+        )
+
+        # receiver deletes its connection with sender
+        IncomingNode.objects.get(id = self.incoming_id).delete()
+        for node in IncomingNode.objects.all():
+            credentials = base64.b64encode(f"{node.username}:{node.password}".encode("utf-8")).decode("ascii")
+            header = {
+                "Authorization": f"Basic {credentials}"
+            }
+            response = self.client.get("/api/authors/", headers=header)
+            self.assertEqual(response.status_code, 404)
+        self.assertIsNone(response)

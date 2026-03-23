@@ -1,7 +1,8 @@
 import base64
-from email.mime import base
+import re
 import markdown
 import bleach
+import logging
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import HttpResponse, JsonResponse
 from django.urls import reverse, resolve, Resolver404
@@ -9,9 +10,15 @@ from django.contrib import messages
 from django.views.decorators.http import require_POST
 from django.db.models import Count, Q
 from .models import Entry
-from core.models import Author
+from core.models import Author, AdminHostedImage
 from core.services import maybe_sync_github_for_stream
+from core.remote import federate_entry_create_or_update, federate_entry_deleted
 from interactions.models import Like, Comment
+from core.models import RemoteFollow, RemoteFollower, IncomingNode
+import requests
+import json
+
+logger = logging.getLogger(__name__)
 
 def check_visibility(entry, viewer_id, is_list=False):
     """
@@ -56,6 +63,38 @@ def check_visibility(entry, viewer_id, is_list=False):
             return False
             
     return False
+
+def validate_markdown_image_syntax(text_content):
+    """
+    Helper function to detect broken Markdown image syntax.
+
+    Return:
+    None if no error, else an error string message.
+    """
+    # Check if user probably wants to use Markdown image syntax
+    if not text_content or "![" not in text_content:
+        return None
+        
+    # If image marker ![ exists, but no proper ( after it
+    if re.search(r'!\[[^\]]*\](?!\()', text_content):
+        return (
+            "Invalid Markdown image syntax. Use the format: ![alt text](url)"
+        )
+
+    # If not enclose the URL with )
+    if re.search(r'!\[[^\]]*\]\([^)]*$', text_content):
+        return (
+            "Markdown image link is not enclosed with ')'. Use the format: ![alt text](url)"
+        )
+
+    # If no image URL in ()
+    if re.search(r'!\[[^\]]*\]\(\s*\)', text_content):
+        return (
+            "Markdown image URL cannot be empty. Use the format: ![alt text](url)"
+        )
+
+    # Otherwise valid syntax
+    return None 
 
 def render_safe_markdown(text_content):
     """
@@ -118,6 +157,9 @@ def update_entry_from_request(request, entry):
 
             # Check for text type
             if contentType == "text/markdown":
+                markdown_error = validate_markdown_image_syntax(text_content)
+                if markdown_error:
+                    return False, markdown_error
                 entry.content = render_safe_markdown(text_content)
             else:
                 entry.content = text_content
@@ -130,6 +172,26 @@ def update_entry_from_request(request, entry):
     entry.visibility = request.POST.get("visibility", entry.visibility)
 
     return True, None   # Success
+
+def get_admin_hosted_images(request):
+    """
+    Get node-admin hosted images with the absolute URL.
+    """
+    images = []
+    for image in AdminHostedImage.objects.order_by("-uploaded_at"):
+        if not image.content or not image.content_type:
+            continue
+
+        absolute_url = request.build_absolute_uri(
+            reverse("admin_hosted_image_file", kwargs={"image_id": image.id})
+        )
+        safe_title = (image.title or "").replace("]", "")
+        images.append({
+            "title": image.title,
+            "absolute_url": absolute_url,
+            "markdown": f"![{safe_title}]({absolute_url})",
+        })
+    return images
 
 def create_entry(request):
     """
@@ -151,14 +213,15 @@ def create_entry(request):
         if not success:
             messages.error(request, error_msg)
             # Pass new_entry back to continue
-            return render(request, "entries/create_entry.html", {"entry": new_entry})
+            return render(request, "entries/create_entry.html", {"entry": new_entry, "admin_hosted_images": get_admin_hosted_images(request)})
         
         # If successful, commit it to the database
         new_entry.save()
+        federate_entry_create_or_update(new_entry, request)
         return redirect("view_my_entries")
 
     # Show the empty form for GET requests
-    return render(request, "entries/create_entry.html")
+    return render(request, "entries/create_entry.html", {"admin_hosted_images": get_admin_hosted_images(request)})
 
 def edit_entry(request, entry_id):
     """
@@ -178,13 +241,14 @@ def edit_entry(request, entry_id):
         
         if not success:
             messages.error(request, error_msg)
-            return render(request, "entries/edit_entry.html", {"entry": entry})
+            return render(request, "entries/edit_entry.html", {"entry": entry, "admin_hosted_images": get_admin_hosted_images(request)})
         
         # Commit the updates to the database
         entry.save()
+        federate_entry_create_or_update(entry, request)
         return redirect("view_my_entries")
     
-    return render(request, "entries/edit_entry.html", {"entry": entry})
+    return render(request, "entries/edit_entry.html", {"entry": entry, "admin_hosted_images": get_admin_hosted_images(request)})
 
 @require_POST
 def delete_entry(request, entry_id):
@@ -203,6 +267,7 @@ def delete_entry(request, entry_id):
     # Soft delete by changing visibility to DELETED
     entry.visibility = "DELETED"
     entry.save()
+    federate_entry_deleted(entry, request)
 
     return redirect("view_my_entries")
 
@@ -231,11 +296,12 @@ def stream_view(request):
     friend_ids = list(viewer.friends().values_list("id", flat=True))
 
     # US#26: All PUBLIC entries from any author on the node
-    # US#27: UNLISTED from following; FRIENDS from friends only
+    # US#27: UNLISTED from following (and viewer's own); FRIENDS from friends (and viewer's own)
     # US#29: No DELETED (hard-delete removes from DB)
-    entries = (
+    local_entries = list(
         Entry.objects.filter(
             Q(visibility="PUBLIC")
+            | Q(author_id=viewer.id, visibility__in=["UNLISTED", "FRIENDS"])  # author sees own unlisted/friends
             | Q(author_id__in=following_ids, visibility="UNLISTED")
             | Q(author_id__in=friend_ids, visibility="FRIENDS")
         )
@@ -243,14 +309,49 @@ def stream_view(request):
         .order_by("-published")
     )
 
+    # Public entries from IncomingNode; UNLISTED from following; FRIENDS from remote friends (mutual follow)
+    from core.models import RemoteFollow, RemoteFollower
+    from core.remote import fetch_remote_public_entries
+    following_remote_fqids = list(
+        RemoteFollow.objects.filter(follower=viewer).values_list("followed_fqid", flat=True)
+    )
+    # Remote friends = we follow them AND they follow us
+    followers_remote_fqids = set(
+        RemoteFollower.objects.filter(target=viewer).values_list("actor_fqid", flat=True)
+    )
+    friends_remote_fqids = [f for f in following_remote_fqids if f in followers_remote_fqids]
+    base_url_for_fetch = request.build_absolute_uri("/")[:-1]
+    viewer_fqid = f"{base_url_for_fetch}/api/authors/{viewer.id}"
+    remote_entries = fetch_remote_public_entries(
+        following_remote_fqids=following_remote_fqids,
+        friends_remote_fqids=friends_remote_fqids,
+        requested_by_fqid=viewer_fqid,
+    )
+    logger.info("STREAM VIEW viewer=%s local_entries=%s remote_entries=%s", viewer.id, len(local_entries), len(remote_entries))
+
+    # Combine and sort by published (newest first)
+    def _sort_key(e):
+        p = getattr(e, "published", None)
+        if hasattr(p, "isoformat"):
+            return p.isoformat()
+        return str(p) if p else ""
+
+    entries = sorted(
+        local_entries + remote_entries,
+        key=_sort_key,
+        reverse=True,
+    )
+
     # Build the current user's URL
     base_url = request.build_absolute_uri('/')[:-1]
 
     for entry in entries:
+        if getattr(entry, "is_remote", False):
+            continue
         entry_url = f"{base_url}/api/authors/{entry.author.id}/entries/{entry.id}"
         
         # Fetch the count of interactions
-        entry.comment_count = Comment.objects.filter(entry=entry_url).count()
+        entry.comment_count = Comment.objects.filter(entry__endswith=entry.id).count()
         entry.like_count = Like.objects.filter(object=entry_url).count()
         
         if "author_id" in request.session:
@@ -289,6 +390,7 @@ def stream_api(request, author_id):
     entries = (
         Entry.objects.filter(
             Q(visibility="PUBLIC")
+            | Q(author_id=viewer.id, visibility__in=["UNLISTED", "FRIENDS"])
             | Q(author_id__in=following_ids, visibility="UNLISTED")
             | Q(author_id__in=friend_ids, visibility="FRIENDS")
         )
@@ -362,7 +464,7 @@ def view_my_entries(request):
         entry.liked_by_user = Like.objects.filter(object=entry_url, author=user_fqid).exists()
 
         # fetch comments
-        entry.fetched_comments = Comment.objects.filter(entry=entry_url).order_by('published')
+        entry.fetched_comments = Comment.objects.filter(entry__endswith=entry.id).order_by('published')
 
         # all objects liked by current user
         liked_objects = Like.objects.filter(author=user_fqid).values_list("object", flat=True)
@@ -374,14 +476,15 @@ def view_my_entries(request):
         }
 
         for comment in entry.fetched_comments:
-            # extract author id from URL
-            author_id = comment.author.rstrip("/").split("/")[-1]
+            # Extract commenter id from author URL (commenter = who wrote comment, NOT entry.author)
+            match = re.search(r'/authors?/(\d+)/?$', comment.author)
+            commenter_id = match.group(1) if match else comment.author.rstrip("/").split("/")[-1]
 
             try:
-                author = Author.objects.get(id=author_id)
-                comment.author_name = author.name
-            except Author.DoesNotExist:
-                comment.author_name = comment.author  # fallback
+                commenter = Author.objects.get(id=commenter_id)
+                comment.author_name = commenter.name or commenter.username
+            except (Author.DoesNotExist, ValueError):
+                comment.author_name = comment.author
 
             comment_uuid = comment.id.rstrip("/").split("/")[-1]
 
@@ -475,7 +578,7 @@ def get_entry(request, entry_id):
 
     # Base Entry Interactions
     entry.like_count = Like.objects.filter(object=entry_url).count()
-    entry.fetched_comments = Comment.objects.filter(entry=entry_url).order_by('published')
+    entry.fetched_comments = Comment.objects.filter(entry__endswith=entry_id).order_by('published')
 
     # Check if the logged-in user liked the this entry
     if logged_in_id:
@@ -484,15 +587,16 @@ def get_entry(request, entry_id):
     else:
         entry.liked_by_user = False
 
-    # Fetch data for each comment
+    # Fetch data for each comment (commenter is who wrote the comment, NOT entry.author)
     for comment in entry.fetched_comments:
-        # extract author id from FQID
-        author_id = comment.author.rstrip("/").split("/")[-1]
+        # Extract commenter id from author URL (e.g. .../api/authors/123 or .../authors/123)
+        match = re.search(r'/authors?/(\d+)/?$', comment.author)
+        commenter_id = match.group(1) if match else comment.author.rstrip("/").split("/")[-1]
 
         try:
-            author = Author.objects.get(id=author_id)
-            comment.author_name = author.username
-        except Author.DoesNotExist:
+            commenter = Author.objects.get(id=commenter_id)
+            comment.author_name = commenter.name or commenter.username
+        except (Author.DoesNotExist, ValueError):
             comment.author_name = comment.author
 
         comment_url = comment.id
@@ -505,8 +609,51 @@ def get_entry(request, entry_id):
     # Check the visibility for the logged-in user
     allowed = check_visibility(entry, logged_in_id)
 
+    image_api_url = None
+    if ";base64" in entry.contentType and "image" in entry.contentType:
+        image_api_url = reverse("api:ApiEntryImage", kwargs={
+            "author_id": entry.author.id,
+            "entry_id": entry.id,
+        })
+
     return render(request, "entries/entry.html", {
         "entry": entry,
         "allowed": allowed,
         "return_url": return_url,
+        "image_api_url": image_api_url,
+    })
+"""
+Handles displaying the page for remote entries
+"""
+def RemoteEntry(request,fqid):
+    # Gets where the host ends
+    index = fqid.index("/api/")
+    logged_in_id = request.session.get("author_id")
+    # Gets the entry
+    print(fqid[:index] + "/api/entries/" + fqid.rstrip("/"))
+    node_credentials = get_object_or_404(IncomingNode, url=fqid[:index] + "/")
+    print(node_credentials.username, node_credentials.password)
+    entryInfo = requests.get(fqid[:index] + "/api/entries/" + fqid.rstrip("/"), auth=(node_credentials.username, node_credentials.password))
+    entryInfo.raise_for_status()
+    entry = json.loads(entryInfo.text)
+    # Creates the list of allowed things to view
+    allowed_visibility = ["PUBLIC"]
+    if RemoteFollow.objects.filter(follower = logged_in_id,followed_fqid__endswith = entry.get("author").get("id").rstrip("/").split("/")[-1]).exists():
+        allowed_visibility.append("UNLISTED")
+        if RemoteFollower.objects.filter(actor_fqid__endswith = entry.get("author").get("id").rstrip("/").split("/")[-1],target = logged_in_id).exists():
+            allowed_visibility.append("FRIENDS")
+    allowed = entry.get("visibility") in allowed_visibility
+    # Image api url
+    image_api_url = None
+    if ";base64" in entry.get("contentType") and "image" in entry.get("contentType"):
+        image_api_url = fqid[:index] + "/api/entries/" + fqid + "/image"
+    entry["like_count"] = entry.get("likes").get("count")
+    entry["fetched_comments"] = entry.get("comments").get("src")
+
+    return_url = request.session.get('last_feed_url', reverse('stream'))
+    return render(request, "entries/remoteentry.html", {
+        "entry": entry,
+        "allowed": allowed,
+        "return_url": return_url,
+        "image_api_url": image_api_url,
     })
