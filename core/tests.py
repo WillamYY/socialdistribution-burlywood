@@ -1,6 +1,6 @@
-from django.test import TestCase, Client
+from django.test import TestCase, Client, LiveServerTestCase
 from django.urls import reverse
-from core.models import Author, FollowRequest, AdminHostedImage
+from core.models import Author, FollowRequest, AdminHostedImage, OutgoingNode, IncomingNode
 from interactions.models import Like, Comment
 from entries.models import Entry
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -9,6 +9,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.contrib.admin.sites import AdminSite
 import uuid
 import base64
+import requests
 
 class UnfollowAPITestCase(TestCase):
     """
@@ -460,3 +461,163 @@ class SameOriginSecurityMiddlewareTestCase(TestCase):
         """Referrer-Policy limits referrer leakage."""
         response = self.client.get("/")
         self.assertIsNotNone(response.get("Referrer-Policy"))
+
+# from https://docs.djangoproject.com/en/6.0/topics/testing/tools/, Django Software Foundation, downloaded 2026-03-22
+class NodeAuthenticationTests(LiveServerTestCase):
+    def setUp(self):
+        self.outgoing_id = OutgoingNode.objects.create(
+            url = "test_url",
+            username = "correct_username",
+            password = "correct_password",
+            is_active = True
+        ).id  # sender node OutgoingNode database
+
+        self.incoming_id = IncomingNode.objects.create(
+            url = f"{self.live_server_url}/",
+            username = "correct_username",
+            password = "correct_password"
+        ).id  # receiver node IncomingNode database
+
+    def test_node_connection(self):
+        """
+        Test case for US #68: As a node admin, I want to be able to connect to remote nodes by entering only the URL of the remote node, a username, and a password, so that I don't have to edit code. ⧟ Part 3-5 only.
+        """
+        for node in IncomingNode.objects.all():
+            header = {
+            }
+            response = requests.get(
+                f"{node.url.rstrip("/")}/api/authors",  # url of the remote node
+                auth=(node.username, node.password),  # username and password
+                headers=header
+            )
+            self.assertEqual(response.status_code, 200)
+
+            # checking that both methods of authentication work
+            credentials = base64.b64encode(f"{node.username}:{node.password}".encode("utf-8")).decode("ascii")
+            header["Authorization"] = f"Basic {credentials}"
+            response = requests.get(
+                f"{node.url.rstrip("/")}/api/authors",
+                headers=header
+            )
+            self.assertEqual(response.status_code, 200)
+
+    def test_node_connection_unauthenticated(self):
+        """
+        Test case for US #72: As a node admin, I can prevent nodes from connecting to my node if they don't have a valid username and password. ⧟ Part 3-5 only.
+        """
+        for node in IncomingNode.objects.all():
+            # the sender node only formed a connection with url "test_url"
+            response = requests.get(
+                f"{node.url.rstrip("/")}/api/authors",
+                auth=("bad_username", node.password),  # incorrect username
+            )
+            self.assertEqual(response.status_code, 403)
+
+            header = {
+            }
+            response = requests.get(
+                f"{node.url.rstrip("/")}/api/authors",
+                auth=(node.username, "bad_password"),  # incorrect password
+            )
+            self.assertEqual(response.status_code, 403)
+
+    def test_node_connection_basic_auth(self):
+        """
+        Test case for US #73: As a node admin, node to node connections can be authenticated with HTTP Basic Auth, so that I don't have to deal with tokens. ⧟ Part 3-5 only.
+        """
+        for node in IncomingNode.objects.all():
+            credentials = base64.b64encode(f"{node.username}:{node.password}".encode("utf-8")).decode("ascii")
+
+            # Authorization header is missing
+            response = requests.get(
+                f"{node.url.rstrip("/")}/api/authors",
+            )
+            self.assertEqual(response.status_code, 403)
+
+            # trying a different authentication method
+            header = {
+                "Authorization": f"Bearer {credentials}"
+            }
+            response = requests.get(
+                f"{node.url.rstrip("/")}/api/authors",
+                headers=header
+            )
+            self.assertEqual(response.status_code, 403)
+
+            # have Authorization header, but content is empty
+            header = {
+                "Authorization": ""
+            }
+            response = requests.get(
+                f"{node.url.rstrip("/")}/api/authors",
+                headers=header
+            )
+            self.assertEqual(response.status_code, 403)
+
+            response = requests.get(
+                f"{node.url.rstrip("/")}/api/authors",
+                auth=("", "")
+            )
+            self.assertEqual(response.status_code, 403)
+
+            # Authorization header is gibberish
+            header = {
+                "Authorization": "dsafadsfsafsdf"
+            }
+            response = requests.get(
+                f"{node.url.rstrip("/")}/api/authors",
+                headers=header
+            )
+            self.assertEqual(response.status_code, 403)
+
+    def test_node_connection_disabled(self):
+        """
+        Test case for US #74: As a node admin, I can disable the node to node interfaces for connections that I no longer want, in case another node goes bad. ⧟ Part 3-5 only.
+        """
+        # The sender no longer wants to form a connection with the receiver
+        outgoing_object = OutgoingNode.objects.get(id = self.outgoing_id)
+        outgoing_object.is_active = False
+        outgoing_object.save()
+        for node in IncomingNode.objects.all():
+            header = {
+            }
+            response = requests.get(
+                f"{node.url.rstrip("/")}/api/authors",
+                auth=(node.username, node.password),
+                headers=header
+            )
+            self.assertEqual(response.status_code, 403)
+        # resetting the sender interface
+        outgoing_object = OutgoingNode.objects.get(id = self.outgoing_id)
+        outgoing_object.is_active = True
+        outgoing_object.save()
+
+        # Sender deletes its connection with receiver
+        OutgoingNode.objects.get(id = self.outgoing_id).delete()
+        for node in IncomingNode.objects.all():
+            credentials = base64.b64encode(f"{node.username}:{node.password}".encode("utf-8")).decode("ascii")
+            header = {
+                "Authorization": f"Basic {credentials}"
+            }
+            response = self.client.get("/api/authors/", headers=header)
+            self.assertEqual(response.status_code, 403)
+
+        # resetting the sender interface and response
+        response = None
+        OutgoingNode.objects.create(
+            url = "test_url",
+            username = "correct_username",
+            password = "correct_password",
+            is_active = True
+        )
+
+        # receiver deletes its connection with sender
+        IncomingNode.objects.get(id = self.incoming_id).delete()
+        for node in IncomingNode.objects.all():
+            credentials = base64.b64encode(f"{node.username}:{node.password}".encode("utf-8")).decode("ascii")
+            header = {
+                "Authorization": f"Basic {credentials}"
+            }
+            response = self.client.get("/api/authors/", headers=header)
+            self.assertEqual(response.status_code, 404)
+        self.assertIsNone(response)

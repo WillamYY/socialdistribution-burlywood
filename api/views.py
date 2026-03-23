@@ -15,7 +15,7 @@ from rest_framework.decorators import api_view, authentication_classes, permissi
 from rest_framework.response import Response
 from core.authentication import NodeBasicAuthentication
 from core.remote import federate_entry_create_or_update, federate_entry_deleted
-from core.models import Author, AuthorRequest, FollowRequest
+from core.models import Author, AuthorRequest, FollowRequest, RemoteFollower, RemoteFollow
 from entries.models import Entry
 from interactions.models import Like, Comment
 from .serializers import AuthorSerializer, LikesSerializer, LikeSerializer, EntrySerializer, EntriesSerializer, CommentSerializer
@@ -283,6 +283,7 @@ def ApiAuthorAndEntryLikes(request,author_id,entry_id):
 
 # Returns who liked a specific entry with no author
 @api_view(["GET"])
+@authentication_classes([NodeBasicAuthentication])
 def ApiEntryLikes(request, entry_fqid):
     # Ensures the entry exists before accessing it
     # From https://stackoverflow.com/questions/150505/how-to-get-get-request-values-in-django by camlfan, downloaded 2026-03-01
@@ -682,6 +683,7 @@ def ApiEntries(request, author_id):
         return Response(serializer.data, status=201)
 
 @api_view(['GET', 'PUT', 'DELETE'])
+@authentication_classes([NodeBasicAuthentication])
 def HandleApiEntry(request, author_id, entry_id):
     return ApiEntry(request, author_id, entry_id)
 
@@ -700,9 +702,6 @@ def ApiEntry(request, author_id, entry_id):
             return Response({"detail": "Not found."}, status=404)
 
         # Check the visibility for the logged-in user
-        logged_in_id = request.session.get("author_id")
-        if not check_visibility(entry, logged_in_id):
-            return Response({"detail": "Forbidden"}, status=403)
         
         # Serialize and return
         serializer = EntrySerializer(entry, context={'request': request})
@@ -783,10 +782,6 @@ def ApiEntryGlobal(request, entry_fqid):
     except (Entry.DoesNotExist, ValueError):
         return Response({"detail": "Not found."}, status=404)
 
-    # Check visibility
-    logged_in_id = request.session.get("author_id")
-    if not check_visibility(entry, logged_in_id):
-            return Response({"detail": "Forbidden"}, status=403)
 
     # Serialize and return
     serializer = EntrySerializer(entry, context={'request': request})
@@ -828,6 +823,7 @@ def _parse_author_fqid(author_fqid):
 
 
 @api_view(['GET'])
+@authentication_classes([NodeBasicAuthentication])
 def ApiEntryByFqid(request, entry_fqid):
     """GET [local]: Retrieve entry by FQID. URL: /api/entries/{ENTRY_FQID}"""
     author_id, entry_id = _parse_entry_fqid(entry_fqid, request)

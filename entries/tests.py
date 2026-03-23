@@ -3,9 +3,10 @@ from datetime import datetime, timedelta
 from django.test import TestCase, Client
 from django.urls import reverse
 from django.utils import timezone
-from core.models import Author
+from core.models import Author, OutgoingNode
 from entries.models import Entry
 from entries.views import render_safe_markdown
+import base64
 
 
 class StreamApiTests(TestCase):
@@ -182,6 +183,12 @@ class EntryWebUITests(TestCase):
             content=f"data:image/png;base64,{self.tiny_png_b64}",
             visibility="FRIENDS"
         )
+
+        OutgoingNode.objects.create(url = "test", username = "test", password = "test")
+        encoded_creds = base64.b64encode("test:test".encode("utf-8")).decode("ascii")
+        self.header = {
+            "Authorization": f"Basic {encoded_creds}"
+        }
     
     def test_markdown_renders_in_html(self):
         """
@@ -225,7 +232,7 @@ class EntryWebUITests(TestCase):
             "visibility": "PUBLIC",
         }
 
-        response = self.client.post(url, data)
+        response = self.client.post(url, data, headers=self.header)
         self.assertIn(response.status_code, [200, 201])
 
         entry = Entry.objects.get(title="Plain Text Test")

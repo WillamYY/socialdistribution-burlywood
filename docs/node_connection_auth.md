@@ -2,6 +2,7 @@
 
 This document covers the authentication between two nodes and expected behavior for **Node management** user stories, referencing GitHub issues.
 
+Node management (#68, #72, #73, #74)
 Node management (#68, #72, #73, #74, #80)
 
 * **#68** As a node admin, I want to be able to connect to remote nodes by entering only the URL of the remote node, a username, and a password, so that I don't have to edit code.

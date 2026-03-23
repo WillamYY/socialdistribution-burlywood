@@ -12,7 +12,7 @@ class NodeBasicAuthentication(BaseAuthentication):
 
         if not auth or auth[0].lower() != b"basic":
             print("NO BASIC AUTH HEADER")
-            return None
+            raise exceptions.AuthenticationFailed("Missing basic auth header.")
 
         if len(auth) != 2:
             print("BAD AUTH HEADER LENGTH:", len(auth))
