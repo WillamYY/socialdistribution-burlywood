@@ -419,11 +419,13 @@ def _send_accept_to_requester(request, actor_fqid, accepter):
             "actor": accepter_id,
             "object": {"type": "Follow", "actor": actor_fqid, "object": accepter_id},
         }
+        credentials = get_object_or_404(IncomingNode, inbox_url[:inbox_url.index("/api")] + "/")
         requests.post(
             inbox_url,
             json=payload,
             headers={"Content-Type": "application/json", "User-Agent": "SocialDistribution/1.0"},
             timeout=10,
+            auth=(credentials.username, credentials.password)
         )
     except Exception:
         pass
@@ -573,18 +575,21 @@ def follow_remote_author(request, fqid):
             }
             payload = {"type": "follow", "actor": actor_info, "object": object_info}
             logger.info("Sending follow to inbox url=%s actor=%s object=%s", inbox_url, actor_info.get("id"), normalized)
+            credentials = get_object_or_404(IncomingNode, url = inbox_url[:inbox_url.index("/api")] + "/")
             resp = requests.post(
                 inbox_url,
                 json=payload,
                 headers=headers,
                 timeout=15,
                 allow_redirects=False,
+                auth=(credentials.username, credentials.password)
             )
             logger.info("Follow POST response status=%s url=%s body=%s", resp.status_code, inbox_url, resp.text[:200] if resp.text else "")
             if resp.status_code in (301, 302, 307, 308):
                 loc = resp.headers.get("Location", "")
                 if loc and loc != inbox_url:
-                    resp = requests.post(loc, json=payload, headers=headers, timeout=15)
+                    credentials = get_object_or_404(IncomingNode, url = loc[:loc.index("/api")] + "/")
+                    resp = requests.post(loc, json=payload, headers=headers, timeout=15, auth=(credentials.username, credentials.password))
             if resp.status_code in (200, 202, 204):
                 RemoteFollow.objects.create(follower=me, followed_fqid=normalized)
                 messages.success(request, "Follow request sent!", extra_tags="follow")
@@ -672,10 +677,15 @@ def RemoteProfileDisplay(request, fqid):
         raise Http404("Invalid remote author URL")
 
     try:
+        credentials = get_object_or_404(IncomingNode, url = remote_author_url[:remote_author_url.index("/api")] + "/")
         authorInfo = requests.get(
             remote_author_url,
             headers={"Accept": "application/json"},
             timeout=10,
+<<<<<<< HEAD
+=======
+            auth=(credentials.username, credentials.password)
+>>>>>>> 603264974ec6278e6dd9f6250967a9906d204bc6
         )
         authorInfo.raise_for_status()
         author = authorInfo.json()
@@ -690,10 +700,12 @@ def RemoteProfileDisplay(request, fqid):
     base_host = remote_author_url.split("/api/authors/")[0]
 
     try:
+        credentials = get_object_or_404(IncomingNode, url = base_host + "/")
         entryInfo = requests.get(
             f"{base_host}/api/authors/{author_id}/entries/",
             headers={"Accept": "application/json"},
             timeout=10,
+            auth=(credentials.username, credentials.password)
         )
         entryInfo.raise_for_status()
         entry_json = entryInfo.json()

@@ -2,9 +2,12 @@
 
 This document covers the authentication between two nodes and expected behavior for **Node management** user stories, referencing GitHub issues.
 
+Node management (#68, #72, #73, #74)
 Node management (#68, #72, #73, #74, #80)
 
 * **#68** As a node admin, I want to be able to connect to remote nodes by entering only the URL of the remote node, a username, and a password, so that I don't have to edit code.
+* **#70** As a node admin, I want to be able to add nodes to share with. ⧟ Part 3-5 only.
+* **#71** As a node admin, I want to be able to remove nodes and stop sharing with them. ⧟ Part 3-5 only.
 * **#72** As a node admin, I can prevent nodes from connecting to my node if they don't have a valid username and password.
 * **#73** As a node admin, node to node connections can be authenticated with HTTP Basic Auth, so that I don't have to deal with tokens.
 * **#74** As a node admin, I can disable the node to node interfaces for connections that I no longer want, in case another node goes bad.
@@ -36,7 +39,7 @@ Knowing that node B wants to receive information from node A, it must create an 
 - **Password**
     - The password that will be used to authenticate node B. This will be sent in the request to node A.
 
-### 3. Configuration on the sharing node
+### 3. Configuration on the sharing node  (**#US 70**)
 
 Knowing that node A wants to share information with node B, it must create an entry in the **Outgoing nodes** table. An **Outgoing nodes** entry contains the following fields:
 - **Url**
@@ -58,7 +61,7 @@ Suppose node B no longer wants to receive information shared by node A. This can
 
 **NOTE:** By changing either the username, the password, the url, or by deleting the **Incoming nodes** entry corresponding to node A in node B's admin panel, this will also cause node B to stop receiving information from node A. However, this is not the proper way to prevent the connection.
 
-### 6. Disabling the connection on the sender side
+### 6. Disabling the connection on the sender side  (**#71, 74**)
 
 Suppose node A no longer wants to share information to node B. This can be done by unchecking the `IS ACTIVE` field for the **Outgoing node** entry corresponding to node B in node A's admin panel.
 

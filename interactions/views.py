@@ -4,7 +4,7 @@ import uuid
 from django.shortcuts import redirect, get_object_or_404
 from .models import Like, Comment
 from entries.models import Entry
-from core.models import Author
+from core.models import Author, IncomingNode
 import requests
 from datetime import datetime
 import json
@@ -41,7 +41,11 @@ def add_remote_like(request, entry_id):
         if not author_id:
             return redirect('/app/login/')
         # Gets the entry info and ensures its valid
-        entryInfo = requests.get(entry_id.rstrip("/"))
+        host = entry_id[:entry_id.index("api/")]
+        remotenode = IncomingNode.objects.get(url = host)
+        auth = (remotenode.username,remotenode.password)
+        print(auth)
+        entryInfo = requests.get(entry_id.rstrip("/"), auth=auth)
         entryInfo.raise_for_status()
         jsonEntry = json.loads(entryInfo.text)
         foreignAuthor = jsonEntry["author"]["id"]
@@ -65,7 +69,8 @@ def add_remote_like(request, entry_id):
             "web": author.web,
         }
         # Post the like to the inbox
-        post = requests.post(foreignAuthor + "/inbox",json = {"type": "like","author": authorInfo,"published":datetime.now().isoformat(),"id":"","object":entry_id})
+        credentials = get_object_or_404(IncomingNode, url = foreignAuthor[:foreignAuthor.index("/api")] + "/")
+        post = requests.post(foreignAuthor + "/inbox",json = {"type": "like","author": authorInfo,"published":datetime.now().isoformat(),"id":"","object":entry_id}, auth=(credentials.username, credentials.password))
 
     return redirect(request.META.get('HTTP_REFERER', '/app/stream/'))
 
@@ -117,10 +122,12 @@ def add_remote_comment(request, entry_id):
         local_author_fqid = f"{base}/api/authors/{author.id}"
         try:
             # get remote entry first, same pattern as remote like
+            credentials = get_object_or_404(IncomingNode, url = remote_entry_url[:remote_entry_url.index("/api")] + "/")
             entry_resp = requests.get(
                 remote_entry_url,
                 headers={"Accept": "application/json"},
                 timeout=10,
+                auth=(credentials.username, credentials.password)
             )
             entry_resp.raise_for_status()
             entry_data = entry_resp.json()
@@ -157,10 +164,12 @@ def add_remote_comment(request, entry_id):
         print("REMOTE COMMENT PAYLOAD AUTHOR:", payload["author"])
         print("REMOTE COMMENT FULL PAYLOAD:", payload)
         try:
+            credentials = get_object_or_404(IncomingNode, url = foreign_author[:foreign_author.index("/api")] + "/")
             resp = requests.post(
                 foreign_author.rstrip("/") + "/inbox",
                 json=payload,
                 timeout=10,
+                auth=(credentials.username, credentials.password)
             )
             print("REMOTE COMMENT POST STATUS:", resp.status_code)
             print("REMOTE COMMENT POST BODY:", resp.text)
