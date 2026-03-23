@@ -243,26 +243,19 @@ class EntrySerializer(serializers.ModelSerializer):
         return f"/app/entry/{obj.id}/"
 
     def get_comments(self, obj):
-        """
-        Getter for the comments on this entry.
-        """
         base_url = self.get_id(obj).rstrip("/")
         web_url = self.get_web(obj).rstrip("/")
 
-        # Try a few common object values
-        possible_objects = [
-            base_url,
-            f"{base_url}/",
-            str(obj.id),
-        ]
+        comments_qs = (
+            Comment.objects
+            .filter(entry__endswith=obj.id)
+            .order_by("-published")
+        )
 
-        comments_qs = Comment.objects.none()
-
-        # If Comment model has an 'object' field, use it
-        if hasattr(Comment, "object"):
-            comments_qs = Comment.objects.filter(object__in=possible_objects).order_by("-published")
-
-        serialized_comments = CommentSerializer(comments_qs[:50], many=True, context=self.context).data
+        total_count = comments_qs.count()
+        serialized_comments = CommentSerializer(
+            comments_qs[:50], many=True, context=self.context
+        ).data
 
         return {
             "type": "comments",
@@ -270,9 +263,9 @@ class EntrySerializer(serializers.ModelSerializer):
             "web": f"{web_url}/comments",
             "page_number": 1,
             "size": 50,
-            "count": comments_qs.count(),
+            "count": total_count,
             "src": serialized_comments,
-        }
+    }
 
     def get_likes(self, obj):
         """
