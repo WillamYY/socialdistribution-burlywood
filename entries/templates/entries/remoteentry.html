@@ -68,22 +68,10 @@
                     <p style="margin: 8px 0;">{{ comment.comment }}</p>
 
                     <div class="interaction-row" style="padding: 5px 0; border: none;" onclick="event.stopPropagation();">
-                        {% if request.session.author_id %}
-                        <form method="POST" action="{% url 'interactions:add_remote_comment_like' comment.id %}">
-                            {% csrf_token %}
-                            <button type="submit" class="stat-item {% if comment.liked_by_user %}liked{% endif %}">
-                                <span class="icon" style="font-size: 1rem;">
-                                    {% if comment.liked_by_user %}❤️{% else %}🤍{% endif %}
-                                </span>
-                                <span class="count">{{ comment.like_count|default:0 }}</span>
-                            </button>
-                        </form>
-                        {% else %}
-                            <div class="stat-item">
-                                <span class="icon" style="font-size: 1rem;">🤍</span>
-                                <span class="count">{{ comment.like_count|default:0 }}</span>
-                            </div>
-                        {% endif %}
+                        <div class="stat-item">
+                            <span class="icon" style="font-size: 1rem;">🤍</span>
+                            <span class="count">{{ comment.like_count|default:0 }}</span>
+                        </div>
                     </div>
                 </div>
             {% empty %}

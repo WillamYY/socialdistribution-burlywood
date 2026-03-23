@@ -463,7 +463,7 @@ def _inbox_handle_comment(request, author_id, data=None):
     entry_fqid = f"{base}/api/authors/{author_id}/entries/{entry.id}"
     id = data.get("id")
     if not id:
-        f"{base}/api/authors/{author_id}/commented/{uuid.uuid4()}"
+        id = f"{base}/api/authors/{author_id}/commented/{uuid.uuid4()}"
     Comment.objects.create(
         id=id,
         author=author_url,
