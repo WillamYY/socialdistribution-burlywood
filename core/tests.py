@@ -163,7 +163,7 @@ class EditProfileAPITestCase(TestCase):
             description='Initial description'
         )
         self.client = Client()
-        self.url = reverse('EditProfileView') 
+        self.url = reverse('EditProfileView')  
 
         # Set session for logged-in user
         session = self.client.session
@@ -193,21 +193,21 @@ class EditProfileAPITestCase(TestCase):
         self.assertEqual(self.author.description, "New description")
         self.assertEqual(self.author.github, "https://github.com/new")
 
-    def test_edit_profile_picture(self):
-        img = SimpleUploadedFile("test.png", b"file_content", content_type="image/png")
-        response = self.client.post(
-            self.url,
-            {
-                "picture": img,
-                "name": "Test Name",
-                "description": "Test Description",
-                "github": "",
-            },
-            format='multipart'
-        )
+    def test_edit_profile_picture_url(self):
+        """
+        Test updating profile picture via URL input.
+        """
+        data = {
+            "name": "Test Name",
+            "description": "Test Description",
+            "github": "",
+            "picture_url": "https://example.com/test.png"
+        }
+        response = self.client.post(self.url, data)
         self.assertEqual(response.status_code, 200)
+
         self.author.refresh_from_db()
-        self.assertTrue(self.author.picture)
+        self.assertEqual(self.author.picture_url, "https://example.com/test.png")
 
     def test_edit_profile_forbidden(self):
         """

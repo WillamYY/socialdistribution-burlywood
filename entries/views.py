@@ -2,6 +2,7 @@ import base64
 import re
 import markdown
 import bleach
+import logging
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import HttpResponse, JsonResponse
 from django.urls import reverse, resolve, Resolver404
@@ -11,7 +12,13 @@ from django.db.models import Count, Q
 from .models import Entry
 from core.models import Author, AdminHostedImage
 from core.services import maybe_sync_github_for_stream
+from core.remote import federate_entry_create_or_update, federate_entry_deleted
 from interactions.models import Like, Comment
+from core.models import RemoteFollow, RemoteFollower
+import requests
+import json
+
+logger = logging.getLogger(__name__)
 
 def check_visibility(entry, viewer_id, is_list=False):
     """
@@ -210,6 +217,7 @@ def create_entry(request):
         
         # If successful, commit it to the database
         new_entry.save()
+        federate_entry_create_or_update(new_entry, request)
         return redirect("view_my_entries")
 
     # Show the empty form for GET requests
@@ -237,6 +245,7 @@ def edit_entry(request, entry_id):
         
         # Commit the updates to the database
         entry.save()
+        federate_entry_create_or_update(entry, request)
         return redirect("view_my_entries")
     
     return render(request, "entries/edit_entry.html", {"entry": entry, "admin_hosted_images": get_admin_hosted_images(request)})
@@ -258,6 +267,7 @@ def delete_entry(request, entry_id):
     # Soft delete by changing visibility to DELETED
     entry.visibility = "DELETED"
     entry.save()
+    federate_entry_deleted(entry, request)
 
     return redirect("view_my_entries")
 
@@ -286,11 +296,12 @@ def stream_view(request):
     friend_ids = list(viewer.friends().values_list("id", flat=True))
 
     # US#26: All PUBLIC entries from any author on the node
-    # US#27: UNLISTED from following; FRIENDS from friends only
+    # US#27: UNLISTED from following (and viewer's own); FRIENDS from friends (and viewer's own)
     # US#29: No DELETED (hard-delete removes from DB)
     local_entries = list(
         Entry.objects.filter(
             Q(visibility="PUBLIC")
+            | Q(author_id=viewer.id, visibility__in=["UNLISTED", "FRIENDS"])  # author sees own unlisted/friends
             | Q(author_id__in=following_ids, visibility="UNLISTED")
             | Q(author_id__in=friend_ids, visibility="FRIENDS")
         )
@@ -316,6 +327,7 @@ def stream_view(request):
         friends_remote_fqids=friends_remote_fqids,
         requested_by_fqid=viewer_fqid,
     )
+    logger.info("STREAM VIEW viewer=%s local_entries=%s remote_entries=%s", viewer.id, len(local_entries), len(remote_entries))
 
     # Combine and sort by published (newest first)
     def _sort_key(e):
@@ -378,6 +390,7 @@ def stream_api(request, author_id):
     entries = (
         Entry.objects.filter(
             Q(visibility="PUBLIC")
+            | Q(author_id=viewer.id, visibility__in=["UNLISTED", "FRIENDS"])
             | Q(author_id__in=following_ids, visibility="UNLISTED")
             | Q(author_id__in=friend_ids, visibility="FRIENDS")
         )
@@ -463,14 +476,15 @@ def view_my_entries(request):
         }
 
         for comment in entry.fetched_comments:
-            # extract author id from URL
-            author_id = comment.author.rstrip("/").split("/")[-1]
+            # Extract commenter id from author URL (commenter = who wrote comment, NOT entry.author)
+            match = re.search(r'/authors?/(\d+)/?$', comment.author)
+            commenter_id = match.group(1) if match else comment.author.rstrip("/").split("/")[-1]
 
             try:
-                author = Author.objects.get(id=author_id)
-                comment.author_name = author.name
-            except Author.DoesNotExist:
-                comment.author_name = comment.author  # fallback
+                commenter = Author.objects.get(id=commenter_id)
+                comment.author_name = commenter.name or commenter.username
+            except (Author.DoesNotExist, ValueError):
+                comment.author_name = comment.author
 
             comment_uuid = comment.id.rstrip("/").split("/")[-1]
 
@@ -573,15 +587,16 @@ def get_entry(request, entry_id):
     else:
         entry.liked_by_user = False
 
-    # Fetch data for each comment
+    # Fetch data for each comment (commenter is who wrote the comment, NOT entry.author)
     for comment in entry.fetched_comments:
-        # extract author id from FQID
-        author_id = comment.author.rstrip("/").split("/")[-1]
+        # Extract commenter id from author URL (e.g. .../api/authors/123 or .../authors/123)
+        match = re.search(r'/authors?/(\d+)/?$', comment.author)
+        commenter_id = match.group(1) if match else comment.author.rstrip("/").split("/")[-1]
 
         try:
-            author = Author.objects.get(id=author_id)
-            comment.author_name = author.username
-        except Author.DoesNotExist:
+            commenter = Author.objects.get(id=commenter_id)
+            comment.author_name = commenter.name or commenter.username
+        except (Author.DoesNotExist, ValueError):
             comment.author_name = comment.author
 
         comment_url = comment.id
@@ -602,6 +617,38 @@ def get_entry(request, entry_id):
         })
 
     return render(request, "entries/entry.html", {
+        "entry": entry,
+        "allowed": allowed,
+        "return_url": return_url,
+        "image_api_url": image_api_url,
+    })
+"""
+Handles displaying the page for remote entries
+"""
+def RemoteEntry(request,fqid):
+    # Gets where the host ends
+    index = fqid.index("/api/")
+    logged_in_id = request.session.get("author_id")
+    # Gets the entry
+    entryInfo = requests.get(fqid[:index] + "/api/entries/" + fqid)
+    entryInfo.raise_for_status()
+    entry = json.loads(entryInfo.text)
+    # Creates the list of allowed things to view
+    allowed_visibility = ["PUBLIC"]
+    if RemoteFollow.objects.filter(follower = logged_in_id,followed_fqid__endswith = entry.get("author").get("id").rstrip("/").split("/")[-1]).exists():
+        allowed_visibility.append("UNLISTED")
+        if RemoteFollower.objects.filter(actor_fqid__endswith = entry.get("author").get("id").rstrip("/").split("/")[-1],target = logged_in_id).exists():
+            allowed_visibility.append("FRIENDS")
+    allowed = entry.get("visibility") in allowed_visibility
+    # Image api url
+    image_api_url = None
+    if ";base64" in entry.get("contentType") and "image" in entry.get("contentType"):
+        image_api_url = fqid[:index] + "/api/entries/" + fqid + "/image"
+    entry["like_count"] = entry.get("likes").get("count")
+    entry["fetched_comments"] = entry.get("comments").get("src")
+
+    return_url = request.session.get('last_feed_url', reverse('stream'))
+    return render(request, "entries/remoteentry.html", {
         "entry": entry,
         "allowed": allowed,
         "return_url": return_url,

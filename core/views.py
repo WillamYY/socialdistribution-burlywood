@@ -13,6 +13,7 @@ import json
 import logging
 from api.serializers import EntrySerializer
 import re
+import base64
 
 logger = logging.getLogger(__name__)
 
@@ -72,26 +73,36 @@ def NodeDisplay(request):
     other_node_authors = []
 
     for node in IncomingNode.objects.all():
-        resp = requests.get(node.url.rstrip("/") + "/api/authors/", timeout=10)
-        if resp.status_code != 200:
-            continue
-        data = resp.json()
-        authors = data.get("authors") or []
-        if not isinstance(authors, list):
-            continue
-        base = node.url.rstrip("/")
-        for author in authors:
-            if not isinstance(author, dict):
+        try:
+            resp = requests.get(
+                node.url.rstrip("/") + "/api/authors/",
+                auth=(node.username, node.password),
+                headers={"Accept": "application/json"},
+                timeout=10,
+            )
+            if resp.status_code != 200:
                 continue
-            aid = author.get("id")
-            if aid and not str(aid).startswith("http"):
-                author = dict(author)
-                author["id"] = f"{base}/api/authors/{aid}"
-            other_node_authors.append(author)
+                
+            data = resp.json()
+            authors = data.get("authors") or data.get("src") or []
+            if not isinstance(authors, list):
+                continue
+
+            base = node.url.rstrip("/")
+            for author in authors:
+                if not isinstance(author, dict):
+                    continue
+                aid = author.get("id")
+                if aid and not str(aid).startswith("http"):
+                    author = dict(author)
+                    author["id"] = f"{base}/api/authors/{aid}"
+                other_node_authors.append(author)
+        except (requests.RequestException, ValueError):
+            continue
 
     return render(request, "node.html", {
         "users": node_authors,
-        "other_users": other_node_authors
+        "other_users": other_node_authors,
     })
 
 def login_view(request):
@@ -165,8 +176,16 @@ def edit_profile(request):
 
         author.github = github if github else ""
 
-        if request.FILES.get("picture"):
-            author.picture = request.FILES["picture"]
+        picture_url = request.POST.get("picture_url", "").strip()
+        if picture_url:
+            # Accept only URLs ending with common image extensions
+            if picture_url.lower().endswith((".jpg", ".jpeg", ".png", ".gif")):
+                author.picture_url = picture_url
+            else:
+                return render(request, "edit_profile.html", {
+                    "author": author,
+                    "error": "Please enter a direct image URL ending with .jpg, .jpeg, .png, or .gif"
+                })
 
         author.save()
 
@@ -207,10 +226,28 @@ def profile_view(request):
 
     author = Author.objects.get(id=request.session["author_id"])
 
-    followers_count = author.followers.exclude(id__in=author.following.values_list("id", flat=True)).count()
-    following_count = author.following.exclude(id__in=author.followers.values_list("id", flat=True)).count()
-    friends_count = author.friends().count()
+    # Local: followers (excl mutual), following (excl mutual), friends (mutual)
+    local_followers_only = author.followers.exclude(id__in=author.following.values_list("id", flat=True))
+    local_following_only = author.following.exclude(id__in=author.followers.values_list("id", flat=True))
+    local_friends = author.friends()
+
+    # Remote: same logic as connections view
+    remote_followings_raw = list(RemoteFollow.objects.filter(follower=author).order_by("created_at"))
+    remote_followers_raw = list(RemoteFollower.objects.filter(target=author).order_by("created_at"))
+    following_fqids = {_normalize_fqid(rf.followed_fqid) for rf in remote_followings_raw}
+    follower_by_fqid = {_normalize_fqid(r.actor_fqid): r for r in remote_followers_raw}
+    follower_fqids = set(follower_by_fqid)
+    remote_friends = [norm_fqid for norm_fqid in follower_fqids if norm_fqid in following_fqids]
+    mutual_fqids = set(remote_friends)
+    remote_followings_only = [rf for rf in remote_followings_raw if _normalize_fqid(rf.followed_fqid) not in mutual_fqids]
+    remote_followers_only = [r for r in remote_followers_raw if _normalize_fqid(r.actor_fqid) not in mutual_fqids]
+
+    followers_count = local_followers_only.count() + len(remote_followers_only)
+    following_count = local_following_only.count() + len(remote_followings_only)
+    friends_count = local_friends.count() + len(remote_friends)
+
     pending_requests_count = FollowRequest.objects.filter(target=author).count()
+    pending_requests_count += RemoteFollowRequest.objects.filter(target=author).count()
 
     return render(request, "profile.html", {
         "author": author,
@@ -471,20 +508,16 @@ def connections(request):
 def get_admin_hosted_image(request, image_id):
     """
     Serve hosted image by id for Markdown embedding.
-    Uses HostedImage model (ImageField).
+    Uses AdminHostedImage model (ImageField).
     """
-    hosted = get_object_or_404(HostedImage, id=image_id)
-    if not hosted.image:
+    hosted = get_object_or_404(AdminHostedImage, id=image_id)
+    if not hosted.content or not hosted.content_type:
         return HttpResponse(status=404)
     try:
-        with hosted.image.open("rb") as f:
-            content = f.read()
-        content_type = "image/png"
-        if hasattr(hosted.image, "content_type") and hosted.image.content_type:
-            content_type = hosted.image.content_type
-        return HttpResponse(content, content_type=content_type)
-    except (IOError, OSError):
+        binary_data = base64.b64decode(hosted.content)
+    except (ValueError, TypeError):
         return HttpResponse(status=404)
+    return HttpResponse(binary_data, content_type=hosted.content_type)
 
 
 def _normalize_fqid(s):
@@ -642,6 +675,7 @@ def RemoteProfileDisplay(request, fqid):
             remote_author_url,
             headers={"Accept": "application/json"},
             timeout=10,
+            
         )
         authorInfo.raise_for_status()
         author = authorInfo.json()
@@ -693,6 +727,28 @@ def RemoteProfileDisplay(request, fqid):
         entry["clean_id"] = clean_id
 
         remote_comments = ((entry.get("comments") or {}).get("src")) or []
+        # Fix comment author: remote may return entry author instead of commenter.
+        # If comment author id matches our user, use our local display name.
+        if logged_in_id and user_fqid:
+            try:
+                me = Author.objects.get(id=logged_in_id)
+                my_display = me.name or me.username
+                for c in remote_comments:
+                    if not isinstance(c, dict):
+                        continue
+                    auth = c.get("author")
+                    if isinstance(auth, dict):
+                        cid = (auth.get("id") or "").rstrip("/")
+                    else:
+                        cid = str(auth or "").rstrip("/")
+                    if cid and _normalize_fqid(cid) == _normalize_fqid(user_fqid):
+                        if isinstance(auth, dict):
+                            auth["displayName"] = my_display
+                        else:
+                            c["author"] = {"id": cid, "displayName": my_display}
+            except Author.DoesNotExist:
+                pass
+
         remote_likes_src = (entry.get("likes") or {}).get("src", [])
         remote_like_count = (entry.get("likes") or {}).get("count", 0)
 
