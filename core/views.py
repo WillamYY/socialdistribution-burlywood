@@ -74,26 +74,36 @@ def NodeDisplay(request):
     other_node_authors = []
 
     for node in IncomingNode.objects.all():
-        resp = requests.get(node.url.rstrip("/") + "/api/authors/", timeout=10)
-        if resp.status_code != 200:
-            continue
-        data = resp.json()
-        authors = data.get("authors") or []
-        if not isinstance(authors, list):
-            continue
-        base = node.url.rstrip("/")
-        for author in authors:
-            if not isinstance(author, dict):
+        try:
+            resp = requests.get(
+                node.url.rstrip("/") + "/api/authors/",
+                auth=(node.username, node.password),
+                headers={"Accept": "application/json"},
+                timeout=10,
+            )
+            if resp.status_code != 200:
                 continue
-            aid = author.get("id")
-            if aid and not str(aid).startswith("http"):
-                author = dict(author)
-                author["id"] = f"{base}/api/authors/{aid}"
-            other_node_authors.append(author)
+                
+            data = resp.json()
+            authors = data.get("authors") or data.get("src") or []
+            if not isinstance(authors, list):
+                continue
+
+            base = node.url.rstrip("/")
+            for author in authors:
+                if not isinstance(author, dict):
+                    continue
+                aid = author.get("id")
+                if aid and not str(aid).startswith("http"):
+                    author = dict(author)
+                    author["id"] = f"{base}/api/authors/{aid}"
+                other_node_authors.append(author)
+        except (requests.RequestException, ValueError):
+            continue
 
     return render(request, "node.html", {
         "users": node_authors,
-        "other_users": other_node_authors
+        "other_users": other_node_authors,
     })
 
 def login_view(request):
