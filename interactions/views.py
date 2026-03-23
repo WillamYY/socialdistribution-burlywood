@@ -9,6 +9,7 @@ import requests
 from datetime import datetime
 import json
 from django.http import JsonResponse
+import re
 
 def add_like(request, entry_id):
     """Toggles a Like object using the Entry's FQID (URL)."""
@@ -74,7 +75,7 @@ def add_comment(request, entry_id):
             author_fqid = f"{base}/api/authors/{author_id}"
 
             Comment.objects.create(
-                id=f"{request.build_absolute_uri('/')[:-1]}/api/authors/{author_id}/comments/{uuid.uuid4()}",
+                id=f"{request.build_absolute_uri('/')[:-1]}/api/authors/{author_id}/commented/{uuid.uuid4()}",
                 author=author_fqid,
                 entry=entry_fqid,
                 comment=comment_text,
@@ -132,7 +133,7 @@ def add_remote_comment(request, entry_id):
             "type": "comment",
             "author": author_info,
             "published": datetime.now().isoformat(),
-            "id": "",
+            "id": f"{entry_data["author"]["host"]}/api/authors/{author_id}/commented/{uuid.uuid4()}",
             "comment": comment_text,
             "contentType": "text/plain",
             "object": remote_entry_url,
@@ -183,7 +184,7 @@ def add_remote_comment_like(request, comment_id):
         if not author_id:
             return redirect('/app/login/')
         # Gets the entry info and ensures its valid
-        commentInfo = requests.get(comment_id.rstrip("/"))
+        commentInfo = requests.get(re.match("(https?://[^/]+)",comment_id).group(1) + "/api/commented/" + comment_id)
         commentInfo.raise_for_status()
         jsonEntry = json.loads(commentInfo.text)
         foreignAuthor = jsonEntry["author"]["id"]
