@@ -13,7 +13,7 @@ from django.contrib.admin.sites import AdminSite
 from unittest.mock import Mock, patch
 import base64
 import uuid
-from core.models import Author, AuthorRequest, IncomingNode, RemoteFollower, EntryDelivery
+from core.models import Author, AuthorRequest, IncomingNode, OutgoingNode, RemoteFollower, EntryDelivery
 from entries.models import Entry
 from interactions.models import Comment, Like
 from core.views import SignUpProcessing
@@ -29,6 +29,12 @@ from core.remote import (
 Creates a series of tests for all the user stories relating to the author endpoint
 """
 class AuthorEndpointTest(APITestCase):
+    def setUp(self):
+        OutgoingNode.objects.create(url = "test", username = "test", password = "test")
+        encoded_creds = base64.b64encode("test:test".encode("utf-8")).decode("ascii")
+        self.header = {
+            "Authorization": f"Basic {encoded_creds}"
+        }
     """
     Test to ensure all ID's are unique by attempting to create one that is not unique
     User story #2
@@ -41,11 +47,11 @@ class AuthorEndpointTest(APITestCase):
         secondauthorURL = reverse("api:ApiAuthor",kwargs = {"id":2})
         # Attempts to create an author with the wrong ID for it's location
         author2 = {"type":"author","id":firstauthorURL[:-1],"host":"http://localhost:8000/api/","displayName":"Daltonssda","github": "http://g.com","profileImage": "","web": "http://localhost:8000/app/authors/2" }
-        put2 = self.client.put(secondauthorURL,author2,format = "json")
+        put2 = self.client.put(secondauthorURL,author2,format = "json", headers=self.header)
         self.assertEqual(put2.status_code,status.HTTP_400_BAD_REQUEST)
         # Tests overwritting a user with the same ID
         author3 = {"type":"author","id":firstauthorURL[:-1],"host":"http://localhost:8000/api/","displayName":"Author3","github": "http://3.com","profileImage": "","web": "http://localhost:8000/app/authors/1" }
-        put3 = self.client.put(firstauthorURL,author3,format = "json") # Should replace author 1 ensuring that there is no repeated ID's
+        put3 = self.client.put(firstauthorURL,author3,format = "json", headers=self.header) # Should replace author 1 ensuring that there is no repeated ID's
         self.assertEqual(put3.status_code,status.HTTP_200_OK) # Ensures that it worked
         self.assertEqual(Author.objects.count(),1) # Ensures there is only one author still there
         # Ensures all the values match that of author 3 instead of author 1
@@ -62,12 +68,12 @@ class AuthorEndpointTest(APITestCase):
         # Adds the first author
         firstauthorURL = reverse("api:ApiAuthor",kwargs = {"id": 1})
         author1 = {"type":"author","id":firstauthorURL[:-1],"host":"http://localhost:8000/api/","displayName":"Dalton","github": "http://github.com/dalton","profileImage": "https://www.bigfootdigital.co.uk/wp-content/uploads/2020/07/image-optimisation-scaled.jpg","web": "http://localhost:8000/app/authors/1" }
-        put1 = self.client.put(firstauthorURL,author1,format = "json")
+        put1 = self.client.put(firstauthorURL,author1,format = "json", headers=self.header)
         self.assertEqual(put1.status_code,status.HTTP_201_CREATED) # Ensures the first author was added successfully
         # Adds the second author
         secondauthorURL = reverse("api:ApiAuthor",kwargs = {"id": 2})
         author2 = {"type":"author","id":secondauthorURL[:-1],"host":"http://localhost:8000/api/","displayName":"Low","github": "http://github.com/daltons","profileImage": "https://image-optimisation-scaled.jpg","web": "http://localhost:8000/app/authors/2" }
-        put2 = self.client.put(secondauthorURL,author2,format = "json")
+        put2 = self.client.put(secondauthorURL,author2,format = "json", headers=self.header)
         self.assertEqual(put2.status_code,status.HTTP_201_CREATED) # Ensures the first author was added successfully
         self.assertEqual(AuthorRequest.objects.count(),2) # Ensures that both are in the database
         # Checks that the two author requests were created
@@ -85,7 +91,7 @@ class AuthorEndpointTest(APITestCase):
         # Adds an author
         firstauthorURL = reverse("api:ApiAuthor",kwargs = {"id": 1})
         author1 = {"type":"author","id":firstauthorURL[:-1],"host":"http://localhost:8000/api/","displayName":"Dalton","github": "http://github.com/dalton","profileImage": "https://www.bigfootdigital.co.uk/wp-content/uploads/2020/07/image-optimisation-scaled.jpg","web": "http://localhost:8000/app/authors/1" }
-        put1 = self.client.put(firstauthorURL,author1,format = "json")
+        put1 = self.client.put(firstauthorURL,author1,format = "json", headers=self.header)
         self.assertEqual(put1.status_code,status.HTTP_201_CREATED) # Ensures the first author was added successfully
         self.assertEqual(AuthorRequest.objects.count(),1) # Checks that it made an author request object
         # Creates an instance of the AuthorRequestAdmin
@@ -111,7 +117,7 @@ class AuthorEndpointTest(APITestCase):
         author1 = Author(id=1, host="http://localhost:8000/api/", name="Dalton", username="Dalton", github="http://github.com/dalton")
         author1.save()
 
-        get1 = self.client.get(firstauthorURL, format="json")
+        get1 = self.client.get(firstauthorURL, format="json", headers=self.header)
         expected_data = AuthorSerializer(author1).data
 
         # normalize URLs to https to match actual API output
@@ -124,6 +130,13 @@ class AuthorEndpointTest(APITestCase):
 Creates a test for the authors endpoint
 """
 class AuthorsEndpointTest(APITestCase):
+    def setUp(self):
+        OutgoingNode.objects.create(url = "test", username = "test", password = "test")
+        encoded_creds = base64.b64encode("test:test".encode("utf-8")).decode("ascii")
+        self.header = {
+            "Authorization": f"Basic {encoded_creds}"
+        }
+
     def test_get_multiple_authors(self):
         # Creates the first author outright
         author1 = Author(id=1, host="http://localhost:8000/api/", name="Dalton", username="Dalton", github="http://github.com/dalton")
@@ -134,7 +147,7 @@ class AuthorsEndpointTest(APITestCase):
 
         # Retrieves the authors page
         multiauthorURL = reverse("api:ApiAuthors")
-        get1 = self.client.get(multiauthorURL, format="json")
+        get1 = self.client.get(multiauthorURL, format="json", headers=self.header)
 
         # Prepare expected data
         expected_data = {
@@ -298,6 +311,12 @@ class EntryLikeEndpointTest(APITestCase):
 Allows the user to create a like
 """
 class AddLikeEndpointTest(APITestCase):
+    def setUp(self):
+        OutgoingNode.objects.create(url = "test", username = "test", password = "test")
+        encoded_creds = base64.b64encode("test:test".encode("utf-8")).decode("ascii")
+        self.header = {
+            "Authorization": f"Basic {encoded_creds}"
+        }
     """
     Tests sending a like to a user
     User Story # 58
@@ -320,7 +339,7 @@ class AddLikeEndpointTest(APITestCase):
 
         # Gets the info from the website
         like_url = reverse("api:ApiSendLike",kwargs = {"author_id":author1.id})
-        post1 = self.client.post(like_url,like1.data,format = 'json')
+        post1 = self.client.post(like_url,like1.data,format = 'json', headers=self.header)
         # Ensures there is one like in the data base
         self.assertEqual(Like.objects.count(),1)
         # Ensures it matches with the like object information
@@ -645,6 +664,12 @@ class EntryAPITest(APITestCase):
         session = self.client.session
         session["author_id"] = self.author.id
         session.save()
+
+        OutgoingNode.objects.create(url = "test", username = "test", password = "test")
+        encoded_creds = base64.b64encode("test:test".encode("utf-8")).decode("ascii")
+        self.header = {
+            "Authorization": f"Basic {encoded_creds}"
+        }
     
     def test_create_entry(self):
         """
@@ -660,7 +685,7 @@ class EntryAPITest(APITestCase):
             "content": "Hello World",
             "visibility": "PUBLIC",
         }
-        response = self.client.post(url, data, format="json")
+        response = self.client.post(url, data, format="json", headers=self.header)
 
         # Check if the entry was created successfully
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
@@ -831,7 +856,7 @@ class EntryAPITest(APITestCase):
             "contentType": "text/markdown",
             "content": markdown_source,
             "visibility": "PUBLIC",
-        }, format="json")
+        }, headers=self.header, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
@@ -865,7 +890,7 @@ class EntryAPITest(APITestCase):
         url = reverse("api:ApiEntries", kwargs={"author_id": self.author.id})
         
         # Request page 2 with size 3
-        response = self.client.get(url, {"page": 2, "size": 3})
+        response = self.client.get(url, {"page": 2, "size": 3}, headers=self.header)
         
         # Check if the response is successful and has correct pagination structures
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -895,7 +920,7 @@ class EntryAPITest(APITestCase):
         self.assertEqual(response1.status_code, 404)
 
         # only the image entry should remain since it was not deleted
-        response2 = self.client.get(entry_url2)
+        response2 = self.client.get(entry_url2, headers=self.header)
         self.assertEqual(response2.data["count"], 1)
         self.assertEqual(len(response2.data["src"]), 1)
         self.assertNotIn(str(entry.id), response2.data["src"][0]["id"])
@@ -1189,6 +1214,12 @@ class VisibilityAPITest(TestCase):
 Tests that there is only a single database for front and backend
 """
 class DatabaseTest(TestCase):
+    def setUp(self):
+        OutgoingNode.objects.create(url = "test", username = "test", password = "test")
+        encoded_creds = base64.b64encode("test:test".encode("utf-8")).decode("ascii")
+        self.header = {
+            "Authorization": f"Basic {encoded_creds}"
+        }
     """
     User Story #77
     """
@@ -1209,7 +1240,7 @@ class DatabaseTest(TestCase):
         self.assertContains(response,"https://github.com/John")
         # Gets the author from the api
         authorURL = reverse("api:ApiAuthor",kwargs = {"id": 1})
-        get1 = self.client.get(authorURL,format = "json")
+        get1 = self.client.get(authorURL,format = "json", headers=self.header)
         # Check that the details match
         self.assertEqual(get1.data["displayName"],author1.name)
         self.assertEqual(get1.data["github"],author1.github)
