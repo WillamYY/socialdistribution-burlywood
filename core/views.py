@@ -69,7 +69,9 @@ def NodeDisplay(request):
     """
     Displays all authors in the node.
     """
-    authors = []
+    node_authors = Author.objects.all()
+    other_node_authors = []
+
     for node in IncomingNode.objects.all():
         try:
             resp = requests.get(
@@ -82,13 +84,26 @@ def NodeDisplay(request):
                 continue
                 
             data = resp.json()
-            remote_authors = data.get("authors") or data.get("src") or []
-            if isinstance(remote_authors, list):
-                authors.extend(remote_authors)
+            authors = data.get("authors") or data.get("src") or []
+            if not isinstance(authors, list):
+                continue
+
+            base = node.url.rstrip("/")
+            for author in authors:
+                if not isinstance(author, dict):
+                    continue
+                aid = author.get("id")
+                if aid and not str(aid).startswith("http"):
+                    author = dict(author)
+                    author["id"] = f"{base}/api/authors/{aid}"
+                other_node_authors.append(author)
         except (requests.RequestException, ValueError):
             continue
 
-    return render(request, "core/node_display.html", {"authors": authors})
+    return render(request, "node.html", {
+        "users": node_authors,
+        "other_users": other_node_authors,
+    })
 
 def login_view(request):
     """
