@@ -717,6 +717,28 @@ def RemoteProfileDisplay(request, fqid):
         entry["clean_id"] = clean_id
         remote_comments = ((entry.get("comments") or {}).get("src")) or []
 
+        # Fix comment author: remote may return entry author instead of commenter.
+        # If comment author id matches our user, use our local display name.
+        if logged_in_id and user_fqid:
+            try:
+                me = Author.objects.get(id=logged_in_id)
+                my_display = me.name or me.username
+                for c in remote_comments:
+                    if not isinstance(c, dict):
+                        continue
+                    auth = c.get("author")
+                    if isinstance(auth, dict):
+                        cid = (auth.get("id") or "").rstrip("/")
+                    else:
+                        cid = str(auth or "").rstrip("/")
+                    if cid and _normalize_fqid(cid) == _normalize_fqid(user_fqid):
+                        if isinstance(auth, dict):
+                            auth["displayName"] = my_display
+                        else:
+                            c["author"] = {"id": cid, "displayName": my_display}
+            except Author.DoesNotExist:
+                pass
+
         remote_likes_src = (entry.get("likes") or {}).get("src", [])
         remote_like_count = (entry.get("likes") or {}).get("count", 0)
 
