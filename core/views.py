@@ -642,6 +642,7 @@ def RemoteProfileDisplay(request, fqid):
             remote_author_url,
             headers={"Accept": "application/json"},
             timeout=10,
+            
         )
         authorInfo.raise_for_status()
         author = authorInfo.json()
