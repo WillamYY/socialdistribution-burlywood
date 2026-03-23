@@ -691,9 +691,21 @@ def RemoteProfileDisplay(request, fqid):
         if not clean_id:
             continue
 
+        clean_id = (entry.get("id") or "").rstrip("/")
+        if not clean_id:
+            continue
+
         entry["clean_id"] = clean_id
         remote_comments = ((entry.get("comments") or {}).get("src")) or []
-        local_comments = list(Comment.objects.filter(entry=clean_id).values("author", "comment"))
+
+        entry_id_tail = clean_id.split("/")[-1]
+        local_comments = list(
+            (
+                Comment.objects.filter(entry=clean_id) |
+                Comment.objects.filter(entry=clean_id + "/") |
+                Comment.objects.filter(entry__endswith=entry_id_tail)
+            ).values("author", "comment")
+        )
 
         merged_comments = list(remote_comments)
         for c in local_comments:
