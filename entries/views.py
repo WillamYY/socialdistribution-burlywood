@@ -14,7 +14,7 @@ from core.models import Author, AdminHostedImage
 from core.services import maybe_sync_github_for_stream
 from core.remote import federate_entry_create_or_update, federate_entry_deleted
 from interactions.models import Like, Comment
-from core.models import RemoteFollow, RemoteFollower
+from core.models import RemoteFollow, RemoteFollower, IncomingNode
 import requests
 import json
 
@@ -631,7 +631,8 @@ def RemoteEntry(request,fqid):
     logged_in_id = request.session.get("author_id")
     # Gets the entry
     print(fqid[:index] + "/api/entries/" + fqid.rstrip("/"))
-    entryInfo = requests.get(fqid[:index] + "/api/entries/" + fqid.rstrip("/"))
+    node_credentials = get_object_or_404(IncomingNode, url=fqid[:index] + "/")
+    entryInfo = requests.get(fqid[:index] + "/api/entries/" + fqid.rstrip("/"), auth=(node_credentials.username, node_credentials.password))
     entryInfo.raise_for_status()
     entry = json.loads(entryInfo.text)
     # Creates the list of allowed things to view
