@@ -326,7 +326,6 @@ def ApiEntryLikes(request, entry_fqid):
     return Response(likesSerializer.data)
 
 # Unified Inbox (User Story #69): routes by object type
-@csrf_exempt
 @api_view(["POST"])
 @authentication_classes([NodeBasicAuthentication])
 @permission_classes([IsAuthenticated])
