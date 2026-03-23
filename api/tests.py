@@ -13,7 +13,7 @@ from django.contrib.admin.sites import AdminSite
 from unittest.mock import Mock, patch
 import base64
 import uuid
-from core.models import Author, AuthorRequest, IncomingNode, RemoteFollower, EntryDelivery
+from core.models import Author, AuthorRequest, IncomingNode, OutgoingNode, RemoteFollower, EntryDelivery
 from entries.models import Entry
 from interactions.models import Comment, Like
 from core.views import SignUpProcessing
@@ -1457,3 +1457,187 @@ class RemoteImageEntryFetchTests(TestCase):
             "https://remote.example/api/authors/9",
         )
         self.assertEqual(entries[0].author.username, "Remote User")
+
+class RemoteInboxInteractionTests(APITestCase):
+    def setUp(self):
+        self.local_author = Author.objects.create(
+            username="local_user",
+            password="pass",
+            name="Local User",
+            host="http://testserver/api/",
+            web="http://testserver/app/authors/1",
+            github="http://github.com/local",
+        )
+
+        self.entry = Entry.objects.create(
+            author=self.local_author,
+            title="Inbox Target Entry",
+            content="hello",
+            contentType="text/plain",
+            visibility="PUBLIC",
+        )
+
+        self.inbox_url = reverse("api:ApiSendLike", kwargs={"author_id": self.local_author.id})
+
+        # node creds for Basic Auth on ApiInbox
+        self.node = OutgoingNode.objects.create(
+            url="https://remote.example/",
+            username="remote_node",
+            password="secret123",
+        )
+
+        token = base64.b64encode(b"remote_node:secret123").decode("utf-8")
+        self.auth_header = f"Basic {token}"
+
+    def test_remote_comment_sent_to_inbox_creates_comment(self):
+        """
+        Remote node sends a comment to local author's inbox.
+        Should create a local Comment row and return 202.
+        """
+        entry_fqid = f"http://testserver/api/authors/{self.local_author.id}/entries/{self.entry.id}"
+        remote_author_fqid = "https://remote.example/api/authors/9"
+
+        payload = {
+            "type": "comment",
+            "author": {
+                "type": "author",
+                "id": remote_author_fqid,
+                "host": "https://remote.example/api/",
+                "displayName": "Remote Greg",
+                "github": "https://github.com/remote-greg",
+                "profileImage": "https://example.com/greg.png",
+                "web": "https://remote.example/authors/greg",
+            },
+            "comment": "Remote comment hello",
+            "contentType": "text/plain",
+            "published": "2026-03-23T12:00:00+00:00",
+            "id": "https://remote.example/api/authors/9/commented/123",
+            "entry": entry_fqid,
+        }
+
+        response = self.client.post(
+            self.inbox_url,
+            data=payload,
+            format="json",
+            HTTP_AUTHORIZATION=self.auth_header,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED)
+        self.assertEqual(Comment.objects.count(), 1)
+
+        comment = Comment.objects.get()
+        self.assertEqual(comment.author, remote_author_fqid)
+        self.assertEqual(comment.comment, "Remote comment hello")
+        self.assertEqual(comment.contentType, "text/plain")
+        self.assertEqual(
+            comment.entry,
+            f"http://testserver/api/authors/{self.local_author.id}/entries/{self.entry.id}",
+        )
+        self.assertEqual(comment.id, "https://remote.example/api/authors/9/commented/123")
+
+    def test_remote_comment_using_object_field_also_creates_comment(self):
+        """
+        Inbox comment handler currently accepts entry OR object for the target entry.
+        """
+        entry_fqid = f"http://testserver/api/authors/{self.local_author.id}/entries/{self.entry.id}"
+        remote_author_fqid = "https://remote.example/api/authors/10"
+
+        payload = {
+            "type": "comment",
+            "author": {
+                "type": "author",
+                "id": remote_author_fqid,
+                "host": "https://remote.example/api/",
+                "displayName": "Remote Alt",
+                "github": "",
+                "profileImage": "",
+                "web": "https://remote.example/authors/alt",
+            },
+            "comment": "Comment through object field",
+            "contentType": "text/markdown",
+            "published": "2026-03-23T12:30:00+00:00",
+            "id": "https://remote.example/api/authors/10/commented/456",
+            "object": entry_fqid,
+        }
+
+        response = self.client.post(
+            self.inbox_url,
+            data=payload,
+            format="json",
+            HTTP_AUTHORIZATION=self.auth_header,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED)
+        self.assertEqual(Comment.objects.count(), 1)
+
+        comment = Comment.objects.get()
+        self.assertEqual(comment.author, remote_author_fqid)
+        self.assertEqual(comment.comment, "Comment through object field")
+        self.assertEqual(comment.contentType, "text/markdown")
+
+    def test_remote_like_sent_to_inbox_creates_like(self):
+        """
+        Remote node sends a like to local author's inbox.
+        Should create a Like row and return 202.
+        """
+        entry_fqid = f"http://testserver/api/authors/{self.local_author.id}/entries/{self.entry.id}"
+        remote_author_fqid = "https://remote.example/api/authors/77"
+
+        payload = {
+            "type": "like",
+            "author": {
+                "type": "author",
+                "id": remote_author_fqid,
+                "host": "https://remote.example/api/",
+                "displayName": "Remote Liker",
+                "github": "https://github.com/liker",
+                "profileImage": "",
+                "web": "https://remote.example/authors/liker",
+            },
+            "published": "2026-03-23T13:00:00+00:00",
+            "id": "https://remote.example/api/authors/77/liked/999",
+            "object": entry_fqid,
+        }
+
+        response = self.client.post(
+            self.inbox_url,
+            data=payload,
+            format="json",
+            HTTP_AUTHORIZATION=self.auth_header,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(Like.objects.count(), 1)
+
+        like = Like.objects.get()
+        self.assertEqual(like.author, remote_author_fqid)
+        self.assertEqual(like.object.rstrip("/"), entry_fqid.rstrip("/"))
+
+    def test_remote_like_missing_object_returns_400(self):
+        """
+        Like without object should be rejected by inbox handler.
+        """
+        payload = {
+            "type": "like",
+            "author": {
+                "type": "author",
+                "id": "https://remote.example/api/authors/88",
+                "host": "https://remote.example/api/",
+                "displayName": "Broken Remote",
+                "github": "",
+                "profileImage": "",
+                "web": "https://remote.example/authors/broken",
+            },
+            "published": "2026-03-23T13:30:00+00:00",
+            "id": "https://remote.example/api/authors/88/liked/1000",
+        }
+
+        response = self.client.post(
+            self.inbox_url,
+            data=payload,
+            format="json",
+            HTTP_AUTHORIZATION=self.auth_header,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(Like.objects.count(), 0)

@@ -267,6 +267,57 @@ Comment IDs are also stored as FQIDs to guarantee global uniqueness across diffe
 
 ---
 
+## Comment Federation (Outgoing Node)
+
+### Purpose
+To ensure that comments created on a local node can be delivered to remote authors when the target entry belongs to another node.
+
+### How it works
+Whenever a local author comments on a **remote entry**, the local node serializes the comment into the standard JSON Comment Object and sends it to the remote author's **Inbox**.
+
+1. **Target Resolution:** The system identifies the remote entry's FQID and the remote author who owns that entry.
+2. **Serialization:** The comment is converted into a JSON Comment Object containing:
+   - `type: "comment"`
+   - `author` as a full Author object
+   - `comment`
+   - `contentType`
+   - `published`
+   - `id`
+   - `entry` (or `object`, depending on remote compatibility)
+3. **Delivery:** The node performs a `POST` request to the remote author's Inbox endpoint.
+4. **Authentication:** The request is authenticated using stored node credentials.
+
+```md
+### Expected Federation Behavior
+
+| Action | Triggering Operation | Federation Method | Payload |
+| :--- | :--- | :--- | :--- |
+| **Create Remote Comment** | Local author comments on remote entry | `POST` to Inbox | Full Comment Object |
+
+### Example Outgoing Payload
+
+```json
+{
+  "type": "comment",
+  "author": {
+    "type": "author",
+    "id": "http://nodeaaaa/api/authors/111",
+    "host": "http://nodeaaaa/api/",
+    "displayName": "Greg Johnson",
+    "github": "http://github.com/gjohnson",
+    "profileImage": "https://i.imgur.com/k7XVwpB.jpeg",
+    "web": "http://nodeaaaa/authors/greg"
+  },
+  "comment": "Sick Olde English",
+  "contentType": "text/markdown",
+  "published": "2015-03-09T13:07:04+00:00",
+  "id": "http://nodeaaaa/api/authors/111/commented/130",
+  "entry": "http://nodebbbb/api/authors/222/entries/249"
+}
+
+```md
+---
+
 # Citation
 
 Some documentation text and formatting improvements were generated with assistance from **ChatGPT (OpenAI)**.
