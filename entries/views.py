@@ -17,6 +17,8 @@ from interactions.models import Like, Comment
 from core.models import RemoteFollow, RemoteFollower, IncomingNode
 import requests
 import json
+from api.serializers import CommentSerializer
+
 
 logger = logging.getLogger(__name__)
 
@@ -587,24 +589,41 @@ def get_entry(request, entry_id):
     else:
         entry.liked_by_user = False
 
-    # Fetch data for each comment (commenter is who wrote the comment, NOT entry.author)
+    comments = []
+    # Gets all the comments (Have to fetch each one individually :( )
     for comment in entry.fetched_comments:
-        # Extract commenter id from author URL (e.g. .../api/authors/123 or .../authors/123)
-        match = re.search(r'/authors?/(\d+)/?$', comment.author)
-        commenter_id = match.group(1) if match else comment.author.rstrip("/").split("/")[-1]
-
-        try:
-            commenter = Author.objects.get(id=commenter_id)
-            comment.author_name = commenter.name or commenter.username
-        except (Author.DoesNotExist, ValueError):
-            comment.author_name = comment.author
-
-        comment_url = comment.id
-        comment.like_count = Like.objects.filter(object=comment_url).count()
-
-        if logged_in_id:
-            user_fqid = f"{base_url}/api/authors/{logged_in_id}"
-            comment.liked_by_user = Like.objects.filter(object=comment_url, author=user_fqid).exists()
+        comment_id = comment.get("id")
+        comment_part_host = re.search("https?://([^/]+)",comment_id).group(1)
+        # If it is our comment get it
+        if comment_part_host == request.get_host():
+            # Try and except incase the api returns faulty data
+            try:
+                comment = Comment.objects.get(id__endswith = re.search("/commented/([^/]+)",comment_id).group(0))
+                serialized_comment = CommentSerializer(comment).data
+                serialized_comment["local"] = True
+                serialized_comment["like_count"] = Like.objects.filter(object=comment.id).count()
+                comments.append(serialized_comment)
+            except:
+                pass
+        else:
+            # Tries to get the comment info (Passes if the comment is faulty or we don't have the host)
+            try:
+                comment_full_host = re.search("https?://[^/]+",comment_id).group(0)
+                comment_node = IncomingNode.objects.get(url = comment_full_host + "/")
+                comment_credentials = (comment_node.username,comment_node.password)
+                comment_info = requests.get(comment_id,auth = comment_credentials)
+                # If we failed to get the comment raise an error
+                if comment_info.status_code >= 400:
+                    raise ConnectionError
+                comment_json = json.loads(comment_info.text)
+                comment_json["local"] = False
+                comment_json["like_count"] = comment_json["likes"]["count"]
+                comments.append(comment_json)
+            except:
+                pass
+        print(comment_json)
+    # Replaces the comments in the entry with the comments pulled from their respective databases
+    entry["comments"]["src"] = comments
 
     # Check the visibility for the logged-in user
     allowed = check_visibility(entry, logged_in_id)
@@ -641,6 +660,41 @@ def RemoteEntry(request,fqid):
         if RemoteFollower.objects.filter(actor_fqid__endswith = entry.get("author").get("id").rstrip("/").split("/")[-1],target = logged_in_id).exists():
             allowed_visibility.append("FRIENDS")
     allowed = entry.get("visibility") in allowed_visibility
+    comments = []
+    # Gets all the comments (Have to fetch each one individually :( )
+    for comment in entry.get("comments",{}).get("src",{}):
+        comment_id = comment.get("id")
+        comment_part_host = re.search("https?://([^/]+)",comment_id).group(1)
+        # If it is our comment get it
+        if comment_part_host == request.get_host():
+            # Try and except incase the api returns faulty data
+            try:
+                comment = Comment.objects.get(id__endswith = re.search("/commented/([^/]+)",comment_id).group(0))
+                serialized_comment = CommentSerializer(comment).data
+                serialized_comment["local"] = True
+                serialized_comment["like_count"] = Like.objects.filter(object=comment.id).count()
+                comments.append(serialized_comment)
+            except:
+                pass
+        else:
+            # Tries to get the comment info (Passes if the comment is faulty or we don't have the host)
+            try:
+                comment_full_host = re.search("https?://[^/]+",comment_id).group(0)
+                comment_node = IncomingNode.objects.get(url = comment_full_host + "/")
+                comment_credentials = (comment_node.username,comment_node.password)
+                comment_info = requests.get(comment_id,auth = comment_credentials)
+                # If we failed to get the comment raise an error
+                if comment_info.status_code >= 400:
+                    raise ConnectionError
+                comment_json = json.loads(comment_info.text)
+                comment_json["local"] = False
+                comment_json["like_count"] = comment_json["likes"]["count"]
+                comments.append(comment_json)
+            except:
+                pass
+        print(comment_json)
+    # Replaces the comments in the entry with the comments pulled from their respective databases
+    entry["comments"]["src"] = comments
     # Image api url
     image_api_url = None
     if ";base64" in entry.get("contentType") and "image" in entry.get("contentType"):
