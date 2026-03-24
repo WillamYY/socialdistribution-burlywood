@@ -514,22 +514,28 @@ def _inbox_handle_like(request, author_id, data=None):
     return Response(LikeSerializer(like).data, status=201)
 
 def _inbox_handle_comment_like(request, author_id, data=None):
+    print("1")
     """Handle like: existing like logic."""
     data = data or request.data or {}
     obj_url = data.get("object")
     if not obj_url:
         return Response({"detail": "Missing object"}, status=400)
     try:
+        print(2)
         comment = Comment.objects.get(id__endswith=re.search("/commented/([^/]+)",obj_url).group(1))
     except (Comment.DoesNotExist, ValueError):
         return Response(status=404)
+    print(3)
     author_data = data.get("author") or {}
     author_url = (author_data.get("id") if isinstance(author_data, dict) else None) or ""
     if not author_url:
+        print(4)
         return Response(status=400)
     if Like.objects.filter(author=author_url, object=obj_url.rstrip("/")).exists():
+        print(5)
         Like.objects.filter(author=author_url, object=obj_url.rstrip("/")).delete()
         return Response(status=204)
+    print(6)
     like_uuid = uuid.uuid4()
 
     like = Like(
@@ -538,6 +544,7 @@ def _inbox_handle_comment_like(request, author_id, data=None):
         id=f"{author_url.rstrip("/")}/liked/{like_uuid}",
         uuid=like_uuid,
     )
+    print(7)
     like.save()
     return Response(LikeSerializer(like).data, status=201)
 
