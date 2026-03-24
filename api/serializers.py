@@ -142,6 +142,7 @@ class CommentSerializer(serializers.ModelSerializer):
     type = serializers.CharField(default="comment", read_only=True)
     author = serializers.SerializerMethodField()
     id = serializers.SerializerMethodField()
+    likes = serializers.SerializerMethodField()
 
     class Meta:
         model = Comment
@@ -152,6 +153,7 @@ class CommentSerializer(serializers.ModelSerializer):
             "comment",
             "contentType",
             "published",
+            "likes",
         ]
 
     def get_id(self, obj):
@@ -169,35 +171,47 @@ class CommentSerializer(serializers.ModelSerializer):
     def get_author(self, obj):
         author_value = getattr(obj, "author", None)
 
+        # If author is already a local Author object
         if isinstance(author_value, Author):
             return AuthorSerializer(author_value).data
 
+        # If author is stored as a URL string
         if isinstance(author_value, str):
-            author_url = author_value.rstrip("/").replace("http://", "https://")
+            author_url = author_value.rstrip("/")
+            author_url = author_url.replace("://", "§§TEMP§§").replace("//", "/").replace("§§TEMP§§", "://")
+            author_id_part = author_url.split("/")[-1]
 
-            request = self.context.get("request")
-            local_base = ""
-            if request:
-                local_base = request.build_absolute_uri('/').rstrip('/').replace("http://", "https://")
-
-            if local_base and author_url.startswith(f"{local_base}/api/authors/"):
-                author_id_part = author_url.split("/")[-1]
-                if author_id_part.isdigit():
-                    author_obj = Author.objects.filter(id=int(author_id_part)).first()
-                    if author_obj:
-                        return AuthorSerializer(author_obj).data
+            if author_id_part.isdigit():
+                author_obj = Author.objects.filter(id=int(author_id_part)).first()
+                if author_obj:
+                    return AuthorSerializer(author_obj).data
 
             return {
                 "type": "author",
-                "id": author_url,
-                "host": author_url.split("/api/authors/")[0] if "/api/authors/" in author_url else "",
-                "displayName": author_url.split("/")[-1] if author_url else "Unknown Author",
+                "id": author_value,
+                "host": "",
+                "displayName": author_id_part if author_id_part else "Unknown",
                 "github": "",
                 "profileImage": "",
                 "web": ""
             }
 
         return None
+    
+    # Gets the likes of an object
+    def get_likes(self, obj):
+        likes = Like.objects.filter(object__endswith = obj.id) | Like.objects.filter(object__endswith = str(obj.id) + "/")
+                # Package the data for LikesSerializer
+        likes_data = {
+            "page_number": 1,
+            "size": 50,
+            "count": likes.count(),
+            "src": likes
+        }
+        likes_url = self.get_id(obj).rstrip("/") + "/likes" 
+        # Instantiate LikesSerializer
+        serializer = LikesSerializer(likes_data, context={"link": likes_url})
+        return serializer.data
     
 class EntrySerializer(serializers.ModelSerializer):
     """

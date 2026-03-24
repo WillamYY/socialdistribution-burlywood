@@ -19,6 +19,8 @@ from core.models import Author, AuthorRequest, FollowRequest, RemoteFollower, Re
 from entries.models import Entry
 from interactions.models import Like, Comment
 from .serializers import AuthorSerializer, LikesSerializer, LikeSerializer, EntrySerializer, EntriesSerializer, CommentSerializer
+import json
+import re
 
 def _normalize_fqid_for_check(s):
     """Normalize FQID for comparison."""
@@ -356,7 +358,10 @@ def ApiInbox(request, author_id):
             return _inbox_handle_comment(request, author_id, data)
         if obj_type == "entry":
             return _inbox_handle_entry(request, author_id, data)
-        return _inbox_handle_like(request, author_id, data)
+        if obj_type == "like":
+            if "commented" in data.get("object"):
+                return _inbox_handle_comment_like(request, author_id, data)
+            return _inbox_handle_like(request, author_id, data)
     except Exception as e:
         logger.exception("Inbox error: %s", e)
         return Response(
@@ -463,7 +468,7 @@ def _inbox_handle_comment(request, author_id, data=None):
     base = request.build_absolute_uri("/")[:-1]
     entry_fqid = f"{base}/api/authors/{author_id}/entries/{entry.id}"
     Comment.objects.create(
-        id=f"{base}/comments/{uuid.uuid4()}",
+        id= data.get("id") or f"{base}/api/authors/{author_id}/commented/{uuid.uuid4()}",
         author=author_url,
         entry=entry_fqid,
         comment=comment_text,
@@ -498,12 +503,48 @@ def _inbox_handle_like(request, author_id, data=None):
     if Like.objects.filter(author=author_url, object=obj_url.rstrip("/")).exists():
         Like.objects.filter(author=author_url, object=obj_url.rstrip("/")).delete()
         return Response(status=204)
+    like_uuid = uuid.uuid4()
     like = Like(
         author=author_url,
         object=obj_url.rstrip("/"),
-        id=f"{request.build_absolute_uri('/')[:-1]}/likes/{uuid.uuid4()}",
-        uuid=uuid.uuid4(),
+        id=f"{request.build_absolute_uri('/')[:-1]}/likes/{like_uuid}",
+        uuid=like_uuid,
     )
+    like.save()
+    return Response(LikeSerializer(like).data, status=201)
+
+def _inbox_handle_comment_like(request, author_id, data=None):
+    print("1")
+    """Handle like: existing like logic."""
+    data = data or request.data or {}
+    obj_url = data.get("object")
+    if not obj_url:
+        return Response({"detail": "Missing object"}, status=400)
+    try:
+        print(2)
+        comment = Comment.objects.get(id__endswith=re.search("/commented/([^/]+)",obj_url).group(1))
+    except (Comment.DoesNotExist, ValueError):
+        return Response(status=404)
+    print(3)
+    author_data = data.get("author") or {}
+    author_url = (author_data.get("id") if isinstance(author_data, dict) else None) or ""
+    if not author_url:
+        print(4)
+        return Response(status=400)
+    if Like.objects.filter(author=author_url, object=obj_url.rstrip("/")).exists():
+        print(5)
+        Like.objects.filter(author=author_url, object=obj_url.rstrip("/")).delete()
+        return Response(status=204)
+    print(6)
+    like_uuid = uuid.uuid4()
+
+    like = Like(
+        author=author_url,
+        object=obj_url.rstrip("/"),
+        id=f"{author_url.rstrip("/")}/liked/{like_uuid}",
+        uuid=like_uuid,
+    )
+    print(7)
     like.save()
     return Response(LikeSerializer(like).data, status=201)
 
@@ -1036,3 +1077,13 @@ def ApiBrowsePublicEntries(request):
         "count": len(visible_entries),
         "src": serializer.data
     })
+
+@api_view(['GET'])
+def ApiCommented(request,author_id,comment_id):
+    # Gets the authors fqid
+    author = get_object_or_404(Author,id = author_id)
+    author_fqid = author.host + "/authors/" + str(author.id)
+    # Gets the comment
+    comment = get_object_or_404(Comment,id = author_fqid + "/commented/" + str(comment_id))
+    comment_serializer = CommentSerializer(comment)
+    return Response(comment_serializer.data)

@@ -37,6 +37,7 @@ This document covers the API implementation and expected behavior for **Liking E
 
 **URL:** `POST /api/authors/{AUTHOR_ID}/inbox`\
 **Description:** Sends a like to a remote author's entry
+**Notes:** If a comment already exists between that author and that entry it is deleted
 
 **POST Example:**
 

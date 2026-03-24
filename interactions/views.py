@@ -8,7 +8,9 @@ from core.models import Author, IncomingNode
 import requests
 from datetime import datetime
 import json
+import re
 from django.http import JsonResponse
+from api.views import _inbox_handle_comment_like
 
 def add_like(request, entry_id):
     """Toggles a Like object using the Entry's FQID (URL)."""
@@ -27,7 +29,7 @@ def add_like(request, entry_id):
         like, created = Like.objects.get_or_create(
             author=author_fqid,
             object=entry_fqid,
-            defaults={'id': f"{request.build_absolute_uri('/')[:-1]}/likes/{likeId}","uuid":likeId}
+            defaults={'id': f"{request.build_absolute_uri('/')[:-1]}/liked/{likeId}","uuid":likeId}
         )
 
         if not created:
@@ -91,7 +93,7 @@ def add_comment(request, entry_id):
             author_fqid = f"{base}/api/authors/{author_id}"
 
             Comment.objects.create(
-                id=f"{request.build_absolute_uri('/')[:-1]}/comments/{uuid.uuid4()}",
+                id=f"{request.build_absolute_uri('/')[:-1]}/api/authors/{author_id}/commented/{uuid.uuid4()}",
                 author=author_fqid,
                 entry=entry_fqid,
                 comment=comment_text,
@@ -146,12 +148,13 @@ def add_remote_comment(request, entry_id):
             "profileImage": author.picture_url,
             "web": author.web,
         }
-
+        comment_uuid = uuid.uuid4()
+        id = f"{request.build_absolute_uri('/')[:-1]}/api/authors/{author_id}/commented/{comment_uuid}"
         payload = {
             "type": "comment",
             "author": author_info,
             "published": datetime.now().isoformat(),
-            "id": "",
+            "id": id,
             "comment": comment_text,
             "contentType": "text/plain",
             "object": remote_entry_url,
@@ -172,6 +175,15 @@ def add_remote_comment(request, entry_id):
                 auth=(credentials.username, credentials.password)
             )
             print("REMOTE COMMENT POST STATUS:", resp.status_code)
+            # Only add it to our database if it was successful
+            if 200 <= resp.status_code < 300:
+                Comment.objects.create(
+                    id=id,
+                    author=local_author_fqid,
+                    entry=remote_entry_url,
+                    comment=comment_text,
+                    contentType="text/plain"
+                ).save()
             print("REMOTE COMMENT POST BODY:", resp.text)
         except Exception as e:
             print("REMOTE COMMENT POST ERROR:", str(e))
@@ -202,4 +214,48 @@ def add_comment_like(request, comment_id):
         if not created:
             like.delete()
 
+    return redirect(request.META.get('HTTP_REFERER', '/app/stream/'))
+
+def add_remote_comment_like(request, comment_id):
+    if request.method == "POST":
+        author_id = request.session.get("author_id")
+        if not author_id:
+            return redirect('/app/login/')
+        author = get_object_or_404(Author,id = author_id)
+        # Creates the author Info so both paths can use it
+        authorInfo = {
+                "type": "author",
+                "id": f"{author.host}/authors/{author.id}",
+                "host": author.host,
+                "displayName": author.name or author.username,
+                "github": author.github,
+                "profileImage": author.picture_url,
+                "web": author.web,
+            }
+        # Gets the host that has the comment
+        host = re.match("https?://([^/]+)",comment_id).group(1)
+        # Gets the author of a comment
+        if host == request.get_host():
+            print(comment_id)
+            print("THIS IS TRUE")
+            author_fqid = Comment.objects.get(id__endswith = re.search("/commented/([^/]+)",comment_id).group(1)).author
+            print(author_fqid)
+            # Gets the json for the like
+            likejson = {"type": "like","author": authorInfo,"published":datetime.now().isoformat(),"id":"","object":comment_id}
+            # Replaces whatever the scheme of the author is with the current scheme (Useful when running local host)
+            author_fqid = re.sub("https?",request.scheme,author_fqid)
+            # Calls the inbox directly if it is a local authors comment
+            _inbox_handle_comment_like(request,author_fqid,likejson)
+        else:
+            # Gets the comment if it was made by a remote author
+            print(re.match("https?://[^/]+",comment_id).group(0))
+            remotenode = IncomingNode.objects.get(url = re.match("https?://[^/]+",comment_id).group(0) + "/")
+            auth = (remotenode.username,remotenode.password)
+            commentInfo = requests.get(comment_id.rstrip("/"), auth=auth)
+            commentInfo.raise_for_status()
+            jsoncomment = json.loads(commentInfo.text)
+            author_fqid = jsoncomment["author"]["id"]
+            # Post the like to the inbox
+            print(author_fqid[:author_fqid.index("/api")] + "/")
+            post = requests.post(author_fqid + "/inbox",json = {"type": "like","author": authorInfo,"published":datetime.now().isoformat(),"id":"","object":comment_id}, auth=auth)
     return redirect(request.META.get('HTTP_REFERER', '/app/stream/'))
