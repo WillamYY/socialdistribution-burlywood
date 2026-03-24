@@ -20,6 +20,7 @@ from entries.models import Entry
 from interactions.models import Like, Comment
 from .serializers import AuthorSerializer, LikesSerializer, LikeSerializer, EntrySerializer, EntriesSerializer, CommentSerializer
 import json
+import re
 
 def _normalize_fqid_for_check(s):
     """Normalize FQID for comparison."""
@@ -489,7 +490,14 @@ def _inbox_handle_like(request, author_id, data=None):
     try:
         entry = Entry.objects.get(id=entry_id)
     except (Entry.DoesNotExist, ValueError):
-        return Response(status=404)
+        # Tries adding a like to comment as well
+        try:
+            response = _inbox_handle_comment_like(request, author_id, data=None)
+            # Raises value error if the comment couldn't be liked
+            if response.status_code >= 400:
+                raise ValueError
+        except:
+            return Response(status=404)
     if entry.visibility == "DELETED":
         return Response(status=404)
     author_data = data.get("author") or {}
@@ -499,11 +507,40 @@ def _inbox_handle_like(request, author_id, data=None):
     if Like.objects.filter(author=author_url, object=obj_url.rstrip("/")).exists():
         Like.objects.filter(author=author_url, object=obj_url.rstrip("/")).delete()
         return Response(status=204)
+    like_uuid = uuid.uuid4()
     like = Like(
         author=author_url,
         object=obj_url.rstrip("/"),
-        id=f"{request.build_absolute_uri('/')[:-1]}/likes/{uuid.uuid4()}",
-        uuid=uuid.uuid4(),
+        id=f"{request.build_absolute_uri('/')[:-1]}/likes/{like_uuid}",
+        uuid=like_uuid,
+    )
+    like.save()
+    return Response(LikeSerializer(like).data, status=201)
+
+def _inbox_handle_comment_like(request, author_id, data=None):
+    """Handle like: existing like logic."""
+    data = data or request.data or {}
+    obj_url = data.get("object")
+    if not obj_url:
+        return Response({"detail": "Missing object"}, status=400)
+    try:
+        comment = Comment.objects.get(id__endswith=re.match("/commented/([^/]+)"))
+    except (Comment.DoesNotExist, ValueError):
+        return Response(status=404)
+    author_data = data.get("author") or {}
+    author_url = (author_data.get("id") if isinstance(author_data, dict) else None) or ""
+    if not author_url:
+        return Response(status=400)
+    if Like.objects.filter(author=author_url, object=obj_url.rstrip("/")).exists():
+        Like.objects.filter(author=author_url, object=obj_url.rstrip("/")).delete()
+        return Response(status=204)
+    like_uuid = uuid.uuid4()
+
+    like = Like(
+        author=author_url,
+        object=obj_url.rstrip("/"),
+        id=f"{author_url.rstrip("/")}/liked/{like_uuid}",
+        uuid=like_uuid,
     )
     like.save()
     return Response(LikeSerializer(like).data, status=201)

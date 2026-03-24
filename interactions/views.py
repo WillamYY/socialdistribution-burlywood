@@ -154,7 +154,7 @@ def add_remote_comment(request, entry_id):
             "type": "comment",
             "author": author_info,
             "published": datetime.now().isoformat(),
-            "id": f"{request.build_absolute_uri('/')[:-1]}/api/authors/{author_id}/commented/{comment_uuid}",
+            "id": id,
             "comment": comment_text,
             "contentType": "text/plain",
             "object": remote_entry_url,
@@ -237,9 +237,14 @@ def add_remote_comment_like(request, comment_id):
         # Gets the author of a comment
         if host == request.get_host():
             print(comment_id)
-            author_fqid = Comment.objects.get(id__endswith = re.match("/commented/([^/]+)",comment_id).group(1)).author
+            print("THIS IS TRUE")
+            author_fqid = Comment.objects.get(id__endswith = re.search("/commented/([^/]+)",comment_id).group(1)).author
+            print(author_fqid)
             # Gets the json for the like
             json = {"type": "like","author": authorInfo,"published":datetime.now().isoformat(),"id":"","object":comment_id}
+            print(json)
+            # Replaces whatever the scheme of the author is with the current scheme (Useful when running local host)
+            author_fqid = re.sub("https?",request.scheme,author_fqid)
             # Calls the inbox directly if it is a local authors comment
             _inbox_handle_like(request,author_fqid,json)
         else:
