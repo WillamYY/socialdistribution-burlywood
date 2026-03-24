@@ -213,7 +213,6 @@ def add_remote_comment_like(request, comment_id):
         host = comment_id[:comment_id.index("api/")]
         remotenode = IncomingNode.objects.get(url = host)
         auth = (remotenode.username,remotenode.password)
-        print(auth)
         commentInfo = requests.get(comment_id.rstrip("/"), auth=auth)
         commentInfo.raise_for_status()
         jsoncomment = json.loads(commentInfo.text)
