@@ -592,7 +592,7 @@ def get_entry(request, entry_id):
     comments = []
     # Gets all the comments (Have to fetch each one individually :( )
     for comment in entry.fetched_comments:
-        comment_id = comment.get("id")
+        comment_id = comment.id
         comment_part_host = re.search("https?://([^/]+)",comment_id).group(1)
         # If it is our comment get it
         if comment_part_host == request.get_host():
@@ -621,9 +621,8 @@ def get_entry(request, entry_id):
                 comments.append(comment_json)
             except:
                 pass
-        print(comment_json)
     # Replaces the comments in the entry with the comments pulled from their respective databases
-    entry["comments"]["src"] = comments
+    entry.fetched_comments = comments
 
     # Check the visibility for the logged-in user
     allowed = check_visibility(entry, logged_in_id)
