@@ -19,6 +19,7 @@ from core.models import Author, AuthorRequest, FollowRequest, RemoteFollower, Re
 from entries.models import Entry
 from interactions.models import Like, Comment
 from .serializers import AuthorSerializer, LikesSerializer, LikeSerializer, EntrySerializer, EntriesSerializer, CommentSerializer
+import json
 
 def _normalize_fqid_for_check(s):
     """Normalize FQID for comparison."""
@@ -463,7 +464,7 @@ def _inbox_handle_comment(request, author_id, data=None):
     base = request.build_absolute_uri("/")[:-1]
     entry_fqid = f"{base}/api/authors/{author_id}/entries/{entry.id}"
     Comment.objects.create(
-        id= comment_text.get("id") or f"{base}/api/authors/{author_id}/commented/{uuid.uuid4()}",
+        id= data.get("id") or f"{base}/api/authors/{author_id}/commented/{uuid.uuid4()}",
         author=author_url,
         entry=entry_fqid,
         comment=comment_text,
