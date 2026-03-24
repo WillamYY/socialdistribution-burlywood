@@ -91,7 +91,7 @@ def add_comment(request, entry_id):
             author_fqid = f"{base}/api/authors/{author_id}"
 
             Comment.objects.create(
-                id=f"{request.build_absolute_uri('/')[:-1]}/comments/{uuid.uuid4()}",
+                id=f"{request.build_absolute_uri('/')[:-1]}/api/authors/{author_id}/commented/{uuid.uuid4()}",
                 author=author_fqid,
                 entry=entry_fqid,
                 comment=comment_text,
@@ -151,7 +151,7 @@ def add_remote_comment(request, entry_id):
             "type": "comment",
             "author": author_info,
             "published": datetime.now().isoformat(),
-            "id": "",
+            "id": f"{request.build_absolute_uri('/')[:-1]}/api/authors/{author_id}/commented/{uuid.uuid4()}",
             "comment": comment_text,
             "contentType": "text/plain",
             "object": remote_entry_url,
@@ -201,5 +201,44 @@ def add_comment_like(request, comment_id):
 
         if not created:
             like.delete()
+
+    return redirect(request.META.get('HTTP_REFERER', '/app/stream/'))
+
+def add_remote_comment_like(request, comment_id):
+    if request.method == "POST":
+        author_id = request.session.get("author_id")
+        if not author_id:
+            return redirect('/app/login/')
+        # Gets the comment info and ensures its valid
+        host = comment_id[:comment_id.index("api/")]
+        remotenode = IncomingNode.objects.get(url = host)
+        auth = (remotenode.username,remotenode.password)
+        print(auth)
+        commentInfo = requests.get(comment_id.rstrip("/"), auth=auth)
+        commentInfo.raise_for_status()
+        jsoncomment = json.loads(commentInfo.text)
+        foreignAuthor = jsoncomment["author"]["id"]
+        # Get author making request
+        if "https" not in comment_id:
+            comment_id = comment_id.replace("http","https")
+        author = get_object_or_404(Author, pk = author_id)
+        # Print the likes
+        print(jsoncomment["likes"]["count"])
+        host = (author.host or "").rstrip("/")
+        if not host.endswith("/api"):
+            host = f"{host}/api"
+
+        authorInfo = {
+            "type": "author",
+            "id": f"{host}/authors/{author.id}",
+            "host": host,
+            "displayName": author.name or author.username,
+            "github": author.github,
+            "profileImage": author.picture_url,
+            "web": author.web,
+        }
+        # Post the like to the inbox
+        credentials = get_object_or_404(IncomingNode, url = foreignAuthor[:foreignAuthor.index("/api")] + "/")
+        post = requests.post(foreignAuthor + "/inbox",json = {"type": "like","author": authorInfo,"published":datetime.now().isoformat(),"id":"","object":comment_id}, auth=(credentials.username, credentials.password))
 
     return redirect(request.META.get('HTTP_REFERER', '/app/stream/'))
