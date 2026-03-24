@@ -358,7 +358,10 @@ def ApiInbox(request, author_id):
             return _inbox_handle_comment(request, author_id, data)
         if obj_type == "entry":
             return _inbox_handle_entry(request, author_id, data)
-        return _inbox_handle_like(request, author_id, data)
+        if obj_type == "like":
+            if "commented" in data.get("object"):
+                return _inbox_handle_comment_like(request, author_id, data)
+            return _inbox_handle_like(request, author_id, data)
     except Exception as e:
         logger.exception("Inbox error: %s", e)
         return Response(
@@ -490,14 +493,7 @@ def _inbox_handle_like(request, author_id, data=None):
     try:
         entry = Entry.objects.get(id=entry_id)
     except (Entry.DoesNotExist, ValueError):
-        # Tries adding a like to comment as well
-        try:
-            response = _inbox_handle_comment_like(request, author_id, data=None)
-            # Raises value error if the comment couldn't be liked
-            if response.status_code >= 400:
-                raise ValueError
-        except:
-            return Response(status=404)
+        return Response(status=404)
     if entry.visibility == "DELETED":
         return Response(status=404)
     author_data = data.get("author") or {}
@@ -524,7 +520,7 @@ def _inbox_handle_comment_like(request, author_id, data=None):
     if not obj_url:
         return Response({"detail": "Missing object"}, status=400)
     try:
-        comment = Comment.objects.get(id__endswith=re.match("/commented/([^/]+)",obj_url).group(1))
+        comment = Comment.objects.get(id__endswith=re.search("/commented/([^/]+)",obj_url).group(1))
     except (Comment.DoesNotExist, ValueError):
         return Response(status=404)
     author_data = data.get("author") or {}
