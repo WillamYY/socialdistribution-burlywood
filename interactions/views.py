@@ -29,7 +29,7 @@ def add_like(request, entry_id):
         like, created = Like.objects.get_or_create(
             author=author_fqid,
             object=entry_fqid,
-            defaults={'id': f"{request.build_absolute_uri('/')[:-1]}/likes/{likeId}","uuid":likeId}
+            defaults={'id': f"{request.build_absolute_uri('/')[:-1]}/liked/{likeId}","uuid":likeId}
         )
 
         if not created:
@@ -241,12 +241,11 @@ def add_remote_comment_like(request, comment_id):
             author_fqid = Comment.objects.get(id__endswith = re.search("/commented/([^/]+)",comment_id).group(1)).author
             print(author_fqid)
             # Gets the json for the like
-            json = {"type": "like","author": authorInfo,"published":datetime.now().isoformat(),"id":"","object":comment_id}
-            print(json)
+            likejson = {"type": "like","author": authorInfo,"published":datetime.now().isoformat(),"id":"","object":comment_id}
             # Replaces whatever the scheme of the author is with the current scheme (Useful when running local host)
             author_fqid = re.sub("https?",request.scheme,author_fqid)
             # Calls the inbox directly if it is a local authors comment
-            _inbox_handle_comment_like(request,author_fqid,json)
+            _inbox_handle_comment_like(request,author_fqid,likejson)
         else:
             # Gets the comment if it was made by a remote author
             print(re.match("https?://[^/]+",comment_id).group(0))
