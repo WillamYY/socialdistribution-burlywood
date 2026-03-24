@@ -1077,3 +1077,13 @@ def ApiBrowsePublicEntries(request):
         "count": len(visible_entries),
         "src": serializer.data
     })
+
+@api_view(['GET'])
+def ApiCommented(request,author_id,comment_id):
+    # Gets the authors fqid
+    author = get_object_or_404(Author,id = author_id)
+    author_fqid = author.host + "/authors/" + author.id
+    # Gets the comment
+    comment = get_object_or_404(Comment,id = author_fqid + "/commented/" + comment_id)
+    comment_serializer = CommentSerializer(comment)
+    return comment_serializer.data

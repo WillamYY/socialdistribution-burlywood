@@ -249,13 +249,14 @@ def add_remote_comment_like(request, comment_id):
             _inbox_handle_comment_like(request,author_fqid,json)
         else:
             # Gets the comment if it was made by a remote author
-            remotenode = IncomingNode.objects.get(url = host)
+            print(re.match("https?://[^/]+",comment_id).group(0))
+            remotenode = IncomingNode.objects.get(url = re.match("https?://[^/]+",comment_id).group(0) + "/")
             auth = (remotenode.username,remotenode.password)
             commentInfo = requests.get(comment_id.rstrip("/"), auth=auth)
             commentInfo.raise_for_status()
             jsoncomment = json.loads(commentInfo.text)
             author_fqid = jsoncomment["author"]["id"]
             # Post the like to the inbox
-            credentials = get_object_or_404(IncomingNode, url = author_fqid[:author_fqid.index("/api")] + "/")
-            post = requests.post(author_fqid + "/inbox",json = {"type": "like","author": authorInfo,"published":datetime.now().isoformat(),"id":"","object":comment_id}, auth=(credentials.username, credentials.password))
+            print(author_fqid[:author_fqid.index("/api")] + "/")
+            post = requests.post(author_fqid + "/inbox",json = {"type": "like","author": authorInfo,"published":datetime.now().isoformat(),"id":"","object":comment_id}, auth=auth)
     return redirect(request.META.get('HTTP_REFERER', '/app/stream/'))
