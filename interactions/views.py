@@ -10,7 +10,7 @@ from datetime import datetime
 import json
 import re
 from django.http import JsonResponse
-from api.views import _inbox_handle_like
+from api.views import _inbox_handle_comment_like
 
 def add_like(request, entry_id):
     """Toggles a Like object using the Entry's FQID (URL)."""
@@ -246,7 +246,7 @@ def add_remote_comment_like(request, comment_id):
             # Replaces whatever the scheme of the author is with the current scheme (Useful when running local host)
             author_fqid = re.sub("https?",request.scheme,author_fqid)
             # Calls the inbox directly if it is a local authors comment
-            _inbox_handle_like(request,author_fqid,json)
+            _inbox_handle_comment_like(request,author_fqid,json)
         else:
             # Gets the comment if it was made by a remote author
             remotenode = IncomingNode.objects.get(url = host)

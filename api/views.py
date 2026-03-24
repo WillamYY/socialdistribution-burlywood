@@ -524,7 +524,7 @@ def _inbox_handle_comment_like(request, author_id, data=None):
     if not obj_url:
         return Response({"detail": "Missing object"}, status=400)
     try:
-        comment = Comment.objects.get(id__endswith=re.match("/commented/([^/]+)"))
+        comment = Comment.objects.get(id__endswith=re.match("/commented/([^/]+)",obj_url).group(1))
     except (Comment.DoesNotExist, ValueError):
         return Response(status=404)
     author_data = data.get("author") or {}
