@@ -691,7 +691,6 @@ def RemoteEntry(request,fqid):
                 comments.append(comment_json)
             except:
                 pass
-        print(comment_json)
     # Replaces the comments in the entry with the comments pulled from their respective databases
     entry["comments"]["src"] = comments
     # Image api url
