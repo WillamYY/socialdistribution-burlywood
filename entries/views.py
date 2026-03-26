@@ -587,7 +587,7 @@ def get_entry(request, entry_id):
 
     # Base Entry Interactions
     entry.like_count = Like.objects.filter(object=entry_url).count()
-    entry.fetched_comments = Comment.objects.filter(entry__endswith=entry_id).order_by('published')
+    entry.fetched_comments = Comment.objects.filter(entry__endswith=entry.id).order_by('published')
 
     # Check if the logged-in user liked the this entry
     if logged_in_id:
