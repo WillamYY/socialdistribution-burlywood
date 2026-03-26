@@ -56,7 +56,6 @@ def add_remote_like(request, entry_id):
             entry_id = entry_id.replace("http","https")
         author = get_object_or_404(Author, pk = author_id)
         # Print the likes
-        print(jsonEntry["likes"]["count"])
         host = (author.host or "").rstrip("/")
         if not host.endswith("/api"):
             host = f"{host}/api"
@@ -80,6 +79,7 @@ def add_remote_like(request, entry_id):
             like.delete()
         # Post the like to the inbox
         credentials = get_object_or_404(IncomingNode, url = foreignAuthor[:foreignAuthor.index("/api")] + "/")
+        print(foreignAuthor + "/inbox")
         post = requests.post(foreignAuthor + "/inbox",json = {"type": "like","author": authorInfo,"published":datetime.now().isoformat(),"id":f"{request.build_absolute_uri('/')[:-1]}/api/authors/{author_id}/liked/{like_uuid}","object":entry_id}, auth=(credentials.username, credentials.password))
 
     return redirect(request.META.get('HTTP_REFERER', '/app/stream/'))

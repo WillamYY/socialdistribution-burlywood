@@ -575,6 +575,7 @@ def follow_remote_author(request, fqid):
             payload = {"type": "follow", "actor": actor_info, "object": object_info}
             logger.info("Sending follow to inbox url=%s actor=%s object=%s", inbox_url, actor_info.get("id"), normalized)
             credentials = get_object_or_404(IncomingNode, url = inbox_url[:inbox_url.index("/api")] + "/")
+            print(inbox_url)
             resp = requests.post(
                 inbox_url,
                 json=payload,
@@ -733,7 +734,11 @@ def RemoteProfileDisplay(request, fqid):
         if not clean_id:
             continue
         entry["clean_id"] = clean_id
-        remote_comments = ((entry.get("comments") or {}).get("src")) or []
+        # HARDCODED SOLUTION FOR fuchsia
+        if base_host == "https://socialdist-fuchsia-oabbasi-feef8b354ae5.herokuapp.com":
+            remote_comments = entry.get("commentsSrc") or {}
+        else:
+            remote_comments = ((entry.get("comments") or {}).get("src")) or []
 
         # Fix comment author: remote may return entry author instead of commenter.
         # If comment author id matches our user, use our local display name.
@@ -773,7 +778,11 @@ def RemoteProfileDisplay(request, fqid):
 
         entry["liked_by_user"] = remote_user_liked
 
-        entry["like_count"] = entry["likes"]["count"]
+        # HARDCODED SOLUTION FOR fuchsia
+        if base_host == "https://socialdist-fuchsia-oabbasi-feef8b354ae5.herokuapp.com":
+            entry["like_count"]  = entry.get("count") or 0
+        else:
+            entry["like_count"] = entry["likes"]["count"]
         public_entries.append(entry)
 
     is_following = False

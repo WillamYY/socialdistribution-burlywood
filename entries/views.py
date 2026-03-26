@@ -644,6 +644,10 @@ def get_entry(request, entry_id):
 Handles displaying the page for remote entries
 """
 def RemoteEntry(request,fqid):
+    # Handles hardcoded solutions variables
+    fuschia = False
+    if re.match("https?://[^/]+","https://socialdist-fuchsia-oabbasi-feef8b354ae5.herokuapp.com"):
+        fuschia = True
     # Gets where the host ends
     index = fqid.index("/api/")
     logged_in_id = request.session.get("author_id")
@@ -662,8 +666,14 @@ def RemoteEntry(request,fqid):
             allowed_visibility.append("FRIENDS")
     allowed = entry.get("visibility") in allowed_visibility
     comments = []
+    # HARDCODE SOLUTION FOR fuschia
+    if fuschia:
+        entry["comments"] = {}
+        entry["comments"]["src"] = entry.get("commentsSrc",{})
+    # END HARDCODED SOLUTION
+    entry_comments = entry.get("comments",{}).get("src",{})
     # Gets all the comments (Have to fetch each one individually :( )
-    for comment in entry.get("comments",{}).get("src",{}):
+    for comment in entry_comments:
         comment_id = comment.get("id")
         comment_part_host = re.search("https?://([^/]+)",comment_id).group(1)
         # If it is our comment get it
@@ -699,7 +709,11 @@ def RemoteEntry(request,fqid):
     image_api_url = None
     if ";base64" in entry.get("contentType") and "image" in entry.get("contentType"):
         image_api_url = fqid[:index] + "/api/entries/" + fqid + "/image"
-    entry["like_count"] = entry.get("likes").get("count")
+    # HARCODED SOLUTION FOR fuschia
+    if fuschia:
+        entry["like_count"] = entry.get("count",0)
+    else:
+        entry["like_count"] = entry.get("likes").get("count")
     entry["fetched_comments"] = entry.get("comments").get("src")
 
     return_url = request.session.get('last_feed_url', reverse('stream'))
