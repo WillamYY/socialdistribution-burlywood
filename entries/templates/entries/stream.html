@@ -59,7 +59,7 @@
                 </div>
                 {% endif %}
 
-                <div class="stat-item clickable" data-url="{% if entry.is_remote %}{{ entry.remote_web|default:'' }}{% else %}{% url 'get_entry' entry.id %}{% endif %}"{% if entry.is_remote %} data-remote="true"{% endif %}>
+                <div class="stat-item clickable" data-url="{% if entry.is_remote %}{% url 'remote_entry' entry.id %}{% else %}{% url 'get_entry' entry.id %}{% endif %}">
                     <span class="icon">💬</span>
                     <span class="count">
                         {% if entry.comment_count != None %}{{ entry.comment_count }}{% else %}{{ entry.fetched_comments|length|default:0 }}{% endif %}

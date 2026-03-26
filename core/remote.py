@@ -9,6 +9,7 @@ from types import SimpleNamespace
 import logging
 from api.serializers import EntrySerializer
 from core.models import RemoteFollow, RemoteFollower, EntryDelivery, IncomingNode
+from interactions.models import Like
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +72,7 @@ def fetch_remote_public_entries(following_remote_fqids=None, friends_remote_fqid
     friends_remote_fqids = friends_remote_fqids or []
     following_normalized = {_normalize_fqid(f) for f in following_remote_fqids}
     friends_normalized = {_normalize_fqid(f) for f in friends_remote_fqids}
+    requested_by_fqid_norm = _normalize_fqid(requested_by_fqid) if requested_by_fqid else ""
 
     all_entries = []
     seen_ids = set()
@@ -184,6 +186,17 @@ def fetch_remote_public_entries(following_remote_fqids=None, friends_remote_fqid
                         web_raw = item.get("web") or eid_raw or eid
                         remote_web = _absolute_remote_url(node_base, str(web_raw))
 
+                        # If we're logged in, reflect local like state in `liked_by_user`.
+                        # This allows the Stream UI to turn the heart "red/filled" for remote entries.
+                        # Normalize for comparisons (treat http/https as equivalent).
+                        object_url_norm = _normalize_fqid(eid)
+                        liked_by_user = False
+                        if requested_by_fqid_norm:
+                            liked_by_user = Like.objects.filter(
+                                author=requested_by_fqid_norm,
+                                object=object_url_norm,
+                            ).exists()
+
                         entry = SimpleNamespace(
                             id=eid,
                             title=item.get("title", ""),
@@ -200,7 +213,7 @@ def fetch_remote_public_entries(following_remote_fqids=None, friends_remote_fqid
                             remote_web=remote_web,
                             like_count=like_count,
                             comment_count=comment_count,
-                            liked_by_user=False,
+                            liked_by_user=liked_by_user,
                         )
                         all_entries.append(entry)
                         added_for_author += 1

@@ -274,7 +274,7 @@ def ProfileDisplay(request, id):
     user_fqid = None
     if logged_in_id:
         user_fqid = f"{request.build_absolute_uri('/')[:-1]}/api/authors/{logged_in_id}"
-    public_entries = Entry.objects.filter(author=author, visibility="PUBLIC")
+    public_entries = Entry.objects.filter(author=author, visibility="PUBLIC").order_by("-published")
     base_url = request.build_absolute_uri('/')[:-1]
     for entry in public_entries:
         entry_url = f"{base_url}/api/authors/{entry.author.id}/entries/{entry.id}"
@@ -784,6 +784,9 @@ def RemoteProfileDisplay(request, fqid):
         else:
             entry["like_count"] = entry["likes"]["count"]
         public_entries.append(entry)
+
+    # Ensure newest-first ordering even if the remote node doesn't sort.
+    public_entries.sort(key=lambda e: str(e.get("published") or ""), reverse=True)
 
     is_following = False
     if logged_in_id and normalized_fqid:
