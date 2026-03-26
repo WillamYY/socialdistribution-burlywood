@@ -42,6 +42,9 @@ def add_remote_like(request, entry_id):
         author_id = request.session.get("author_id")
         if not author_id:
             return redirect('/app/login/')
+
+        base = request.build_absolute_uri('/')[:-1]
+        author_fqid = f"{base}/api/authors/{author_id}"
         # Gets the entry info and ensures its valid
         host = entry_id[:entry_id.index("api/")]
         remotenode = IncomingNode.objects.get(url = host)
@@ -51,9 +54,12 @@ def add_remote_like(request, entry_id):
         entryInfo.raise_for_status()
         jsonEntry = json.loads(entryInfo.text)
         foreignAuthor = jsonEntry["author"]["id"]
+        # Normalize entry FQID (scheme + trailing slash).
+        if entry_id.startswith("http://"):
+            entry_id = "https" + entry_id[len("http://"):]
+        entry_object = str(entry_id).rstrip("/")
+
         # Get author making request
-        if "https" not in entry_id:
-            entry_id = entry_id.replace("http","https")
         author = get_object_or_404(Author, pk = author_id)
         # Print the likes
         print(jsonEntry["likes"]["count"])
@@ -72,7 +78,33 @@ def add_remote_like(request, entry_id):
         }
         # Post the like to the inbox
         credentials = get_object_or_404(IncomingNode, url = foreignAuthor[:foreignAuthor.index("/api")] + "/")
-        post = requests.post(foreignAuthor + "/inbox",json = {"type": "like","author": authorInfo,"published":datetime.now().isoformat(),"id":"","object":entry_id}, auth=(credentials.username, credentials.password))
+        post = requests.post(
+            foreignAuthor + "/inbox",
+            json={
+                "type": "like",
+                "author": authorInfo,
+                "published": datetime.now().isoformat(),
+                "id": "",
+                "object": entry_object,
+            },
+            auth=(credentials.username, credentials.password),
+            timeout=15,
+        )
+
+        # If remote accepted the like/unlike, sync our local Like state too.
+        # Our API inbox returns:
+        # - 201 when it *creates* a like
+        # - 204 when it *deletes* (unlikes)
+        if post.status_code in (200, 201, 202, 204):
+            if post.status_code == 204:
+                Like.objects.filter(author=author_fqid, object=entry_object).delete()
+            else:
+                like_uuid = uuid.uuid4()
+                Like.objects.get_or_create(
+                    author=author_fqid,
+                    object=entry_object,
+                    defaults={"id": f"{base}/liked/{like_uuid}", "uuid": like_uuid},
+                )
 
     return redirect(request.META.get('HTTP_REFERER', '/app/stream/'))
 
