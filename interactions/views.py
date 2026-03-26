@@ -2,6 +2,7 @@ from email.mime import base
 from urllib import request
 import uuid
 from django.shortcuts import redirect, get_object_or_404
+from django.contrib import messages
 from .models import Like, Comment
 from entries.models import Entry
 from core.models import Author, IncomingNode
@@ -45,25 +46,36 @@ def add_remote_like(request, entry_id):
 
         base = request.build_absolute_uri('/')[:-1]
         author_fqid = f"{base}/api/authors/{author_id}"
-        # Gets the entry info and ensures its valid
-        host = entry_id[:entry_id.index("api/")]
-        remotenode = IncomingNode.objects.get(url = host)
-        auth = (remotenode.username,remotenode.password)
-        print(auth)
-        entryInfo = requests.get(entry_id.rstrip("/"), auth=auth)
-        entryInfo.raise_for_status()
-        jsonEntry = json.loads(entryInfo.text)
-        foreignAuthor = jsonEntry["author"]["id"]
-        # Normalize entry FQID (scheme + trailing slash).
-        if entry_id.startswith("http://"):
-            entry_id = "https" + entry_id[len("http://"):]
-        entry_object = str(entry_id).rstrip("/")
+        # Parse the remote host + remote author id from the entry FQID:
+        #   https://remote-host/api/authors/<author_id>/entries/<entry_uuid>
+        # Then POST directly to <remote-author>/inbox.
+        remote_entry_url = str(entry_id or "").rstrip("/")
+        if not remote_entry_url:
+            return redirect(request.META.get('HTTP_REFERER', '/app/stream/'))
+        if remote_entry_url.startswith("http://"):
+            remote_entry_url = "https" + remote_entry_url[len("http://"):]
+
+        m = re.match(r"^(https?://[^/]+)/api/authors/([^/]+)/entries/([^/]+)$", remote_entry_url)
+        if not m:
+            messages.error(
+                request,
+                "Invalid remote entry URL for like.",
+                extra_tags="follow",
+            )
+            return redirect(request.META.get('HTTP_REFERER', '/app/stream/'))
+
+        host_base = m.group(1).rstrip("/")
+        remote_author_num_id = m.group(2)
+        foreignAuthor = f"{host_base}/api/authors/{remote_author_num_id}"
+        inbox_url = f"{foreignAuthor.rstrip('/')}/inbox"
+        entry_object = remote_entry_url
 
         # Get author making request
         author = get_object_or_404(Author, pk = author_id)
-        # Print the likes
-        print(jsonEntry["likes"]["count"])
         host = (author.host or "").rstrip("/")
+        # Fallback: ensure we have a usable local base host for author FQID.
+        if not host:
+            host = base
         if not host.endswith("/api"):
             host = f"{host}/api"
 
@@ -77,9 +89,16 @@ def add_remote_like(request, entry_id):
             "web": author.web,
         }
         # Post the like to the inbox
-        credentials = get_object_or_404(IncomingNode, url = foreignAuthor[:foreignAuthor.index("/api")] + "/")
+        credentials = IncomingNode.objects.filter(url__in=[host_base, host_base + "/"]).first()
+        if not credentials:
+            messages.error(
+                request,
+                "Could not find the remote node configuration to like this entry.",
+                extra_tags="follow",
+            )
+            return redirect(request.META.get('HTTP_REFERER', '/app/stream/'))
         post = requests.post(
-            foreignAuthor + "/inbox",
+            inbox_url,
             json={
                 "type": "like",
                 "author": authorInfo,
@@ -145,8 +164,12 @@ def add_remote_comment(request, entry_id):
             return redirect(request.META.get('HTTP_REFERER', '/app/stream/'))
 
         # normalize remote entry url
-        remote_entry_url = entry_id.rstrip("/")
-        if "https" not in remote_entry_url:
+        remote_entry_url = str(entry_id or "").rstrip("/")
+        if not remote_entry_url:
+            return redirect(request.META.get('HTTP_REFERER', '/app/stream/'))
+        if remote_entry_url.startswith("http://"):
+            remote_entry_url = "https" + remote_entry_url[len("http://"):]
+        elif "https" not in remote_entry_url:
             remote_entry_url = remote_entry_url.replace("http", "https")
 
         author = get_object_or_404(Author, pk=author_id)
@@ -154,21 +177,20 @@ def add_remote_comment(request, entry_id):
         # keep a local copy so your side can still display it
         base = request.build_absolute_uri('/')[:-1].replace("http://", "https://")
         local_author_fqid = f"{base}/api/authors/{author.id}"
-        try:
-            # get remote entry first, same pattern as remote like
-            credentials = get_object_or_404(IncomingNode, url = remote_entry_url[:remote_entry_url.index("/api")] + "/")
-            entry_resp = requests.get(
-                remote_entry_url,
-                headers={"Accept": "application/json"},
-                timeout=10,
-                auth=(credentials.username, credentials.password)
+        # Parse the remote host + remote author id from the entry FQID.
+        m = re.match(r"^(https?://[^/]+)/api/authors/([^/]+)/entries/([^/]+)$", remote_entry_url)
+        if not m:
+            messages.error(
+                request,
+                "Invalid remote entry URL for comment.",
+                extra_tags="follow",
             )
-            entry_resp.raise_for_status()
-            entry_data = entry_resp.json()
-            foreign_author = entry_data["author"]["id"]
-        except Exception as e:
-            print("REMOTE COMMENT ENTRY FETCH ERROR:", str(e))
             return redirect(request.META.get('HTTP_REFERER', '/app/stream/'))
+
+        remote_host_base = m.group(1).rstrip("/")
+        remote_author_num_id = m.group(2)
+        foreign_author = f"{remote_host_base}/api/authors/{remote_author_num_id}"
+        inbox_url = f"{foreign_author.rstrip('/')}/inbox"
 
         # build author info in the same style as add_remote_like
         author_info = {
@@ -199,9 +221,16 @@ def add_remote_comment(request, entry_id):
         print("REMOTE COMMENT PAYLOAD AUTHOR:", payload["author"])
         print("REMOTE COMMENT FULL PAYLOAD:", payload)
         try:
-            credentials = get_object_or_404(IncomingNode, url = foreign_author[:foreign_author.index("/api")] + "/")
+            credentials = IncomingNode.objects.filter(url__in=[remote_host_base, remote_host_base + "/"]).first()
+            if not credentials:
+                messages.error(
+                    request,
+                    "Could not find the remote node configuration to send this comment.",
+                    extra_tags="follow",
+                )
+                return redirect(request.META.get('HTTP_REFERER', '/app/stream/'))
             resp = requests.post(
-                foreign_author.rstrip("/") + "/inbox",
+                inbox_url,
                 json=payload,
                 timeout=10,
                 auth=(credentials.username, credentials.password)
