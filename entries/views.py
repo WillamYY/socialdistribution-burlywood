@@ -18,6 +18,7 @@ from core.models import RemoteFollow, RemoteFollower, IncomingNode
 import requests
 import json
 from api.serializers import CommentSerializer
+from django.utils import timezone
 
 
 logger = logging.getLogger(__name__)
@@ -246,6 +247,9 @@ def edit_entry(request, entry_id):
             return render(request, "entries/edit_entry.html", {"entry": entry, "admin_hosted_images": get_admin_hosted_images(request)})
         
         # Commit the updates to the database
+        # `published` is used for "most recent first" ordering, so treat edits as
+        # a new "publish" time even though the Entry model uses `auto_now_add`.
+        entry.published = timezone.now()
         entry.save()
         federate_entry_create_or_update(entry, request)
         return redirect("view_my_entries")

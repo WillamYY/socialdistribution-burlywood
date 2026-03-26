@@ -10,6 +10,7 @@ import requests
 from urllib.parse import unquote
 from django.http import HttpResponse, HttpResponseForbidden
 from django.shortcuts import render, get_object_or_404
+from django.utils import timezone
 from django.urls import path
 from rest_framework.decorators import api_view, authentication_classes, permission_classes
 from rest_framework.response import Response
@@ -776,6 +777,9 @@ def ApiEntry(request, author_id, entry_id):
         entry.contentType = request.data.get("contentType", entry.contentType)
         entry.content = request.data.get("content", entry.content)
         entry.visibility = request.data.get("visibility", entry.visibility)
+        # `published` is used for "most recent first" ordering, so treat remote
+        # updates/edits as a new publish time.
+        entry.published = timezone.now()
         entry.save()
 
         # Notify remote nodes
