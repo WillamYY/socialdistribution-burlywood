@@ -597,6 +597,8 @@ def get_entry(request, entry_id):
         entry.liked_by_user = False
 
     comments = []
+    print(f"fetched_comments: {entry.fetched_comments}", flush=True)
+    print(f"fetched_comments count: {len(entry.fetched_comments)}", flush=True)
     # Gets all the comments (Have to fetch each one individually :( )
     for comment in entry.fetched_comments:
         comment_id = comment.id
