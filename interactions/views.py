@@ -70,9 +70,17 @@ def add_remote_like(request, entry_id):
             "profileImage": author.picture_url,
             "web": author.web,
         }
+        like_uuid = uuid.uuid4()
+        like, created = Like.objects.get_or_create(
+            author=f"{host}/authors/{author.id}",
+            object=entry_id,
+            defaults={'id': f"{request.build_absolute_uri('/')[:-1]}/liked/{like_uuid}","uuid":like_uuid}
+        )
+        if not created:
+            like.delete()
         # Post the like to the inbox
         credentials = get_object_or_404(IncomingNode, url = foreignAuthor[:foreignAuthor.index("/api")] + "/")
-        post = requests.post(foreignAuthor + "/inbox",json = {"type": "like","author": authorInfo,"published":datetime.now().isoformat(),"id":"","object":entry_id}, auth=(credentials.username, credentials.password))
+        post = requests.post(foreignAuthor + "/inbox",json = {"type": "like","author": authorInfo,"published":datetime.now().isoformat(),"id":f"{request.build_absolute_uri('/')[:-1]}/liked/{like_uuid}","object":entry_id}, auth=(credentials.username, credentials.password))
 
     return redirect(request.META.get('HTTP_REFERER', '/app/stream/'))
 
