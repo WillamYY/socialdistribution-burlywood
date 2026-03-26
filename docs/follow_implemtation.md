@@ -22,7 +22,7 @@ This node supports full follow relationships with remote authors across differen
 
 | Model | Purpose |
 |-------|---------|
-| **RemoteFollow** | Local author following a remote author. `follower` (local) → `followed_fqid` (remote author URL). |
+| **RemoteFollow** | Local author following a remote author. `follower` (local) → `followed_fqid` (remote author URL)|
 | **RemoteFollowRequest** | Pending follow request from a remote actor. `actor_fqid`, `actor_display_name`, `target` (local author). |
 | **RemoteFollower** | Approved remote follower. `actor_fqid` follows `target` (local author). |
 
