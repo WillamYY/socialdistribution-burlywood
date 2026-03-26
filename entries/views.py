@@ -653,7 +653,7 @@ Handles displaying the page for remote entries
 def RemoteEntry(request,fqid):
     # Handles hardcoded solutions variables
     fuschia = False
-    if re.match("https?://https://socialdist-fuchsia-oabbasi-feef8b354ae5.herokuapp.com",fqid):
+    if re.match("https?://socialdist-fuchsia-oabbasi-feef8b354ae5.herokuapp.com",fqid):
         fuschia = True
     # Gets where the host ends
     index = fqid.index("/api/")
