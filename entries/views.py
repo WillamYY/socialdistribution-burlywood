@@ -597,8 +597,6 @@ def get_entry(request, entry_id):
         entry.liked_by_user = False
 
     comments = []
-    print(f"fetched_comments: {entry.fetched_comments}", flush=True)
-    print(f"fetched_comments count: {len(entry.fetched_comments)}", flush=True)
     # Gets all the comments (Have to fetch each one individually :( )
     for comment in entry.fetched_comments:
         comment_id = comment.id
@@ -617,17 +615,10 @@ def get_entry(request, entry_id):
         else:
             # Tries to get the comment info (Passes if the comment is faulty or we don't have the host)
             try:
-                print(1,flush=True)
                 comment_full_host = re.search("https?://[^/]+",comment_id).group(0)
-                print(2,flush=True)
                 comment_node = IncomingNode.objects.get(url = comment_full_host + "/")
-                print(3,flush=True)
                 comment_credentials = (comment_node.username,comment_node.password)
-                print(4,flush=True)
-                print(comment_id,flush=True)
                 comment_info = requests.get(comment_id,auth = comment_credentials)
-                print(5,flush=True)
-                print(comment_info.status_code,flush=True)
                 # If we failed to get the comment raise an error
                 if comment_info.status_code >= 400:
                     raise ConnectionError
