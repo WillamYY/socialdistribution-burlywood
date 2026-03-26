@@ -945,7 +945,7 @@ class CommentApiTest(TestCase):
     Tests for all comment-related API endpoints.
     """
     def setUp(self):
-        self.author = Author.objects.create(name="Tester")
+        self.author = Author.objects.create(name="Tester",host = "/api")
 
         self.entry = Entry.objects.create(
             author=self.author,
@@ -955,6 +955,12 @@ class CommentApiTest(TestCase):
         )
 
         self.entry_url = f"http://testserver/api/authors/{self.author.id}/entries/{self.entry.id}/"
+
+        OutgoingNode.objects.create(url = "test", username = "test", password = "test")
+        encoded_creds = base64.b64encode("test:test".encode("utf-8")).decode("ascii")
+        self.header = {
+            "Authorization": f"Basic {encoded_creds}"
+        }
 
     """
     As an author, I want to comment on entries that I can access,
@@ -1031,6 +1037,23 @@ class CommentApiTest(TestCase):
         )
 
         self.assertEqual(response.status_code, 404)
+    
+    """
+    Test Commented API
+    """
+    def test_commented_api(self):
+        cuuid = uuid.uuid4()
+        id = reverse("api:ApiCommented",kwargs={"author_id": self.author.id, "comment_id": cuuid})
+        comment = Comment.objects.create(
+            id=id,
+            author="http://testserver/authors/1",
+            entry=self.entry_url,
+            comment="Hello"
+        )
+        response = self.client.get(id,headers = self.header)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["id"],comment.id)
+
 
 class VisibilityAPITest(TestCase):
     """
