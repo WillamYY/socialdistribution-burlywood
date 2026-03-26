@@ -2,7 +2,7 @@
 
 ## Overview
 
-This node supports full follow relationships with remote authors across different servers. A local author can follow remote authors, and remote authors can follow local authors. Follow relationships use the ActivityPub-style inbox protocol: **Follow** requests are sent to the remote author's inbox, and **Accept** (or rejection) is returned via the requester's inbox.
+This node supports full follow relationships with remote authors across different servers. A local author can follow remote authors, and remote authors can follow local authors. Follow relationships use the ActivityPub-style inbox protocol: **Follow** requests are sent to the remote author's inbox, and **Accept** (or rejection) is returned via the requester's inbox
 
 ---
 
