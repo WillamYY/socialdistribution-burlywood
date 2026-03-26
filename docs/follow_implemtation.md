@@ -34,7 +34,7 @@ This node supports full follow relationships with remote authors across differen
 
 ### 1. Local Author Follows Remote Author
 
-1. User clicks **Follow** on a remote profile (`/user/<fqid>/follow/`).
+1. User clicks **Follow** on a remote profile (`/user/<fqid>/follow/`)
 2. `follow_remote_author` builds our actor info and POSTs a `Follow` object to `{remote_author_fqid}/inbox`.
 3. On success (2xx), creates `RemoteFollow` locally.
 4. Remote node may approve or deny; if they approve, they POST `Accept` to our inbox.
@@ -52,6 +52,7 @@ This node supports full follow relationships with remote authors across differen
 
 - **Unfollow**: `unfollow_remote_author` deletes `RemoteFollow`. If they were a friend, they move to Remote Followers only.
 - **Remove follower**: `remove_remote_follower` deletes `RemoteFollower`.
+  
 
 ---
 
