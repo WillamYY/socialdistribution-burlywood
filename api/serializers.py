@@ -242,10 +242,10 @@ class EntrySerializer(serializers.ModelSerializer):
         request = self.context.get('request')
         if request:
             return request.build_absolute_uri(
-                f"/api/authors/{obj.author.id}/entries/{obj.id}/"
+                f"/api/authors/{obj.author.id}/entries/{obj.id}"
             )
 
-        return f"/api/authors/{obj.author.id}/entries/{obj.id}/"
+        return f"/api/authors/{obj.author.id}/entries/{obj.id}"
 
     def get_web(self, obj):
         """

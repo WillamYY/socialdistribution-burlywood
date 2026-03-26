@@ -353,6 +353,10 @@ def stream_view(request):
 
     for entry in entries:
         if getattr(entry, "is_remote", False):
+            if "author_id" in request.session:
+                user_fqid = f"{base_url}/api/authors/{request.session['author_id']}"
+                print(user_fqid)
+                entry.liked_by_user = Like.objects.filter(object__endswith= re.search("/entries/([^/]+)",entry.id).group(1), author=user_fqid).exists()
             continue
         entry_url = f"{base_url}/api/authors/{entry.author.id}/entries/{entry.id}"
         
