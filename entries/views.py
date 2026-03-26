@@ -354,9 +354,8 @@ def stream_view(request):
     for entry in entries:
         if getattr(entry, "is_remote", False):
             if "author_id" in request.session:
-                user_fqid = f"{base_url}/api/authors/{request.session['author_id']}"
-                print(user_fqid)
-                entry.liked_by_user = Like.objects.filter(object__endswith= re.search("/entries/([^/]+)",entry.id).group(1), author=user_fqid).exists()
+                partial_fqid = f"{request.get_host()}/api/authors/{request.session['author_id']}"
+                entry.liked_by_user = Like.objects.filter(object__endswith= re.search("/entries/([^/]+)",entry.id).group(1), author__endswith = partial_fqid).exists()
             continue
         entry_url = f"{base_url}/api/authors/{entry.author.id}/entries/{entry.id}"
         
@@ -654,7 +653,7 @@ Handles displaying the page for remote entries
 def RemoteEntry(request,fqid):
     # Handles hardcoded solutions variables
     fuschia = False
-    if re.match("https?://[^/]+","https://socialdist-fuchsia-oabbasi-feef8b354ae5.herokuapp.com"):
+    if re.match("https?://https://socialdist-fuchsia-oabbasi-feef8b354ae5.herokuapp.com",fqid):
         fuschia = True
     # Gets where the host ends
     index = fqid.index("/api/")
