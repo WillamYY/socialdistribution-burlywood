@@ -164,7 +164,7 @@ class CommentSerializer(serializers.ModelSerializer):
         # Fallback: try to construct from object field if it exists
         object_url = getattr(obj, "object", None)
         if object_url:
-            return f"{str(object_url).rstrip('/')}/comments/{obj.id}"
+            return f"{str(object_url).rstrip('/')}/commented/{obj.id}"
 
         return str(obj.id)
 
@@ -242,10 +242,10 @@ class EntrySerializer(serializers.ModelSerializer):
         request = self.context.get('request')
         if request:
             return request.build_absolute_uri(
-                f"/api/authors/{obj.author.id}/entries/{obj.id}/"
+                f"/api/authors/{obj.author.id}/entries/{obj.id}"
             )
 
-        return f"/api/authors/{obj.author.id}/entries/{obj.id}/"
+        return f"/api/authors/{obj.author.id}/entries/{obj.id}"
 
     def get_web(self, obj):
         """
