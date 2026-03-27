@@ -3,13 +3,14 @@ import re
 import markdown
 import bleach
 import logging
+from types import SimpleNamespace
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import HttpResponse, JsonResponse
 from django.urls import reverse, resolve, Resolver404
 from django.contrib import messages
 from django.views.decorators.http import require_POST
 from django.db.models import Count, Q
-from .models import Entry
+from .models import Entry, RemoteEntry
 from core.models import Author, AdminHostedImage
 from core.services import maybe_sync_github_for_stream
 from core.remote import federate_entry_create_or_update, federate_entry_deleted
@@ -22,6 +23,55 @@ from django.utils import timezone
 
 
 logger = logging.getLogger(__name__)
+
+
+def _stored_remote_entry_to_stream_obj(remote_entry, viewer_fqid=None):
+    """
+    Helper function to adapt a stored RemoteEntry row into the stream object.
+    Create a nested author object
+    Mark the entry as remote
+    Compute liked_by_user for the current viewer
+    """
+    # Normalize the object URL
+    object_url = str(remote_entry.fqid).rstrip("/")
+    viewer_fqid = (viewer_fqid or "").rstrip("/")
+
+    # Check whether the current viewer liked this entry
+    liked_by_user = False
+    if viewer_fqid:
+        liked_by_user = Like.objects.filter(
+            author=viewer_fqid,
+            object=object_url,
+        ).exists()
+    
+    # Fetch likes and comments objects
+    likes_obj = remote_entry.raw_payload.get("likes") or {}
+    comments_obj = remote_entry.raw_payload.get("comments") or {}
+
+    # Return the object format for stream view
+    return SimpleNamespace(
+        id=remote_entry.fqid,
+        title=remote_entry.title or "",
+        description=remote_entry.description or "",
+        content=remote_entry.content or "",
+        content_raw=remote_entry.content_raw,
+        contentType=remote_entry.contentType or "text/plain",
+        visibility=remote_entry.visibility,
+        published=remote_entry.published,
+        author=SimpleNamespace(
+            id=remote_entry.author_fqid,
+            username=remote_entry.author_display_name or "Remote",
+            github=remote_entry.author_github or "",
+            profile_image=remote_entry.author_profile_image or "",
+            host=remote_entry.author_host or "",
+        ),
+        is_remote=True,
+        remote_web=(remote_entry.web or remote_entry.fqid),
+        like_count = likes_obj.get("count", 0) if isinstance(likes_obj, dict) else 0,
+        comment_count = comments_obj.get("count", 0) if isinstance(comments_obj, dict) else 0,
+        liked_by_user=liked_by_user,
+        stored_remote=True,
+    )
 
 def check_visibility(entry, viewer_id, is_list=False):
     """
@@ -284,7 +334,7 @@ def stream_view(request):
     US#26: All public entries from the node (discoverability).
     US#27: Unlisted and friends-only entries from authors I follow.
     US#28: Most recent version (we fetch from DB - always current).
-    US#29: Deleted entries excluded (hard-deleted, so not in DB).
+    US#29: Deleted entries excluded.
     US#31: Sorted with most recent entries first.
     GitHub activity is auto-synced when stream is viewed (throttled).
     """
@@ -314,7 +364,7 @@ def stream_view(request):
         .select_related("author")
         .order_by("-published")
     )
-
+    """
     # Public entries from IncomingNode; UNLISTED from following; FRIENDS from remote friends (mutual follow)
     from core.models import RemoteFollow, RemoteFollower
     from core.remote import fetch_remote_public_entries
@@ -326,24 +376,39 @@ def stream_view(request):
         RemoteFollower.objects.filter(target=viewer).values_list("actor_fqid", flat=True)
     )
     friends_remote_fqids = [f for f in following_remote_fqids if f in followers_remote_fqids]
+    """
     base_url_for_fetch = request.build_absolute_uri("/")[:-1]
     viewer_fqid = f"{base_url_for_fetch}/api/authors/{viewer.id}"
+
+    # Filter the stored inbox entries
+    stored_remote_entries_qs = (
+        RemoteEntry.objects.filter(recipient=viewer).exclude(visibility="DELETED")
+    )
+    
+    stored_remote_entries = [
+        _stored_remote_entry_to_stream_obj(remote_entry, viewer_fqid=viewer_fqid) for remote_entry in stored_remote_entries_qs
+    ]
+    """
+    # Truly live-fetched remote entries
     remote_entries = fetch_remote_public_entries(
         following_remote_fqids=following_remote_fqids,
         friends_remote_fqids=friends_remote_fqids,
         requested_by_fqid=viewer_fqid,
     )
-    logger.info("STREAM VIEW viewer=%s local_entries=%s remote_entries=%s", viewer.id, len(local_entries), len(remote_entries))
+    """
+
+    logger.info("STREAM VIEW viewer=%s local_entries=%s remote_entries=%s", viewer.id, len(local_entries), len(stored_remote_entries))
 
     # Combine and sort by published (newest first)
-    def _sort_key(e):
-        p = getattr(e, "published", None)
-        if hasattr(p, "isoformat"):
-            return p.isoformat()
-        return str(p) if p else ""
-
+    def _sort_key(entry):
+        published = getattr(entry, "published", None)
+        if hasattr(published, "isoformat"):
+            return published.isoformat()
+        return str(published) if published else ""
+    
+    combined_entries = local_entries + stored_remote_entries
     entries = sorted(
-        local_entries + remote_entries,
+        combined_entries,
         key=_sort_key,
         reverse=True,
     )
@@ -351,22 +416,25 @@ def stream_view(request):
     # Build the current user's URL
     base_url = request.build_absolute_uri('/')[:-1]
 
+    # Add interaction data for local entries
     for entry in entries:
         if getattr(entry, "is_remote", False):
-            if "author_id" in request.session:
-                partial_fqid = f"{request.get_host()}/api/authors/{request.session['author_id']}"
-                entry.liked_by_user = Like.objects.filter(object__endswith= re.search("/entries/([^/]+)",entry.id).group(1), author__endswith = partial_fqid).exists()
+            # Keep adapter flow for remote entries
             continue
+
+        # If local, check local interactoins
         entry_url = f"{base_url}/api/authors/{entry.author.id}/entries/{entry.id}"
         
         # Fetch the count of interactions
         entry.comment_count = Comment.objects.filter(entry__endswith=entry.id).count()
         entry.like_count = Like.objects.filter(object=entry_url).count()
-        
-        if "author_id" in request.session:
-            user_fqid = f"{base_url}/api/authors/{request.session['author_id']}"
-            entry.liked_by_user = Like.objects.filter(object=entry_url, author=user_fqid).exists()
-        
+
+        user_fqid = f"{base_url}/api/authors/{viewer.id}"
+        entry.liked_by_user = Like.objects.filter(
+            object=entry_url,
+            author=user_fqid,
+        ).exists()
+
     return render(
         request,
         "entries/stream.html",
