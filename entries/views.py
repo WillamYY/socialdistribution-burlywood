@@ -718,7 +718,7 @@ def get_entry(request, entry_id):
 """
 Handles displaying the page for remote entries
 """
-def RemoteEntry(request,fqid):
+def get_remote_entry(request,fqid):
     # Handles hardcoded solutions variables
     fuschia = False
     if re.match("https?://socialdist-fuchsia-oabbasi-feef8b354ae5.herokuapp.com",fqid):
