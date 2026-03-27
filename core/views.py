@@ -2,6 +2,7 @@ from django.http import HttpResponse, Http404
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from .models import Author, FollowRequest, AuthorRequest, IncomingNode, RemoteFollow, RemoteFollowRequest, RemoteFollower, AdminHostedImage
+from .remote  import  backfill_entries_to_remote_recipient
 from entries.models import Entry
 from interactions.models import Like, Comment
 from django.contrib.auth.hashers import check_password
@@ -444,6 +445,13 @@ def approve_remote_follow(request, req_id):
     )
     # Notify requester so their Remote Following updates
     _send_accept_to_requester(request, actor_fqid=actor_fqid, accepter=target)
+    relation_type = "friend" if RemoteFollow.objects.filter(follower=target, followed_fqid=actor_fqid).exists() else "follower"
+    backfill_entries_to_remote_recipient(
+        author=target,
+        remote_recipient_fqid=actor_fqid,
+        relation_type=relation_type,
+        request=request,
+    )
     messages.success(request, f"You approved {name}'s follow request!", extra_tags='follow')
     return redirect('view_follow_requests')
 

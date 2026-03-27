@@ -727,7 +727,7 @@ def get_remote_entry(request,fqid):
     index = fqid.index("/api/")
     logged_in_id = request.session.get("author_id")
     # FORCES https for consistency
-    fqid = re.sub("$https?://","https://",fqid)
+    fqid = fqid.rstrip("/").replace("http://", "https://")
     # Gets the entry
     node_credentials = get_object_or_404(IncomingNode, url=fqid[:index] + "/")
     entryInfo = requests.get(fqid.rstrip("/"), auth=(node_credentials.username, node_credentials.password))

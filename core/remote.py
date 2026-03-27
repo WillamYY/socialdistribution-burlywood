@@ -9,6 +9,7 @@ from types import SimpleNamespace
 import logging
 from api.serializers import EntrySerializer
 from core.models import RemoteFollow, RemoteFollower, EntryDelivery, IncomingNode
+from entries.models import Entry
 from interactions.models import Like
 
 logger = logging.getLogger(__name__)
@@ -367,3 +368,30 @@ def federate_entry_deleted(entry, request):
 
     for recipient_fqid in previous_recipients:
         _post_entry_to_single_remote(entry, request, recipient_fqid)
+
+def backfill_entries_to_remote_recipient(author, remote_recipient_fqid, relation_type, request):
+    """
+    Send previous visible entries to new recipient's inbox.
+    """
+    entries = Entry.objects.filter(author=author).exclude(visibility="DELETED").order_by("published")
+
+    for entry in entries:
+        visibility = entry.visibility
+
+        if visibility == "PUBLIC":
+            allowed = True
+        elif visibility == "UNLISTED":
+            allowed = relation_type in {"follower", "friend"}
+        elif visibility == "FRIENDS":
+            allowed = relation_type == "friend"
+        else:
+            allowed = False
+
+        if not allowed:
+            continue
+
+        if _post_entry_to_single_remote(entry, request, remote_recipient_fqid):
+            EntryDelivery.objects.get_or_create(
+                entry=entry,
+                recipient_fqid=_normalize_fqid(remote_recipient_fqid),
+            )

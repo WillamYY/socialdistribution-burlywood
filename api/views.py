@@ -788,7 +788,7 @@ def ApiEntries(request, author_id):
         # Query the entries by checking visibility (logged-in user or remote friend)
         visible_entries = [
             e for e in all_entries
-            if check_visibility(e, logged_in_id, requested_by_fqid=requested_by_fqid)
+            if check_visibility(e, logged_in_id, is_list=True, requested_by_fqid=requested_by_fqid)
         ]
         
         # Paginate the queryset
@@ -856,7 +856,11 @@ def ApiEntry(request, author_id, entry_id):
             return Response({"detail": "Not found."}, status=404)
 
         # Check the visibility for the logged-in user
-        
+        logged_in_id = request.session.get("author_id")
+        requested_by_fqid = (request.META.get("HTTP_X_REQUESTED_BY") or "").strip() or None
+        if not check_visibility(entry, logged_in_id, is_list=False, requested_by_fqid=requested_by_fqid):
+            return Response({"detail": "Forbidden"}, status=403)
+            
         # Serialize and return
         serializer = EntrySerializer(entry, context={'request': request})
         return Response(serializer.data)
