@@ -229,6 +229,48 @@ The response structure is the same as the **Comments Object**.
 
 ---
 
+## Commented API
+
+### Endpoint
+
+```
+GET /api/authors/{AUTHOR_SERIAL}/commented/{COMMENT_SERIAL}
+```
+
+### Description
+
+Returns a specific comment by a specific author
+
+### Response Example
+
+```json
+{
+    "type": "comment",
+    "id": "https://burlywood-53ed993f1b16.herokuapp.com/api/authors/1/commented/373fbe91-9242-4506-b3f4-8adceb8a630d",
+    "author": {
+        "type": "author",
+        "id": "https://burlywood-53ed993f1b16.herokuapp.com/api/authors/1",
+        "host": "https://burlywood-53ed993f1b16.herokuapp.com/api",
+        "displayName": "dalton",
+        "github": "",
+        "profileImage": "",
+        "web": "https://burlywood-53ed993f1b16.herokuapp.com/app/user/1"
+    },
+    "comment": "Unlisted",
+    "contentType": "text/plain",
+    "published": "2026-03-26T12:11:48.900431-06:00",
+    "likes": {
+        "type": "likes",
+        "web": "https://burlywood-53ed993f1b16.herokuapp.com/app/author/1/commented/373fbe91-9242-4506-b3f4-8adceb8a630d",
+        "id": "https://burlywood-53ed993f1b16.herokuapp.com/api/authors/1/commented/373fbe91-9242-4506-b3f4-8adceb8a630d/likes",
+        "page_number": 1,
+        "size": 50,
+        "count": 0,
+        "src": []
+    }
+}
+```
+
 # Pagination
 
 Comment lists support pagination.

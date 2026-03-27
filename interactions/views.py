@@ -30,7 +30,7 @@ def add_like(request, entry_id):
         like, created = Like.objects.get_or_create(
             author=author_fqid,
             object=entry_fqid,
-            defaults={'id': f"{request.build_absolute_uri('/')[:-1]}/liked/{likeId}","uuid":likeId}
+            defaults={'id': f"{request.build_absolute_uri('/')[:-1]}/api/authors/{author_id}/liked/{likeId}","uuid":likeId}
         )
 
         if not created:
@@ -72,6 +72,7 @@ def add_remote_like(request, entry_id):
 
         # Get author making request
         author = get_object_or_404(Author, pk = author_id)
+        # Print the likes
         host = (author.host or "").rstrip("/")
         # Fallback: ensure we have a usable local base host for author FQID.
         if not host:
@@ -88,6 +89,14 @@ def add_remote_like(request, entry_id):
             "profileImage": author.picture_url,
             "web": author.web,
         }
+        like_uuid = uuid.uuid4()
+        like, created = Like.objects.get_or_create(
+            author=authorInfo["id"],
+            object=entry_id,
+            defaults={'id': f"{request.build_absolute_uri('/')[:-1]}/api/authors/{author_id}/liked/{like_uuid}","uuid":like_uuid}
+        )
+        if not created:
+            like.delete()
         # Post the like to the inbox
         credentials = IncomingNode.objects.filter(url__in=[host_base, host_base + "/"]).first()
         if not credentials:
@@ -97,34 +106,7 @@ def add_remote_like(request, entry_id):
                 extra_tags="follow",
             )
             return redirect(request.META.get('HTTP_REFERER', '/app/stream/'))
-        post = requests.post(
-            inbox_url,
-            json={
-                "type": "like",
-                "author": authorInfo,
-                "published": datetime.now().isoformat(),
-                "id": "",
-                "object": entry_object,
-            },
-            auth=(credentials.username, credentials.password),
-            timeout=15,
-        )
-
-        # If remote accepted the like/unlike, sync our local Like state too.
-        # Our API inbox returns:
-        # - 201 when it *creates* a like
-        # - 204 when it *deletes* (unlikes)
-        if post.status_code in (200, 201, 202, 204):
-            if post.status_code == 204:
-                Like.objects.filter(author=author_fqid, object=entry_object).delete()
-            else:
-                like_uuid = uuid.uuid4()
-                Like.objects.get_or_create(
-                    author=author_fqid,
-                    object=entry_object,
-                    defaults={"id": f"{base}/liked/{like_uuid}", "uuid": like_uuid},
-                )
-
+        post = requests.post(foreignAuthor + "/inbox",json = {"type": "like","author": authorInfo,"published":datetime.now().isoformat(),"id":f"{request.build_absolute_uri('/')[:-1]}/api/authors/{author_id}/liked/{like_uuid}","object":entry_id}, auth=(credentials.username, credentials.password))
     return redirect(request.META.get('HTTP_REFERER', '/app/stream/'))
 
 def add_comment(request, entry_id):

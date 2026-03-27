@@ -353,6 +353,9 @@ def stream_view(request):
 
     for entry in entries:
         if getattr(entry, "is_remote", False):
+            if "author_id" in request.session:
+                partial_fqid = f"{request.get_host()}/api/authors/{request.session['author_id']}"
+                entry.liked_by_user = Like.objects.filter(object__endswith= re.search("/entries/([^/]+)",entry.id).group(1), author__endswith = partial_fqid).exists()
             continue
         entry_url = f"{base_url}/api/authors/{entry.author.id}/entries/{entry.id}"
         
@@ -584,7 +587,7 @@ def get_entry(request, entry_id):
 
     # Base Entry Interactions
     entry.like_count = Like.objects.filter(object=entry_url).count()
-    entry.fetched_comments = Comment.objects.filter(entry__endswith=entry_id).order_by('published')
+    entry.fetched_comments = Comment.objects.filter(entry__endswith=entry.id).order_by('published')
 
     # Check if the logged-in user liked the this entry
     if logged_in_id:
@@ -648,12 +651,18 @@ def get_entry(request, entry_id):
 Handles displaying the page for remote entries
 """
 def RemoteEntry(request,fqid):
+    # Handles hardcoded solutions variables
+    fuschia = False
+    if re.match("https?://socialdist-fuchsia-oabbasi-feef8b354ae5.herokuapp.com",fqid):
+        fuschia = True
     # Gets where the host ends
     index = fqid.index("/api/")
     logged_in_id = request.session.get("author_id")
+    # FORCES https for consistency
+    fqid = re.sub("$https?://","https://",fqid)
     # Gets the entry
     node_credentials = get_object_or_404(IncomingNode, url=fqid[:index] + "/")
-    entryInfo = requests.get(fqid[:index] + "/api/entries/" + fqid.rstrip("/"), auth=(node_credentials.username, node_credentials.password))
+    entryInfo = requests.get(fqid.rstrip("/"), auth=(node_credentials.username, node_credentials.password))
     entryInfo.raise_for_status()
     entry = json.loads(entryInfo.text)
     # Creates the list of allowed things to view
@@ -664,8 +673,14 @@ def RemoteEntry(request,fqid):
             allowed_visibility.append("FRIENDS")
     allowed = entry.get("visibility") in allowed_visibility
     comments = []
+    # HARDCODE SOLUTION FOR fuschia
+    if fuschia:
+        entry["comments"] = {}
+        entry["comments"]["src"] = entry.get("commentsSrc",{})
+    # END HARDCODED SOLUTION
+    entry_comments = entry.get("comments",{}).get("src",{})
     # Gets all the comments (Have to fetch each one individually :( )
-    for comment in entry.get("comments",{}).get("src",{}):
+    for comment in entry_comments:
         comment_id = comment.get("id")
         comment_part_host = re.search("https?://([^/]+)",comment_id).group(1)
         # If it is our comment get it
@@ -701,7 +716,11 @@ def RemoteEntry(request,fqid):
     image_api_url = None
     if ";base64" in entry.get("contentType") and "image" in entry.get("contentType"):
         image_api_url = fqid[:index] + "/api/entries/" + fqid + "/image"
-    entry["like_count"] = entry.get("likes").get("count")
+    # HARCODED SOLUTION FOR fuschia
+    if fuschia:
+        entry["like_count"] = entry.get("count",0)
+    else:
+        entry["like_count"] = entry.get("likes").get("count")
     entry["fetched_comments"] = entry.get("comments").get("src")
 
     return_url = request.session.get('last_feed_url', reverse('stream'))
