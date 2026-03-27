@@ -22,15 +22,39 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-x)y9kix^@x_1mfb#ti$_5&&kpi&y73pgb985#9rqg!3n3#2glc'
+SECRET_KEY = os.environ.get(
+    "SECRET_KEY",
+    "django-insecure-x)y9kix^@x_1mfb#ti$_5&&kpi&y73pgb985#9rqg!3n3#2glc",
+)
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+# Heroku sets DYNO; default DEBUG False in production unless DEBUG=1
+_on_heroku = os.environ.get("DYNO") is not None
+if _on_heroku:
+    DEBUG = os.environ.get("DEBUG", "").lower() in ("1", "true", "yes")
+else:
+    DEBUG = os.environ.get("DEBUG", "True").lower() in ("1", "true", "yes")
 
-ALLOWED_HOSTS = ["*"]
+_allowed = os.environ.get("ALLOWED_HOSTS", "*").strip()
+ALLOWED_HOSTS = [h.strip() for h in _allowed.split(",") if h.strip()] or ["*"]
 
-STATIC_ROOT = BASE_DIR / "staticfiles" 
+# Heroku router terminates TLS; needed for correct https URLs and CSRF
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+_csrf = os.environ.get("CSRF_TRUSTED_ORIGINS", "")
+if _csrf:
+    CSRF_TRUSTED_ORIGINS = [o.strip() for o in _csrf.split(",") if o.strip()]
+
+STATIC_ROOT = BASE_DIR / "staticfiles"
 STATIC_URL = "/static/"
+
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedStaticFilesStorage",
+    },
+}
 
 
 # Application definition
@@ -52,6 +76,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'core.middleware.SameOriginSecurityMiddleware',  # US#79: UI only communicates with node's web server
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
@@ -60,7 +85,6 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    "whitenoise.middleware.WhiteNoiseMiddleware",
 ]
 
 ROOT_URLCONF = 'backend.urls'
@@ -142,11 +166,6 @@ USE_I18N = True
 
 USE_TZ = True
 
-
-# Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/6.0/howto/static-files/
-
-STATIC_URL = 'static/'
 
 # Media files (uploads)
 MEDIA_URL = '/media/'
