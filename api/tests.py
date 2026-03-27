@@ -4,7 +4,7 @@ from django.test import TestCase, Client, RequestFactory
 from django.urls import reverse
 from django.shortcuts import render
 from rest_framework import status
-from rest_framework.test import APITestCase
+from rest_framework.test import APITestCase, APIClient
 from .serializers import LikeSerializer, AuthorSerializer
 from core.admin import AuthorAdmin, AuthorRequestAdmin
 from django.contrib.auth.models import User
@@ -14,7 +14,7 @@ from unittest.mock import Mock, patch
 import base64
 import uuid
 from core.models import Author, AuthorRequest, IncomingNode, OutgoingNode, RemoteFollower, EntryDelivery
-from entries.models import Entry
+from entries.models import Entry, RemoteEntry
 from interactions.models import Comment, Like
 from core.views import SignUpProcessing
 from core.remote import (
@@ -1805,3 +1805,156 @@ class APIObjectsTest(APITestCase):
         like_fqid = f"{author_fqid}/liked/{like.uuid}"
         response = self.client.get(reverse("api:ApiSingleLikeLocal", kwargs={"like_url": like.id}))
         self.assertEqual(response.status_code, 200)
+
+class InboxRemoteEntryAPITest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+
+        self.recipient = Author.objects.create(
+            username="localuser",
+            password="testpass",
+            name="Local User",
+            host="http://127.0.0.1:8000/api/",
+            web="http://127.0.0.1:8000/app/user/1/",
+        )
+        self.url = f"/api/authors/{self.recipient.id}/inbox"
+
+        self.node_username = "test"
+        self.node_password = "test"
+        OutgoingNode.objects.create(
+            url="https://remote-node.example/api/",
+            username=self.node_username,
+            password=self.node_password,
+            is_active=True,
+        )
+        credentials = base64.b64encode(
+            f"{self.node_username}:{self.node_password}".encode("utf-8")
+        ).decode("utf-8")
+
+        self.client.credentials(HTTP_AUTHORIZATION=f"Basic {credentials}")
+
+        # Beautiful API entry object
+        self.payload = {
+            "type": "entry",
+            "id": "https://remote-node.example/api/authors/alice/entries/post-123",
+            "web": "https://remote-node.example/authors/alice/posts/post-123",
+            "title": "Remote Markdown Post",
+            "description": "A remote entry sent through inbox",
+            "contentType": "text/markdown",
+            "content": "# Hello from remote\nThis is markdown.",
+            "author": {
+                "type": "author",
+                "id": "https://remote-node.example/api/authors/alice",
+                "host": "https://remote-node.example/api/",
+                "displayName": "Alice Remote",
+                "github": "https://github.com/alice",
+                "profileImage": "https://remote-node.example/media/alice.png",
+                "web": "https://remote-node.example/authors/alice",
+            },
+            "comments": {
+                "type": "comments",
+                "id": "https://remote-node.example/api/authors/alice/entries/post-123/comments",
+                "page": 1,
+                "size": 50,
+                "count": 0,
+                "src": [],
+            },
+            "likes": {
+                "type": "likes",
+                "id": "https://remote-node.example/api/authors/alice/entries/post-123/likes",
+                "page": 1,
+                "size": 50,
+                "count": 0,
+                "src": [],
+            },
+            "published": "2026-03-26T12:00:00Z",
+            "visibility": "PUBLIC",
+        }
+
+    def test_inbox_entry_creates_remote_entry(self):
+        response = self.client.post(self.url, self.payload, format="json")
+
+        # Check if post to remote inbox successfully
+        self.assertEqual(response.status_code, 202)
+        self.assertEqual(RemoteEntry.objects.count(), 1)
+
+        remote_entry = RemoteEntry.objects.get(
+            recipient=self.recipient,
+            fqid=self.payload["id"],
+        )
+
+        # Check if the posted object remains the same
+        self.assertEqual(remote_entry.recipient, self.recipient)
+        self.assertEqual(remote_entry.fqid, self.payload["id"])
+        self.assertEqual(remote_entry.web, self.payload["web"])
+        self.assertEqual(remote_entry.title, self.payload["title"])
+        self.assertEqual(remote_entry.description, self.payload["description"])
+        self.assertEqual(remote_entry.contentType, "text/markdown")
+        self.assertEqual(remote_entry.content, self.payload["content"])
+        self.assertEqual(remote_entry.content_raw, self.payload["content"])
+        self.assertEqual(remote_entry.visibility, "PUBLIC")
+        self.assertEqual(
+            remote_entry.author_fqid,
+            self.payload["author"]["id"],
+        )
+        self.assertEqual(
+            remote_entry.author_display_name,
+            self.payload["author"]["displayName"],
+        )
+        self.assertEqual(
+            remote_entry.author_github,
+            self.payload["author"]["github"],
+        )
+        self.assertEqual(
+            remote_entry.author_profile_image,
+            self.payload["author"]["profileImage"],
+        )
+        self.assertEqual(remote_entry.raw_author, self.payload["author"])
+        self.assertEqual(remote_entry.raw_payload["id"], self.payload["id"])
+        self.assertEqual(remote_entry.raw_payload["type"], "entry")
+
+    def test_inbox_entry_second_post_updates_existing_remote_entry(self):
+        # Post somthing first
+        first_response = self.client.post(self.url, self.payload, format="json")
+        # Basic checks
+        self.assertEqual(first_response.status_code, 202)
+        self.assertEqual(RemoteEntry.objects.count(), 1)
+
+        # Update the post content
+        updated_payload = dict(self.payload)
+        updated_payload["title"] = "Updated Remote Title"
+        updated_payload["content"] = "Updated markdown body"
+        updated_payload["description"] = "Updated description"
+
+        # Post the updated version
+        second_response = self.client.post(self.url, updated_payload, format="json")
+        self.assertEqual(second_response.status_code, 202)
+
+        # Check if any undesired duplicate generated
+        self.assertEqual(RemoteEntry.objects.count(), 1)
+
+        remote_entry = RemoteEntry.objects.get(
+            recipient=self.recipient,
+            fqid=self.payload["id"],
+        )
+
+        # Check if the previous inbox entry also got updated
+        self.assertEqual(remote_entry.title, "Updated Remote Title")
+        self.assertEqual(remote_entry.content, "Updated markdown body")
+        self.assertEqual(remote_entry.content_raw, "Updated markdown body")
+        self.assertEqual(remote_entry.description, "Updated description")
+    
+    def test_same_remote_entry_can_be_stored_for_different_recipients(self):
+        other_recipient = Author.objects.create(
+            username="otherlocal",
+            password="testpass",
+            name="Other Local",
+            host="http://127.0.0.1:8000/api/",
+            web="http://127.0.0.1:8000/app/user/2/",
+        )
+        # Post entries to multiple remote authors
+        self.client.post(f"/api/authors/{self.recipient.id}/inbox", self.payload, format="json")
+        self.client.post(f"/api/authors/{other_recipient.id}/inbox", self.payload, format="json")
+
+        # Check if inbox can store multiple remote entries
+        self.assertEqual(RemoteEntry.objects.count(), 2)  

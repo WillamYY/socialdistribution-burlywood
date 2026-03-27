@@ -12,12 +12,13 @@ from django.http import HttpResponse, HttpResponseForbidden
 from django.shortcuts import render, get_object_or_404
 from django.utils import timezone
 from django.urls import path
+from django.utils.dateparse import parse_datetime
 from rest_framework.decorators import api_view, authentication_classes, permission_classes
 from rest_framework.response import Response
 from core.authentication import NodeBasicAuthentication
 from core.remote import federate_entry_create_or_update, federate_entry_deleted
 from core.models import Author, AuthorRequest, FollowRequest, RemoteFollower, RemoteFollow
-from entries.models import Entry
+from entries.models import Entry, RemoteEntry
 from interactions.models import Like, Comment
 from .serializers import AuthorSerializer, LikesSerializer, LikeSerializer, EntrySerializer, EntriesSerializer, CommentSerializer
 import json
@@ -32,6 +33,62 @@ def _normalize_fqid_for_check(s):
         s = "https" + s[4:]
     return s
 
+def _normalize_remote_url(url):
+    """
+    Helper function to normalize the URL to https and strip the trailing slash.
+    """
+    if not url:
+        return ""
+    url = str(url).strip().rstrip("/")
+    if url.startswith("http://"):
+        url = "https" + url[4:]
+    return url
+
+def _extract_remote_author_info(author_data):
+    """
+    Helper function to extract key attributes of remote author from json object.
+    """
+    if not isinstance(author_data, dict):
+        author_data = {}
+
+    # Normalize fqid and host of remote author
+    author_fqid = _normalize_remote_url(author_data.get("id"))
+    author_host = _normalize_remote_url(author_data.get("host"))
+    # Fallback to extract host from given FQID.
+    if not author_host and "/api/authors/" in author_fqid:
+        author_host = author_fqid.split("/api/authors/")[0]
+    
+    # Extract each field and return
+    return {
+        "author_fqid": author_fqid,
+        "author_host": author_host,
+        "author_display_name": (
+            author_data.get("displayName")
+            or author_data.get("username")
+            or "Remote author"
+        )[:255],
+        "author_github": author_data.get("github") or "",
+        "author_profile_image": author_data.get("profileImage") or "",
+        "raw_author": author_data,
+    }
+
+def _parse_remote_published(value):
+    """
+    Helper function to parse date value.
+    """
+    if not value:
+        return None
+    
+    # Parse date string into Python datetime
+    published = parse_datetime(str(value))
+    if not published:
+        return None
+    
+    # If no timezone info, add one
+    if timezone.is_naive(published):
+        published = timezone.make_aware(published, timezone.get_current_timezone())
+
+    return published
 
 def check_visibility(entry, viewer_id, is_list=False, requested_by_fqid=None):
     """
@@ -480,8 +537,63 @@ def _inbox_handle_comment(request, author_id, data=None):
 
 def _inbox_handle_entry(request, author_id, data=None):
     """Handle incoming entry: store for stream (basic support)."""
-    return Response({"detail": "Entry received (inbox storage not yet implemented)"}, status=202)
-
+    data = data or request.data or {}
+    recipient = get_object_or_404(Author, id=author_id)
+    # Check entry FQID
+    fqid = _normalize_remote_url(data.get("id"))
+    if not fqid:
+        logger.warning(
+            "Inbox entry rejected: missing entry id for recipient=%s",
+            author_id,
+        )
+        return Response({"detail": "Missing entry id"}, status=400)
+    
+    # Check author FQID
+    author_data = data.get("author") or {}
+    remote_author_info = _extract_remote_author_info(author_data)
+    if not remote_author_info["author_fqid"]:
+        logger.warning(
+            "Inbox entry rejected: missing remote author id for recipient=%s entry=%s",
+            author_id,
+            fqid,
+        )
+        return Response({"detail": "Missing author id"}, status=400)
+    
+    # Extract the universal fields
+    content_type = data.get("contentType") or "text/plain"
+    visibility = str(data.get("visibility") or "PUBLIC").upper()
+    if visibility not in {"PUBLIC", "FRIENDS", "UNLISTED", "DELETED"}:
+        visibility = "PUBLIC"
+        
+    content = data.get("content") or ""
+    content_raw = content if content_type in {"text/plain", "text/markdown"} else None
+    
+    defaults = {
+        "web": _normalize_remote_url(data.get("web")),
+        "title": data.get("title") or "",
+        "description": data.get("description") or "",
+        "contentType": content_type,
+        "content": content,
+        "content_raw": content_raw,
+        "published": _parse_remote_published(data.get("published")),
+        "visibility": visibility,
+        "raw_payload": data,
+        **remote_author_info,
+    }
+    # Save to DB
+    remote_entry, created = RemoteEntry.objects.update_or_create(
+        recipient=recipient,
+        fqid=fqid,
+        defaults=defaults,
+    )
+    logger.info(
+        "Inbox remote entry %s: recipient=%s fqid=%s author=%s",
+        "created" if created else "updated",
+        recipient.id,
+        fqid,
+        remote_author_info["author_fqid"],
+    )
+    return Response({"detail": "Entry received", "id": remote_entry.fqid, "created": created}, status=202)
 
 def _inbox_handle_like(request, author_id, data=None):
     """Handle like: existing like logic."""
