@@ -356,16 +356,22 @@ def stream_view(request):
             if "author_id" in request.session:
                 partial_fqid = f"{request.get_host()}/api/authors/{request.session['author_id']}"
                 entry.liked_by_user = Like.objects.filter(object__endswith= re.search("/entries/([^/]+)",entry.id).group(1), author__endswith = partial_fqid).exists()
+            # Handles turning content into markdown
+            if "markdown" in entry.contentType:
+                entry.markdown = render_safe_markdown(entry.content)
+            if "hhh" in entry.title:
+                print(entry)
             continue
-        entry_url = f"{base_url}/api/authors/{entry.author.id}/entries/{entry.id}"
+        else:
+            entry_url = f"{base_url}/api/authors/{entry.author.id}/entries/{entry.id}"
         
-        # Fetch the count of interactions
-        entry.comment_count = Comment.objects.filter(entry__endswith=entry.id).count()
-        entry.like_count = Like.objects.filter(object=entry_url).count()
-        
-        if "author_id" in request.session:
-            user_fqid = f"{base_url}/api/authors/{request.session['author_id']}"
-            entry.liked_by_user = Like.objects.filter(object=entry_url, author=user_fqid).exists()
+            # Fetch the count of interactions
+            entry.comment_count = Comment.objects.filter(entry__endswith=entry.id).count()
+            entry.like_count = Like.objects.filter(object=entry_url).count()
+            
+            if "author_id" in request.session:
+                user_fqid = f"{base_url}/api/authors/{request.session['author_id']}"
+                entry.liked_by_user = Like.objects.filter(object=entry_url, author=user_fqid).exists()
         
     return render(
         request,
@@ -716,6 +722,9 @@ def RemoteEntry(request,fqid):
     image_api_url = None
     if ";base64" in entry.get("contentType") and "image" in entry.get("contentType"):
         image_api_url = fqid[:index] + "/api/entries/" + fqid + "/image"
+    # Handles Markdown
+    if "markdown" in entry.get("contentType"):
+        entry["markdown"] = render_safe_markdown(entry.get("content"))
     # HARCODED SOLUTION FOR fuschia
     if fuschia:
         entry["like_count"] = entry.get("count",0)

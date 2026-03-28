@@ -106,7 +106,10 @@ def add_remote_like(request, entry_id):
                 extra_tags="follow",
             )
             return redirect(request.META.get('HTTP_REFERER', '/app/stream/'))
+        print(foreignAuthor + "/inbox")
         post = requests.post(foreignAuthor + "/inbox",json = {"type": "like","author": authorInfo,"published":datetime.now().isoformat(),"id":f"{request.build_absolute_uri('/')[:-1]}/api/authors/{author_id}/liked/{like_uuid}","object":entry_id}, auth=(credentials.username, credentials.password))
+        print(post.status_code)
+        print(post.text)
     return redirect(request.META.get('HTTP_REFERER', '/app/stream/'))
 
 def add_comment(request, entry_id):

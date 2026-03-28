@@ -14,6 +14,7 @@ import logging
 from api.serializers import EntrySerializer
 import re
 import base64
+from entries.views import render_safe_markdown
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +85,7 @@ def NodeDisplay(request):
                 continue
                 
             data = resp.json()
-            authors = data.get("authors") or data.get("src") or []
+            authors = data.get("authors") or data.get("src") or data.get("items") or []
             if not isinstance(authors, list):
                 continue
 
@@ -704,6 +705,7 @@ def RemoteProfileDisplay(request, fqid):
             timeout=10,
             auth=(credentials.username, credentials.password)
         )
+        print(f"{base_host}/api/authors/{author_id}/entries/")
         entryInfo.raise_for_status()
         entry_json = entryInfo.json()
     except requests.RequestException:
@@ -783,6 +785,9 @@ def RemoteProfileDisplay(request, fqid):
             entry["like_count"]  = entry.get("count") or 0
         else:
             entry["like_count"] = entry["likes"]["count"]
+        # Fixes markdown content
+        if "markdown" in entry.get("contentType"):
+            entry["markdown"] = render_safe_markdown(entry.get("content"))
         public_entries.append(entry)
 
     # Ensure newest-first ordering even if the remote node doesn't sort.
