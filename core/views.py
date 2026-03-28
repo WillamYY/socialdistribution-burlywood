@@ -577,6 +577,7 @@ def follow_remote_author(request, fqid):
             logger.info("Sending follow to inbox url=%s actor=%s object=%s", inbox_url, actor_info.get("id"), normalized)
             credentials = get_object_or_404(IncomingNode, url = inbox_url[:inbox_url.index("/api")] + "/")
             print(inbox_url)
+            print(payload)
             resp = requests.post(
                 inbox_url,
                 json=payload,
