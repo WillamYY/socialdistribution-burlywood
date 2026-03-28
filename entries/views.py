@@ -364,7 +364,8 @@ def stream_view(request):
         .select_related("author")
         .order_by("-published")
     )
-    """
+    
+    # Relations for fetching remote entries directly from other nodes
     # Public entries from IncomingNode; UNLISTED from following; FRIENDS from remote friends (mutual follow)
     from core.models import RemoteFollow, RemoteFollower
     from core.remote import fetch_remote_public_entries
@@ -376,7 +377,7 @@ def stream_view(request):
         RemoteFollower.objects.filter(target=viewer).values_list("actor_fqid", flat=True)
     )
     friends_remote_fqids = [f for f in following_remote_fqids if f in followers_remote_fqids]
-    """
+    
     base_url_for_fetch = request.build_absolute_uri("/")[:-1]
     viewer_fqid = f"{base_url_for_fetch}/api/authors/{viewer.id}"
 
@@ -388,17 +389,14 @@ def stream_view(request):
     stored_remote_entries = [
         _stored_remote_entry_to_stream_obj(remote_entry, viewer_fqid=viewer_fqid) for remote_entry in stored_remote_entries_qs
     ]
-    """
+    
     # Truly live-fetched remote entries
     remote_entries = fetch_remote_public_entries(
         following_remote_fqids=following_remote_fqids,
         friends_remote_fqids=friends_remote_fqids,
         requested_by_fqid=viewer_fqid,
     )
-    """
-
-    logger.info("STREAM VIEW viewer=%s local_entries=%s remote_entries=%s", viewer.id, len(local_entries), len(stored_remote_entries))
-
+    
     # Combine and sort by published (newest first)
     def _sort_key(entry):
         published = getattr(entry, "published", None)
@@ -406,9 +404,36 @@ def stream_view(request):
             return published.isoformat()
         return str(published) if published else ""
     
-    combined_entries = local_entries + stored_remote_entries
+    # Keep both stored remote entries and live-fetched entries for temporary transition
+    # Prefer the former over the latter
+    combined_entries = local_entries + stored_remote_entries + remote_entries
+    
+    live_remote_duped = 0
+    seen_remote_ids = set()
+    deduped_entries = []
+    # Remove duplicated remote entries from two sources
+    for entry in combined_entries:
+        if getattr(entry, "is_remote", False):
+            # Remote entry checks
+            remote_id = str(getattr(entry, "id", "")).rstrip("/")
+            if remote_id in seen_remote_ids:
+                live_remote_duped += 1
+                continue
+            seen_remote_ids.add(remote_id)
+        deduped_entries.append(entry)
+        
+    logger.info(
+        "STREAM VIEW viewer=%s local=%s stored_remote=%s live_remote=%s deduped_live_remote=%s final=%s",
+        viewer.id,
+        len(local_entries),
+        len(stored_remote_entries),
+        len(remote_entries),
+        live_remote_duped,
+        len(deduped_entries),
+    )
+
     entries = sorted(
-        combined_entries,
+        deduped_entries,
         key=_sort_key,
         reverse=True,
     )
