@@ -11,9 +11,9 @@ from django.contrib import messages
 from django.views.decorators.http import require_POST
 from django.db.models import Count, Q
 from .models import Entry, RemoteEntry
-from core.models import Author, AdminHostedImage
+from core.models import Author, AdminHostedImage, RemoteFollow, RemoteFollower
 from core.services import maybe_sync_github_for_stream
-from core.remote import federate_entry_create_or_update, federate_entry_deleted
+from core.remote import federate_entry_create_or_update, federate_entry_deleted, fetch_remote_public_entries
 from interactions.models import Like, Comment
 from core.models import RemoteFollow, RemoteFollower, IncomingNode
 import requests
@@ -367,15 +367,21 @@ def stream_view(request):
     
     # Relations for fetching remote entries directly from other nodes
     # Public entries from IncomingNode; UNLISTED from following; FRIENDS from remote friends (mutual follow)
-    from core.models import RemoteFollow, RemoteFollower
-    from core.remote import fetch_remote_public_entries
-    following_remote_fqids = list(
-        RemoteFollow.objects.filter(follower=viewer).values_list("followed_fqid", flat=True)
-    )
-    # Remote friends = we follow them AND they follow us
-    followers_remote_fqids = set(
-        RemoteFollower.objects.filter(target=viewer).values_list("actor_fqid", flat=True)
-    )
+    def _normalize_fqid_local(s):
+        if not s:
+            return ""
+        s = str(s).strip().rstrip("/")
+        if s.startswith("http://"):
+            s = "https" + s[4:]
+        return s
+    following_remote_fqids = [
+        _normalize_fqid_local(f)
+        for f in RemoteFollow.objects.filter(follower=viewer).values_list("followed_fqid", flat=True)
+    ]
+    followers_remote_fqids = {
+        _normalize_fqid_local(f)
+        for f in RemoteFollower.objects.filter(target=viewer).values_list("actor_fqid", flat=True)
+    }
     friends_remote_fqids = [f for f in following_remote_fqids if f in followers_remote_fqids]
     
     base_url_for_fetch = request.build_absolute_uri("/")[:-1]

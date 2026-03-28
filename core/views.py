@@ -599,7 +599,6 @@ def follow_remote_author(request, fqid):
                     credentials = get_object_or_404(IncomingNode, url = loc[:loc.index("/api")] + "/")
                     resp = requests.post(loc, json=payload, headers=headers, timeout=15, auth=(credentials.username, credentials.password))
             if resp.status_code in (200, 202, 204):
-                RemoteFollow.objects.create(follower=me, followed_fqid=normalized)
                 messages.success(request, "Follow request sent!", extra_tags="follow")
             else:
                 err_detail = resp.reason or ""
