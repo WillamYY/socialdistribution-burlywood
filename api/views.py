@@ -17,7 +17,7 @@ from rest_framework.decorators import api_view, authentication_classes, permissi
 from rest_framework.response import Response
 from core.authentication import NodeBasicAuthentication
 from core.remote import federate_entry_create_or_update, federate_entry_deleted
-from core.models import Author, AuthorRequest, FollowRequest, RemoteFollower, RemoteFollow
+from core.models import Author, AuthorRequest, FollowRequest, RemoteFollower, RemoteFollow, IncomingNode
 from entries.models import Entry, RemoteEntry
 from interactions.models import Like, Comment
 from .serializers import AuthorSerializer, LikesSerializer, LikeSerializer, EntrySerializer, EntriesSerializer, CommentSerializer
@@ -178,7 +178,19 @@ def fetch_remote_image(remote_url):
     Helper function to safely fetch binary image data from a remote node.
     """
     try:
-        response = requests.get(remote_url, timeout=5)    
+        auth = None
+        if "/api/" in remote_url:
+            base = remote_url.split("/api/")[0].rstrip("/") + "/"
+            node = IncomingNode.objects.filter(url=base).first()
+            if node:
+                auth = (node.username, node.password)
+
+        response = requests.get(
+            remote_url,
+            timeout=5,
+            auth=auth,
+            headers={"Accept": "image/*,*/*"},
+        )  
         if response.status_code == 200:
             # Fetch the type of file
             content_type = response.headers.get('Content-Type', '').lower()
@@ -1038,7 +1050,8 @@ def ApiEntryImage(request, author_id=None, entry_id=None, entry_fqid=None):
     
     # Check the visibility for the logged-in user
     logged_in_id = request.session.get("author_id")
-    if not check_visibility(entry, logged_in_id):
+    requested_by_fqid = (request.META.get("HTTP_X_REQUESTED_BY") or "").strip() or None
+    if not check_visibility(entry, logged_in_id, is_list=False, requested_by_fqid=requested_by_fqid):
         return HttpResponseForbidden("You do not have permission to view this image.")
     
     # Decode and Serve
