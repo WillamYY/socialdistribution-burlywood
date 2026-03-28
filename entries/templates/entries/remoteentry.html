@@ -37,7 +37,7 @@
                 </div>
                 {% endif %}
             {% elif entry.contentType == "text/markdown" %}
-                <div class="entry-markdown">{{ entry.content|safe }}</div>
+                <div class="entry-markdown">{{ entry.markdown|safe }}</div>
             {% else %}
                 <div class="entry-plain-text">{{ entry.content|linebreaks }}</div>
             {% endif %}

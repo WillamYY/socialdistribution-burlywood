@@ -37,7 +37,7 @@
                             alt="{{ entry.title }}">
                     {% endif %}
                 {% elif entry.contentType == "text/markdown" %}
-                    <div class="entry-markdown">{{ entry.content|safe }}</div>
+                    <div class="entry-markdown">{% if entry.is_remote %}{{ entry.markdown|safe }}{% else %}{{ entry.content|safe }}{% endif %}</div>
                 {% else %}
                     <div class="entry-plain-text">{{ entry.content|linebreaks }}</div>
                 {% endif %}
