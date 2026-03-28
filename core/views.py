@@ -2,7 +2,7 @@ from django.http import HttpResponse, Http404
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from .models import Author, FollowRequest, AuthorRequest, IncomingNode, RemoteFollow, RemoteFollowRequest, RemoteFollower, AdminHostedImage
-from .remote  import  backfill_entries_to_remote_recipient
+from .remote  import  backfill_entries_to_remote_recipient, _credentials_for_remote_author
 from entries.models import Entry
 from interactions.models import Like, Comment
 from django.contrib.auth.hashers import check_password
@@ -405,6 +405,8 @@ def deny_follow(request, req_id):
 def _send_accept_to_requester(request, actor_fqid, accepter):
     """POST Accept to requester's inbox so their Remote Following updates when we approve."""
     try:
+        logger.info("ACCEPT start", actor_fqid, accepter.id)
+
         base = (accepter.host or "").strip().rstrip("/")
         if not base or not base.startswith("http"):
             base = request.build_absolute_uri("/")[:-1]
@@ -412,23 +414,47 @@ def _send_accept_to_requester(request, actor_fqid, accepter):
             base = base.rstrip("/") + "/api"
         if base.startswith("http://"):
             base = "https" + base[4:]
+        
         accepter_id = f"{base}/authors/{accepter.id}"
-        inbox_url = f"{_normalize_fqid(actor_fqid).rstrip('/')}/inbox"
+        actor_fqid = _normalize_fqid(actor_fqid)
+        inbox_url = f"{actor_fqid}/inbox"
+
         payload = {
             "type": "Accept",
             "actor": accepter_id,
-            "object": {"type": "Follow", "actor": actor_fqid, "object": accepter_id},
+            "object": {
+                "type": "Follow",
+                "actor": actor_fqid,
+                "object": accepter_id,
+            },
         }
-        credentials = get_object_or_404(IncomingNode, inbox_url[:inbox_url.index("/api")] + "/")
-        requests.post(
+        
+        auth = _credentials_for_remote_author(actor_fqid)
+        logger.info("ACCEPT auth", bool(auth), inbox_url)
+        if not auth:
+            logger.warning("Accept POST: no credentials for %s", actor_fqid)
+            return
+        
+        resp = requests.post(
             inbox_url,
             json=payload,
-            headers={"Content-Type": "application/json", "User-Agent": "SocialDistribution/1.0"},
+            headers={
+                "Content-Type": "application/json",
+                "User-Agent": "SocialDistribution/1.0",
+            },
             timeout=10,
-            auth=(credentials.username, credentials.password)
+            auth=auth,
         )
-    except Exception:
-        pass
+
+        logger.info(
+            "Accept POST status=%s url=%s body=%s",
+            resp.status_code,
+            inbox_url,
+            resp.text[:200],
+        )
+    except Exception as e:
+        logger.error("ACCEPT failed", repr(e))
+        logger.exception("Accept POST failed actor=%s accepter=%s error=%s", actor_fqid, accepter.id, e)
 
 
 def approve_remote_follow(request, req_id):
