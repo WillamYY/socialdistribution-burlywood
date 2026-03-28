@@ -359,6 +359,8 @@ def stream_view(request):
             # Handles turning content into markdown
             if "markdown" in entry.contentType:
                 entry.markdown = render_safe_markdown(entry.content)
+            if "hhh" in entry.title:
+                print(entry)
             continue
         else:
             entry_url = f"{base_url}/api/authors/{entry.author.id}/entries/{entry.id}"

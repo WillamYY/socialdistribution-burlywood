@@ -24,8 +24,11 @@
         <div class="entry-content" style="margin-top: 20px; border-top: 1px solid var(--border-light); padding-top: 20px;">
             {% if "image" in entry.contentType %}
                 <picture>
+                    {% if entry.image %}
+                    <img src="{{ entry.image }}" class="entry-image">
+                    {% else %}
                     <img src="data:image/png;base64,{{ entry.content }}" class="entry-image">
-                    <img src="{% url 'api:ApiEntryImageGlobal' entry_fqid=entry.id %}" class="entry-image">
+                    {% endif %}
                 </picture>
                 {% if image_api_url %}
                 <div class="image-embed-helper">
