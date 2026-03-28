@@ -14,6 +14,7 @@ import logging
 from api.serializers import EntrySerializer
 import re
 import base64
+from entries.views import render_safe_markdown
 
 logger = logging.getLogger(__name__)
 
@@ -784,6 +785,9 @@ def RemoteProfileDisplay(request, fqid):
             entry["like_count"]  = entry.get("count") or 0
         else:
             entry["like_count"] = entry["likes"]["count"]
+        # Fixes markdown content
+        if "markdown" in entry.get("contentType"):
+            entry["markdown"] = render_safe_markdown(entry.get("content"))
         public_entries.append(entry)
 
     # Ensure newest-first ordering even if the remote node doesn't sort.

@@ -149,7 +149,7 @@
                         {% if "image" in entry.contentType %}
                             <img src="data:{{ entry.contentType|cut:';base64' }};base64,{{ entry.content }}" class="entry-image">
                         {% elif entry.contentType == "text/markdown" %}
-                            <div class="entry-markdown">{{ entry.content|safe }}</div>
+                            <div class="entry-markdown">{{ entry.markdown|safe }}</div>
                         {% else %}
                             <div class="entry-plain-text">{{ entry.content|linebreaks }}</div>
                         {% endif %}
