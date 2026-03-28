@@ -84,7 +84,7 @@ def NodeDisplay(request):
                 continue
                 
             data = resp.json()
-            authors = data.get("authors") or data.get("src") or []
+            authors = data.get("authors") or data.get("src") or data.get("items") or []
             if not isinstance(authors, list):
                 continue
 
@@ -704,6 +704,7 @@ def RemoteProfileDisplay(request, fqid):
             timeout=10,
             auth=(credentials.username, credentials.password)
         )
+        print(f"{base_host}/api/authors/{author_id}/entries/")
         entryInfo.raise_for_status()
         entry_json = entryInfo.json()
     except requests.RequestException:

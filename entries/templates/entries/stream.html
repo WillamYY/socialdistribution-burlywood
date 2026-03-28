@@ -32,7 +32,7 @@
                                 onerror="this.style.display='none'">
                         {% endif %}
                     {% else %}
-                        <img src="{% url 'api:ApiEntryImage' author_id=entry.author.id entry_id=entry.id %}"
+                        <img src="data:image/png;base64,{{ entry.content }}"
                             class="entry-image"
                             alt="{{ entry.title }}">
                     {% endif %}
