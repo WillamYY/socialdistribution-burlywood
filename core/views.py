@@ -3,7 +3,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from .models import Author, FollowRequest, AuthorRequest, IncomingNode, RemoteFollow, RemoteFollowRequest, RemoteFollower, AdminHostedImage
 from .remote  import  backfill_entries_to_remote_recipient, _credentials_for_remote_author
-from entries.models import Entry
+from entries.models import Entry, RemoteEntry
 from interactions.models import Like, Comment
 from django.contrib.auth.hashers import check_password
 from django.urls import reverse, resolve, Resolver404
@@ -519,12 +519,35 @@ def connections(request):
         if norm_fqid in following_fqids
     ]
     mutual_fqids = {rf["fqid"] for rf in remote_friends}
+    def _fallback_remote_name(fqid: str) -> str:
+        fqid = _normalize_fqid(fqid)
+
+        # If this remote author also in remote_followers_raw, reuse stored name
+        if fqid in follower_by_fqid:
+            return follower_by_fqid[fqid].actor_display_name or "Remote author"
+
+        # Try inbox entries from this remote author
+        latest_entry = (
+            RemoteEntry.objects
+            .filter(recipient=author, author_fqid=fqid)
+            .order_by("-updated_at")
+            .first()
+        )
+        if latest_entry and getattr(latest_entry, "author_display_name", ""):
+            return latest_entry.author_display_name
+
+        # Otherwise, try to fetch readable from the fqid
+        tail = fqid.rstrip("/").split("/")[-1]
+        return tail or "Remote author"
     # Remote following: only we follow them, they do NOT follow us (exclude mutual)
     remote_followings_display = []
     for rf in remote_followings:
         norm_fqid = _normalize_fqid(rf.followed_fqid)
         if norm_fqid not in mutual_fqids:
-            remote_followings_display.append({"fqid": norm_fqid, "display_name": "Remote author"})
+            remote_followings_display.append({
+                "fqid": norm_fqid,
+                "display_name": _fallback_remote_name(norm_fqid),
+            })
     # Remote followers: only they follow us, we do NOT follow them (exclude mutual)
     remote_followers = [
         r for r in remote_followers_raw
