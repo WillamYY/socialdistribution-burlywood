@@ -1,8 +1,8 @@
 from django.http import HttpResponse, Http404
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
-from .models import Author, FollowRequest, AuthorRequest, IncomingNode, RemoteFollow, RemoteFollowRequest, RemoteFollower, AdminHostedImage
-from .remote  import  backfill_entries_to_remote_recipient, _credentials_for_remote_author
+from .models import Author, FollowRequest, AuthorRequest, IncomingNode, RemoteFollow, RemoteFollowRequest, RemoteFollower, AdminHostedImage, EntryDelivery
+from .remote  import  backfill_entries_to_remote_recipient, _credentials_for_remote_author, _post_entry_to_single_remote
 from entries.models import Entry, RemoteEntry
 from interactions.models import Like, Comment
 from django.contrib.auth.hashers import check_password
@@ -630,23 +630,43 @@ def follow_remote_author(request, fqid):
                 "User-Agent": "SocialDistribution/1.0 (+https://github.com/uofa-cmput404/w26-socialdistribution-project-burlywood)",
             }
             payload = {"type": "follow", "actor": actor_info, "object": object_info}
-            logger.info("Sending follow to inbox url=%s actor=%s object=%s", inbox_url, actor_info.get("id"), normalized)
-            credentials = get_object_or_404(IncomingNode, url = inbox_url[:inbox_url.index("/api")] + "/")
-            print(inbox_url)
+
+            auth = _credentials_for_remote_author(normalized)
+            if not auth:
+                messages.error(request, "No node credentials configured for that remote author.")
+                logger.warning("Follow POST: no credentials for %s", normalized)
+                return redirect(request.META.get("HTTP_REFERER", "/"))
+
+            logger.info(
+                "Sending follow to inbox url=%s actor=%s object=%s",
+                inbox_url,
+                actor_info.get("id"),
+                normalized,
+            )
+
             resp = requests.post(
                 inbox_url,
                 json=payload,
                 headers=headers,
                 timeout=15,
                 allow_redirects=False,
-                auth=(credentials.username, credentials.password)
+                auth=auth,
             )
             logger.info("Follow POST response status=%s url=%s body=%s", resp.status_code, inbox_url, resp.text[:200] if resp.text else "")
             if resp.status_code in (301, 302, 307, 308):
                 loc = resp.headers.get("Location", "")
                 if loc and loc != inbox_url:
-                    credentials = get_object_or_404(IncomingNode, url = loc[:loc.index("/api")] + "/")
-                    resp = requests.post(loc, json=payload, headers=headers, timeout=15, auth=(credentials.username, credentials.password))
+                    redirect_auth = _credentials_for_remote_author(loc)
+                    if not redirect_auth:
+                        redirect_auth = auth
+                    resp = requests.post(
+                        loc,
+                        json=payload,
+                        headers=headers,
+                        timeout=15,
+                        auth=redirect_auth,
+                    )
+
             if resp.status_code in (200, 202, 204):
                 messages.success(request, "Follow request sent!", extra_tags="follow")
             else:
@@ -661,10 +681,15 @@ def follow_remote_author(request, fqid):
                     err_detail = resp.text[:100] if resp.text else "no details"
                 messages.error(
                     request,
-                    f"Inbox rejected ({resp.status_code}): {err_detail} — armdb may not have received the request.",
+                    f"Inbox rejected ({resp.status_code}): {err_detail}",
                 )
-                logger.warning("Follow inbox rejected status=%s body=%s", resp.status_code, resp.text[:300])
-        except requests.exceptions.RequestException as e:
+                logger.warning(
+                    "Follow inbox rejected status=%s body=%s",
+                    resp.status_code,
+                    resp.text[:300],
+                )
+
+        except requests.RequestException as e:
             messages.error(request, f"Could not reach remote inbox: {str(e)[:100]}")
             logger.warning("Follow POST failed: %s", e)
 
@@ -678,7 +703,6 @@ def follow_remote_author(request, fqid):
         except (Resolver404, ValueError):
             pass
     return redirect(request.session.get("last_feed_url", referer or "/"))
-
 
 def unfollow_remote_author(request, fqid):
     """
@@ -715,6 +739,15 @@ def remove_remote_follower(request, fqid):
     normalized = _normalize_fqid(fqid)
     deleted, _ = RemoteFollower.objects.filter(actor_fqid=normalized, target=me).delete()
     if deleted:
+        # retract previously delivered entries from this remote follower
+        delivered_entry_ids = EntryDelivery.objects.filter(
+            recipient_fqid=normalized,
+            entry__author=me,
+        ).values_list("entry_id", flat=True)
+
+        for entry in Entry.objects.filter(id__in=delivered_entry_ids):
+            _post_entry_to_single_remote(entry, request, normalized, visibility_override="DELETED")
+
         messages.success(request, "Remote follower removed.", extra_tags="follow")
     else:
         messages.info(request, "Follower was already removed.", extra_tags="follow")
