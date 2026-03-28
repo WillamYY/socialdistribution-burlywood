@@ -590,7 +590,7 @@ def follow_remote_author(request, fqid):
                 loc = resp.headers.get("Location", "")
                 if loc and loc != inbox_url:
                     print("\n\n\n")
-                    print(url = loc[:loc.index("/api")] + "/")
+                    print(loc[:loc.index("/api")] + "/")
                     credentials = get_object_or_404(IncomingNode, url = loc[:loc.index("/api")] + "/")
                     resp = requests.post(loc, json=payload, headers=headers, timeout=15, auth=(credentials.username, credentials.password))
             if resp.status_code in (200, 202, 204):
