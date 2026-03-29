@@ -175,7 +175,12 @@ class CommentSerializer(serializers.ModelSerializer):
             author_url = author_url.replace("://", "§§TEMP§§").replace("//", "/").replace("§§TEMP§§", "://")
             author_id_part = author_url.split("/")[-1]
 
-            if author_id_part.isdigit():
+            request = self.context.get("request")
+            local_base = ""
+            if request:
+                local_base = request.build_absolute_uri("/").rstrip("/").replace("http://", "https://")
+
+            if author_url.startswith(f"{local_base}/api/authors/") and author_id_part.isdigit():
                 author_obj = Author.objects.filter(id=int(author_id_part)).first()
                 if author_obj:
                     return AuthorSerializer(author_obj).data

@@ -556,33 +556,61 @@ def _inbox_handle_accept(request, author_id, data=None):
 def _inbox_handle_comment(request, author_id, data=None):
     """Handle comment: add comment to an entry."""
     data = data or request.data or {}
+
     target_author = get_object_or_404(Author, id=author_id)
-    entry_url = data.get("entry") or (data.get("object") if isinstance(data.get("object"), str) else None)
+
+    entry_url = data.get("entry") or (
+        data.get("object") if isinstance(data.get("object"), str) else None
+    )
     if not entry_url:
         return Response({"detail": "Missing entry"}, status=400)
-    entry_uuid = entry_url.rstrip("/").split("/")[-1]
+
+    entry_url = str(entry_url).strip().rstrip("/")
+    if entry_url.startswith("http://"):
+        entry_url = "https://" + entry_url[len("http://"):]
+
+    entry_uuid = entry_url.split("/")[-1]
+
     try:
         entry = Entry.objects.get(id=entry_uuid, author=target_author)
     except Entry.DoesNotExist:
         return Response({"detail": "Entry not found"}, status=404)
+
     if entry.visibility == "DELETED":
         return Response({"detail": "Entry not found"}, status=404)
+
     author_data = data.get("author") or {}
-    author_url = author_data.get("id") or ""
-    comment_text = data.get("comment") or ""
+    author_url = (author_data.get("id") or "").strip().rstrip("/")
+    if author_url.startswith("http://"):
+        author_url = "https://" + author_url[len("http://"):]
+
+    comment_text = (data.get("comment") or "").strip()
     if not comment_text or not author_url:
         return Response({"detail": "Missing author or comment"}, status=400)
-    base = request.build_absolute_uri("/")[:-1]
-    entry_fqid = f"{base}/api/authors/{author_id}/entries/{entry.id}/"
-    Comment.objects.create(
-        id= data.get("id") or f"{base}/api/authors/{author_id}/commented/{uuid.uuid4()}",
-        author=author_url,
-        entry=entry_fqid,
-        comment=comment_text,
-        contentType=data.get("contentType", "text/plain"),
-    )
-    return Response({"detail": "Comment received"}, status=202)
 
+    base = request.build_absolute_uri("/").rstrip("/")
+    if base.startswith("http://"):
+        base = "https://" + base[len("http://"):]
+
+    entry_fqid = f"{base}/api/authors/{author_id}/entries/{entry.id}"
+    comment_id = (data.get("id") or "").strip().rstrip("/")
+    if comment_id.startswith("http://"):
+        comment_id = "https://" + comment_id[len("http://"):]
+
+    if not comment_id:
+        comment_id = f"{author_url}/commented/{uuid.uuid4()}"
+
+    Comment.objects.get_or_create(
+        id=comment_id,
+        defaults={
+            "author": author_url,
+            "entry": entry_fqid,
+            "comment": comment_text,
+            "contentType": data.get("contentType", "text/plain"),
+        },
+    )
+
+    return Response({"detail": "Comment received"}, status=202)
 
 def _inbox_handle_entry(request, author_id, data=None):
     """Handle incoming entry: store for stream (basic support)."""

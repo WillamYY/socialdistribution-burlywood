@@ -94,28 +94,61 @@ def _comment_matches_entry(comment_entry_url, canonical_entry_fqid):
 
     return left.split("/")[-1] == right.split("/")[-1]
 
-
-def _serialize_local_comment_for_page(comment):
+def _serialize_local_comment_for_page(comment, request=None):
     """
     Safe fallback serializer for local comments when remote/detail lookup fails.
     """
     author_name = "Unknown"
+    author_url = str(comment.author).rstrip("/")
+
     try:
-        match = re.search(r"/authors/(\d+)/?$", str(comment.author).rstrip("/"))
-        if match:
+        local_base = ""
+        if request:
+            local_base = request.build_absolute_uri("/").rstrip("/").replace("http://", "https://")
+
+        match = re.search(r"/authors/(\d+)/?$", author_url)
+
+        # Only resolve to a local Author if the author URL belongs to THIS node
+        if match and local_base and author_url.startswith(f"{local_base}/api/authors/"):
             author_obj = Author.objects.filter(id=int(match.group(1))).first()
             if author_obj:
-                author_name = author_obj.name or author_obj.username
+                author_name = author_obj.username
+            else:
+                author_name = author_url.split("/")[-1]
         else:
-            author_name = str(comment.author).rstrip("/").split("/")[-1]
+            # Remote author: try to fetch displayName from remote profile
+            author_name = author_url.split("/")[-1]
+
+            try:
+                author_host_match = re.search(r"^https?://[^/]+", author_url)
+                author_host = author_host_match.group(0) if author_host_match else None
+
+                if author_host:
+                    node = IncomingNode.objects.filter(url=author_host + "/").first()
+                    if node:
+                        resp = requests.get(
+                            author_url,
+                            auth=(node.username, node.password),
+                            timeout=5,
+                        )
+                        if resp.status_code < 400:
+                            author_json = json.loads(resp.text)
+                            author_name = (
+                                author_json.get("displayName")
+                                or author_json.get("username")
+                                or author_name
+                            )
+            except Exception:
+                pass
+
     except Exception:
-        author_name = str(comment.author).rstrip("/").split("/")[-1]
+        author_name = author_url.split("/")[-1]
 
     return {
         "type": "comment",
         "id": str(comment.id).rstrip("/"),
         "author": {
-            "id": str(comment.author).rstrip("/"),
+            "id": author_url,
             "displayName": author_name,
         },
         "author_name": author_name,
@@ -770,7 +803,7 @@ def get_entry(request, entry_id):
         comment_id = str(stored_comment.id).rstrip("/")
 
         # Default fallback: always keep something displayable
-        fallback_comment = _serialize_local_comment_for_page(stored_comment)
+        fallback_comment = _serialize_local_comment_for_page(stored_comment, request=request)
 
         if user_fqid:
             fallback_comment["liked_by_user"] = (

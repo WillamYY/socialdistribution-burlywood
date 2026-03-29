@@ -8,7 +8,8 @@ from .models import Like, Comment
 from entries.models import Entry
 from core.models import Author, IncomingNode
 import requests
-from datetime import datetime, timezone
+from datetime import datetime
+from django.utils import timezone
 import json
 import re
 from django.http import JsonResponse
