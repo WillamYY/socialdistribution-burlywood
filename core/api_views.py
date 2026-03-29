@@ -157,8 +157,10 @@ def _extract_local_author_id_from_fqid(fqid, request):
     """
     try:
         decoded = unquote(fqid)
+        print("===================DECODED============================")
         # Check if FQID points to our node
         our_base = request.build_absolute_uri('/api/').rstrip('/')
+        print("===================BASE============================", decoded, our_base)
         if our_base in decoded or '127.0.0.1' in decoded or 'localhost' in decoded:
             # Extract id: .../authors/123 or .../authors/123/
             parts = decoded.rstrip('/').split('/')
@@ -167,6 +169,7 @@ def _extract_local_author_id_from_fqid(fqid, request):
                 if idx + 1 < len(parts):
                     return int(parts[idx + 1]), True
     except (ValueError, IndexError):
+        print("===================SOMETHING WENT WRONG UNQOTING============================")
         pass
     return None, False
 
