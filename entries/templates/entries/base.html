@@ -33,14 +33,6 @@
             </a>
             {% if request.session.author_id %}
             <a href="{% url 'create_entry' %}" class="shell-rail__create">＋ New post</a>
-            <a href="{% url 'connections' %}" class="shell-rail__link{% if url_name == 'connections' %} shell-rail__link--active{% endif %}">
-                <span class="shell-rail__emoji" aria-hidden="true">◎</span>
-                <span>Network</span>
-            </a>
-            <a href="{% url 'view_follow_requests' %}" class="shell-rail__link{% if url_name == 'view_follow_requests' %} shell-rail__link--active{% endif %}">
-                <span class="shell-rail__emoji" aria-hidden="true">✉</span>
-                <span>Inbox</span>
-            </a>
             <a href="{% url 'ProfileView' %}" class="shell-rail__link{% if url_name == 'ProfileView' or url_name == 'EditProfileView' %} shell-rail__link--active{% endif %}">
                 <span class="shell-rail__emoji" aria-hidden="true">☺</span>
                 <span>Profile</span>
@@ -95,10 +87,6 @@
         <a href="{% url 'create_entry' %}" class="shell-tabbar__item shell-tabbar__item--mid">
             <span class="shell-tabbar__mid-btn" aria-hidden="true">＋</span>
             <span>Create</span>
-        </a>
-        <a href="{% url 'view_follow_requests' %}" class="shell-tabbar__item">
-            <span class="shell-tabbar__ico" aria-hidden="true">✉</span>
-            <span>Inbox</span>
         </a>
         <a href="{% url 'ProfileView' %}" class="shell-tabbar__item">
             <span class="shell-tabbar__ico" aria-hidden="true">☺</span>

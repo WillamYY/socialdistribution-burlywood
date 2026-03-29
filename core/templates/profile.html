@@ -19,16 +19,22 @@
             <div class="ig-profile__side">
               <h1>{{ author.username }}</h1>
               <div class="ig-profile__stats">
-                <div><strong>{{ followers_count }}</strong><span>Followers</span></div>
-                <div><strong>{{ following_count }}</strong><span>Following</span></div>
-                <div><strong>{{ friends_count }}</strong><span>Friends</span></div>
+                <a href="{% url 'connections' %}#followers" class="ig-profile__statlink">
+                  <strong>{{ followers_count }}</strong><span>Followers</span>
+                </a>
+                <a href="{% url 'connections' %}#following" class="ig-profile__statlink">
+                  <strong>{{ following_count }}</strong><span>Following</span>
+                </a>
+                <a href="{% url 'connections' %}#friends" class="ig-profile__statlink">
+                  <strong>{{ friends_count }}</strong><span>Friends</span>
+                </a>
               </div>
               <div class="ig-profile__actions">
-                <a href="/app/edit-profile" class="button">Edit profile</a>
+                <a href="{% url 'EditProfileView' %}" class="button">Edit profile</a>
                 <a href="{% url 'stream' %}" class="button secondary">Feed</a>
                 <a href="{% url 'create_entry' %}" class="button success">New post</a>
                 <a href="{% url 'NodeDisplay' %}" class="button-ghost">Authors</a>
-                <a href="/app/logout" class="button-ghost">Log out</a>
+                <a href="{% url 'Logout' %}" class="button-ghost">Log out</a>
               </div>
             </div>
         </div>
@@ -44,21 +50,6 @@
             {% endif %}
           </p>
         </div>
-
-        <ul class="profile-stats" style="justify-content:flex-start;margin-top:16px;">
-          <li><a href="{% url 'connections' %}#followers">Open followers</a></li>
-          <li><a href="{% url 'connections' %}#following">Open following</a></li>
-          <li><a href="{% url 'connections' %}#friends">Open friends</a></li>
-        </ul>
-
-        {% if request.session.author_id == author.id %}
-          <a href="{% url 'view_follow_requests' %}" class="follow-requests-btn" title="Follow requests" aria-label="Follow requests">
-            ✉
-            {% if pending_requests_count > 0 %}
-              <span class="notification-count">{{ pending_requests_count }}</span>
-            {% endif %}
-          </a>
-        {% endif %}
     </div>
 </div>
 {% endblock %}

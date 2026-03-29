@@ -30,9 +30,7 @@ body.app-shell-social {
     radial-gradient(ellipse 60% 40% at 0% 100%, rgba(37, 244, 238, 0.06), transparent);
 }
 
-body.app-shell-social a {
-  color: inherit;
-}
+/* Main content links use core/entries styles; do NOT set global a { inherit } or the dark rail loses contrast. */
 
 /* ——— Desktop rail (TikTok-dark inspired) ——— */
 .shell-rail {
@@ -61,7 +59,7 @@ body.app-shell-social a {
   align-items: center;
   gap: 10px;
   text-decoration: none;
-  color: var(--shell-ink);
+  color: var(--shell-ink) !important;
   font-family: var(--shell-font-display);
   font-weight: 800;
   font-size: 1.35rem;
@@ -95,7 +93,7 @@ body.app-shell-social a {
   padding: 12px 14px;
   border-radius: 14px;
   text-decoration: none;
-  color: var(--shell-ink-dim);
+  color: var(--shell-ink-dim) !important;
   font-weight: 600;
   font-size: 0.95rem;
   transition:
@@ -105,12 +103,12 @@ body.app-shell-social a {
 
 .shell-rail__link:hover {
   background: rgba(255, 255, 255, 0.06);
-  color: var(--shell-ink);
+  color: var(--shell-ink) !important;
 }
 
 .shell-rail__link--active {
   background: linear-gradient(90deg, rgba(254, 44, 85, 0.2), transparent);
-  color: var(--shell-ink);
+  color: var(--shell-ink) !important;
   border-left: 3px solid var(--shell-accent);
   margin-left: -3px;
 }
@@ -151,6 +149,10 @@ body.app-shell-social a {
   gap: 4px;
 }
 
+.shell-rail__foot .shell-rail__link {
+  color: var(--shell-ink-dim) !important;
+}
+
 /* ——— Mobile top bar ——— */
 .shell-mobile-top {
   display: flex;
@@ -177,7 +179,7 @@ body.app-shell-social a {
   font-family: var(--shell-font-display);
   font-weight: 800;
   font-size: 1.2rem;
-  color: var(--shell-ink);
+  color: var(--shell-ink) !important;
   text-decoration: none;
   letter-spacing: -0.03em;
 }
@@ -279,7 +281,7 @@ body.app-shell-social.shell-wide .page {
   align-items: center;
   gap: 2px;
   text-decoration: none;
-  color: var(--shell-ink-dim);
+  color: var(--shell-ink-dim) !important;
   font-size: 0.65rem;
   font-weight: 600;
   text-transform: uppercase;
@@ -290,7 +292,7 @@ body.app-shell-social.shell-wide .page {
 
 .shell-tabbar__item:hover,
 .shell-tabbar__item:focus {
-  color: var(--shell-ink);
+  color: var(--shell-ink) !important;
 }
 
 .shell-tabbar__item--mid {
@@ -586,21 +588,41 @@ body.app-shell-social .social-post .entry-footer {
 
 .ig-profile__stats {
   display: flex;
-  gap: 24px;
+  flex-wrap: wrap;
+  gap: 8px 20px;
   margin-bottom: 14px;
   font-size: 0.9rem;
 }
 
-.ig-profile__stats strong {
+.ig-profile__statlink {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  text-decoration: none !important;
+  color: inherit !important;
+  padding: 8px 12px;
+  margin: -8px -12px;
+  border-radius: 14px;
+  transition: background 0.15s ease;
+}
+
+.ig-profile__statlink:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.ig-profile__statlink strong {
   display: block;
   font-family: var(--shell-font-display);
   font-size: 1.1rem;
   font-weight: 800;
+  color: #0a0a0b;
 }
 
-.ig-profile__stats span {
+.ig-profile__statlink span {
   color: #5c5c66;
   font-size: 0.8rem;
+  font-weight: 600;
 }
 
 .ig-profile__actions {
@@ -698,5 +720,40 @@ body.app-shell-social.shell-wide .connections__section {
   max-width: 1200px;
   margin-left: auto;
   margin-right: auto;
+}
+
+/* Authors directory (home): keep avatars perfect circles, aligned to row */
+body.app-shell-social .author-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+body.app-shell-social .author-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 72px;
+}
+
+body.app-shell-social .author-card .profile-pic {
+  width: 56px;
+  height: 56px;
+  min-width: 56px;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: center center;
+  display: block;
+  flex-shrink: 0;
+  border: 2px solid #e8e9ee;
+  background: #f0f1f5;
+  vertical-align: middle;
+}
+
+body.app-shell-social .author-info {
+  flex: 1;
+  min-width: 0;
+  align-self: center;
 }
 
