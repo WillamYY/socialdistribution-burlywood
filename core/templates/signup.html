@@ -1,70 +1,36 @@
+{% extends 'entries/base.html' %}
 {% load static %}
-<head>
-    <title>Sign Up</title>
-    <link rel="stylesheet" href="{% static 'core/styles.css' %}">
-    <style>
-        form {
-            display: flex;
-            flex-direction: column;
-        }
-        label {
-            margin: 10px 0 5px;
-            font-weight: 600;
-        }
-        input[type="text"], input[type="password"], select {
-            padding: 10px;
-            border-radius: 8px;
-            border: 1px solid #d1d5db;
-        }
-        input[type="submit"] {
-            margin-top: 20px;
-            padding: 10px;
-            background-color: var(--success);
-            color: white;
-            font-weight: 600;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-        }
-        input[type="submit"]:hover {
-            background-color: #15803d;
-        }
-    </style>
-</head>
-<body>
-    <nav class="top-nav">
-        <a href="/">Home</a>
-        <a href="/app/stream/">Stream</a>
-        <a href="/app/login/">Login</a>
-    </nav>
-    <div class="page">
-        <div class="card" style="max-width: 480px; margin: 0 auto;">
-            <h2>Create a New Account</h2>
-            {% if message %}
-                <div class="error" style="color: var(--danger); margin-bottom: 12px;">{{ message }}</div>
-            {% endif %}
-            <form method="POST" action="/app/process-signup/">
-                {% csrf_token %}
-                <label>Account Type</label>
-                <select name="account_type" style="padding: 10px; border-radius: 8px; border: 1px solid #d1d5db;">
-                    <option value="author">Author</option>
-                </select>
 
-                <label>Username</label>
-                <input name="username" type="text" required minlength="3" maxlength="40"
-                       placeholder="Letters, numbers, underscores, hyphens (3–40 chars)" autocomplete="username">
+{% block title %}Sign up{% endblock %}
 
-                <label>Password</label>
-                <input name="password" type="password" required minlength="8"
-                       placeholder="At least 8 chars, one letter and one number" autocomplete="new-password">
+{% block content %}
+<div class="page page--narrow">
+    <div class="card auth-card">
+        <h2 style="margin-top:0;text-align:center;">Create an account</h2>
+        <p class="muted text-center" style="margin-bottom:20px;">Join this node as an author.</p>
+        {% if message %}
+            <div class="error text-center" style="margin-bottom:12px;">{{ message }}</div>
+        {% endif %}
+        <form method="POST" action="/app/process-signup/" class="form-stack form-stack--signup">
+            {% csrf_token %}
+            <label for="id_account_type">Account type</label>
+            <select id="id_account_type" name="account_type">
+                <option value="author">Author</option>
+            </select>
 
-                <input type="submit" value="Sign Up">
-            </form>
-            <p class="muted" style="text-align:center;">
-                <a href="/app/login">Already have an account? Login</a>
-            </p>
-        </div>
+            <label for="id_username">Username</label>
+            <input id="id_username" name="username" type="text" required minlength="3" maxlength="40"
+                   placeholder="Letters, numbers, underscores, hyphens (3–40)" autocomplete="username">
+
+            <label for="id_password">Password</label>
+            <input id="id_password" name="password" type="password" required minlength="8"
+                   placeholder="At least 8 characters" autocomplete="new-password">
+
+            <input type="submit" value="Sign up">
+        </form>
+        <p class="muted text-center" style="margin-top:16px;">
+            <a href="/app/login">Already have an account? Log in</a>
+        </p>
     </div>
-</body>
-</html>
-
+</div>
+{% endblock %}

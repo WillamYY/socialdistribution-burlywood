@@ -11,11 +11,10 @@ from django.contrib import messages
 from django.views.decorators.http import require_POST
 from django.db.models import Count, Q
 from .models import Entry, RemoteEntry
-from core.models import Author, AdminHostedImage, RemoteFollow, RemoteFollower
+from core.models import Author, AdminHostedImage, RemoteFollow, RemoteFollower, IncomingNode
 from core.services import maybe_sync_github_for_stream
 from core.remote import federate_entry_create_or_update, federate_entry_deleted, fetch_remote_public_entries
 from interactions.models import Like, Comment
-from core.models import RemoteFollow, RemoteFollower, IncomingNode
 import requests
 import json
 from api.serializers import CommentSerializer
@@ -23,6 +22,117 @@ from django.utils import timezone
 
 
 logger = logging.getLogger(__name__)
+
+
+def _fqid_variants(url):
+    """http/https and trailing-slash variants so Like lookups match how browsers / nodes store FQIDs."""
+    if not url:
+        return []
+    u = str(url).strip().rstrip("/")
+    out = {u, u + "/"}
+    if u.startswith("http://"):
+        out.add("https://" + u[len("http://") :])
+    elif u.startswith("https://"):
+        out.add("http://" + u[len("https://") :])
+    return list(out)
+
+
+def like_count_for_object(object_url):
+    return Like.objects.filter(object__in=_fqid_variants(object_url)).count()
+
+
+def entry_liked_by_user(object_url, user_fqid):
+    if not user_fqid or not object_url:
+        return False
+    return Like.objects.filter(
+        object__in=_fqid_variants(object_url),
+        author__in=_fqid_variants(user_fqid),
+    ).exists()
+
+
+def _author_display_name_from_fqid(author_fqid):
+    if not author_fqid:
+        return "Unknown"
+    s = author_fqid.rstrip("/")
+    match = re.search(r"/authors?/(\d+)/?$", s)
+    if match and match.group(1).isdigit():
+        try:
+            a = Author.objects.get(id=int(match.group(1)))
+            return a.name or a.username
+        except (Author.DoesNotExist, ValueError):
+            pass
+    return s.split("/")[-1] or "Unknown"
+
+
+def _comment_host_from_id(comment_id):
+    m = re.match(r"https?://([^/]+)", comment_id or "")
+    return m.group(1) if m else ""
+
+
+def comments_display_from_queryset(comments_qs, request, logged_in_id):
+    """
+    Build comment dicts for entry.html: always use local DB text so remote authors' comments
+    still show even if IncomingNode lookup or GET to their node fails.
+    """
+    base_url = request.build_absolute_uri("/")[:-1]
+    user_fqid = f"{base_url}/api/authors/{logged_in_id}" if logged_in_id else None
+    my_host = request.get_host()
+    out = []
+    for c in comments_qs.order_by("published"):
+        author_name = _author_display_name_from_fqid(c.author)
+        comment_host = _comment_host_from_id(c.id)
+        out.append(
+            {
+                "id": c.id,
+                "comment": c.comment,
+                "published": c.published,
+                "author_name": author_name,
+                "local": comment_host == my_host,
+                "like_count": like_count_for_object(c.id),
+                "liked_by_user": entry_liked_by_user(c.id, user_fqid),
+            }
+        )
+    return out
+
+
+def _finalize_remote_comment_for_template(comment_dict, request, logged_in_id, original_stub=None):
+    """
+    Normalize API/GET comment JSON (and fallbacks) to keys expected by remoteentry.html.
+    original_stub: list item from entry['comments']['src'] when GET fails.
+    """
+    base_url = request.build_absolute_uri("/")[:-1]
+    user_fqid = f"{base_url}/api/authors/{logged_in_id}" if logged_in_id else None
+    my_host = request.get_host()
+
+    d = dict(comment_dict) if comment_dict else {}
+    stub = original_stub or {}
+    if not d.get("id"):
+        d["id"] = stub.get("id")
+    if not d.get("comment"):
+        d["comment"] = stub.get("comment") or ""
+    if not d.get("published"):
+        d["published"] = stub.get("published")
+
+    cid = d.get("id") or stub.get("id")
+    auth = d.get("author") if d.get("author") is not None else stub.get("author")
+    if isinstance(auth, dict):
+        d["author_name"] = auth.get("displayName") or _author_display_name_from_fqid(auth.get("id", ""))
+    elif isinstance(auth, str):
+        d["author_name"] = _author_display_name_from_fqid(auth)
+    else:
+        d["author_name"] = _author_display_name_from_fqid("")
+
+    likes = d.get("likes")
+    if isinstance(likes, dict) and "count" in likes:
+        d["like_count"] = likes.get("count", 0)
+    elif cid:
+        d["like_count"] = like_count_for_object(cid)
+    else:
+        d["like_count"] = 0
+
+    d["liked_by_user"] = entry_liked_by_user(cid, user_fqid) if cid else False
+    d["local"] = _comment_host_from_id(cid) == my_host if cid else False
+    return d
 
 
 def _stored_remote_entry_to_stream_obj(remote_entry, viewer_fqid=None):
@@ -36,13 +146,8 @@ def _stored_remote_entry_to_stream_obj(remote_entry, viewer_fqid=None):
     object_url = str(remote_entry.fqid).rstrip("/")
     viewer_fqid = (viewer_fqid or "").rstrip("/")
 
-    # Check whether the current viewer liked this entry
-    liked_by_user = False
-    if viewer_fqid:
-        liked_by_user = Like.objects.filter(
-            author=viewer_fqid,
-            object=object_url,
-        ).exists()
+    # Check whether the current viewer liked this entry (FQID variants for http/https etc.)
+    liked_by_user = entry_liked_by_user(object_url, viewer_fqid) if viewer_fqid else False
     
     # Fetch likes and comments objects
     likes_obj = remote_entry.raw_payload.get("likes") or {}
@@ -72,6 +177,7 @@ def _stored_remote_entry_to_stream_obj(remote_entry, viewer_fqid=None):
         liked_by_user=liked_by_user,
         stored_remote=True,
     )
+
 
 def check_visibility(entry, viewer_id, is_list=False):
     """
@@ -466,14 +572,9 @@ def stream_view(request):
         
         # Fetch the count of interactions
         entry.comment_count = Comment.objects.filter(entry__endswith=entry.id).count()
-        entry.like_count = Like.objects.filter(object=entry_url).count()
-
+        entry.like_count = like_count_for_object(entry_url)
         user_fqid = f"{base_url}/api/authors/{viewer.id}"
-        entry.liked_by_user = Like.objects.filter(
-            object=entry_url,
-            author=user_fqid,
-        ).exists()
-
+        entry.liked_by_user = entry_liked_by_user(entry_url, user_fqid)
     return render(
         request,
         "entries/stream.html",
@@ -576,20 +677,11 @@ def view_my_entries(request):
         entry_url = f"{base}/api/authors/{entry.author.id}/entries/{entry.id}"
         
         # entry likes
-        entry.like_count = Like.objects.filter(object=entry_url).count()
-        entry.liked_by_user = Like.objects.filter(object=entry_url, author=user_fqid).exists()
+        entry.like_count = like_count_for_object(entry_url)
+        entry.liked_by_user = entry_liked_by_user(entry_url, user_fqid)
 
         # fetch comments
         entry.fetched_comments = Comment.objects.filter(entry__endswith=entry.id).order_by('published')
-
-        # all objects liked by current user
-        liked_objects = Like.objects.filter(author=user_fqid).values_list("object", flat=True)
-        
-        # extract UUIDs from liked objects
-        liked_uuids = {
-            obj.rstrip("/").split("/")[-1]
-            for obj in liked_objects
-        }
 
         for comment in entry.fetched_comments:
             # Extract commenter id from author URL (commenter = who wrote comment, NOT entry.author)
@@ -602,13 +694,8 @@ def view_my_entries(request):
             except (Author.DoesNotExist, ValueError):
                 comment.author_name = comment.author
 
-            comment_uuid = comment.id.rstrip("/").split("/")[-1]
-
-            comment.like_count = Like.objects.filter(
-                object__endswith=comment_uuid
-            ).count()
-
-            comment.liked_by_user = comment_uuid in liked_uuids
+            comment.like_count = like_count_for_object(comment.id)
+            comment.liked_by_user = entry_liked_by_user(comment.id, user_fqid)
 
     return render(request, "entries/my_entries.html", {"entries": entries})
 
@@ -645,12 +732,12 @@ def view_entries(request, author_id):
     # Manually attach Like/Comment data for the interactions
     for entry in entries_list:
         entry_url = f"{base}/api/authors/{entry.author.id}/entries/{entry.id}"
-        entry.like_count = Like.objects.filter(object=entry_url).count()
+        entry.like_count = like_count_for_object(entry_url)
         entry.fetched_comments = Comment.objects.filter(entry__endswith=entry.id).order_by("-published")
         
         # Only check for "Unlike" state
         if user_fqid:
-            entry.liked_by_user = Like.objects.filter(object=entry_url, author=user_fqid).exists()
+            entry.liked_by_user = entry_liked_by_user(entry_url, user_fqid)
         else:
             entry.liked_by_user = False
 
@@ -692,51 +779,12 @@ def get_entry(request, entry_id):
     # Default to Stream if don't have a saved feed yet
     return_url = request.session.get('last_feed_url', reverse('stream'))
 
-    # Base Entry Interactions
-    entry.like_count = Like.objects.filter(object=entry_url).count()
-    entry.fetched_comments = Comment.objects.filter(entry__endswith=entry.id).order_by('published')
-
-    # Check if the logged-in user liked the this entry
-    if logged_in_id:
-        user_fqid = f"{base_url}/api/authors/{logged_in_id}"
-        entry.liked_by_user = Like.objects.filter(object=entry_url, author=user_fqid).exists()
-    else:
-        entry.liked_by_user = False
-
-    comments = []
-    # Gets all the comments (Have to fetch each one individually :( )
-    for comment in entry.fetched_comments:
-        comment_id = comment.id
-        comment_part_host = re.search("https?://([^/]+)",comment_id).group(1)
-        # If it is our comment get it
-        if comment_part_host == request.get_host():
-            # Try and except incase the api returns faulty data
-            try:
-                comment = Comment.objects.get(id__endswith = re.search("/commented/([^/]+)",comment_id).group(0))
-                serialized_comment = CommentSerializer(comment).data
-                serialized_comment["local"] = True
-                serialized_comment["like_count"] = Like.objects.filter(object=comment.id).count()
-                comments.append(serialized_comment)
-            except:
-                pass
-        else:
-            # Tries to get the comment info (Passes if the comment is faulty or we don't have the host)
-            try:
-                comment_full_host = re.search("https?://[^/]+",comment_id).group(0)
-                comment_node = IncomingNode.objects.get(url = comment_full_host + "/")
-                comment_credentials = (comment_node.username,comment_node.password)
-                comment_info = requests.get(comment_id,auth = comment_credentials)
-                # If we failed to get the comment raise an error
-                if comment_info.status_code >= 400:
-                    raise ConnectionError
-                comment_json = json.loads(comment_info.text)
-                comment_json["local"] = False
-                comment_json["like_count"] = comment_json["likes"]["count"]
-                comments.append(comment_json)
-            except:
-                pass
-    # Replaces the comments in the entry with the comments pulled from their respective databases
-    entry.fetched_comments = comments
+    # Base Entry Interactions (variants: same as ProfileDisplay — http/https mismatch breaks heart state)
+    entry.like_count = like_count_for_object(entry_url)
+    comments_qs = Comment.objects.filter(entry__endswith=entry.id)
+    user_fqid = f"{base_url}/api/authors/{logged_in_id}" if logged_in_id else None
+    entry.liked_by_user = entry_liked_by_user(entry_url, user_fqid) if user_fqid else False
+    entry.fetched_comments = comments_display_from_queryset(comments_qs, request, logged_in_id)
 
     # Check the visibility for the logged-in user
     allowed = check_visibility(entry, logged_in_id)
@@ -786,41 +834,64 @@ def get_remote_entry(request,fqid):
     # HARDCODE SOLUTION FOR fuschia
     if fuschia:
         entry["comments"] = {}
-        entry["comments"]["src"] = entry.get("commentsSrc",{})
+        entry["comments"]["src"] = entry.get("commentsSrc", {})
     # END HARDCODED SOLUTION
-    entry_comments = entry.get("comments",{}).get("src",{})
-    # Gets all the comments (Have to fetch each one individually :( )
-    for comment in entry_comments:
-        comment_id = comment.get("id")
-        comment_part_host = re.search("https?://([^/]+)",comment_id).group(1)
-        # If it is our comment get it
+    entry_comments = entry.get("comments", {}).get("src") or []
+
+    def _incoming_node_for_comment_host(host_base_raw):
+        h = (host_base_raw or "").rstrip("/")
+        if not h:
+            return None
+        for candidate in (h + "/", h):
+            n = IncomingNode.objects.filter(url=candidate).first()
+            if n:
+                return n
+        return None
+
+    for stub in entry_comments:
+        if not isinstance(stub, dict):
+            continue
+        comment_id = stub.get("id")
+        if not comment_id:
+            continue
+        merged = None
+        mhost = re.search(r"https?://([^/]+)", comment_id)
+        comment_part_host = mhost.group(1) if mhost else ""
+
         if comment_part_host == request.get_host():
-            # Try and except incase the api returns faulty data
             try:
-                comment = Comment.objects.get(id__endswith = re.search("/commented/([^/]+)",comment_id).group(0))
-                serialized_comment = CommentSerializer(comment).data
-                serialized_comment["local"] = True
-                serialized_comment["like_count"] = Like.objects.filter(object=comment.id).count()
-                comments.append(serialized_comment)
-            except:
-                pass
+                suf = re.search(r"/commented/([^/]+)", comment_id)
+                if suf:
+                    cobj = Comment.objects.filter(id__endswith=f"/commented/{suf.group(1)}").first()
+                    if cobj:
+                        merged = CommentSerializer(cobj, context={"request": request}).data
+            except Exception:
+                merged = None
         else:
-            # Tries to get the comment info (Passes if the comment is faulty or we don't have the host)
             try:
-                comment_full_host = re.search("https?://[^/]+",comment_id).group(0)
-                comment_node = IncomingNode.objects.get(url = comment_full_host + "/")
-                comment_credentials = (comment_node.username,comment_node.password)
-                comment_info = requests.get(comment_id,auth = comment_credentials)
-                # If we failed to get the comment raise an error
-                if comment_info.status_code >= 400:
-                    raise ConnectionError
-                comment_json = json.loads(comment_info.text)
-                comment_json["local"] = False
-                comment_json["like_count"] = comment_json["likes"]["count"]
-                comments.append(comment_json)
-            except:
-                pass
-    # Replaces the comments in the entry with the comments pulled from their respective databases
+                full_m = re.search(r"https?://[^/]+", comment_id)
+                if full_m:
+                    comment_node = _incoming_node_for_comment_host(full_m.group(0))
+                    if comment_node:
+                        resp = requests.get(
+                            comment_id.rstrip("/"),
+                            auth=(comment_node.username, comment_node.password),
+                            timeout=10,
+                        )
+                        if resp.status_code < 400:
+                            merged = json.loads(resp.text)
+            except Exception:
+                merged = None
+
+        comments.append(
+            _finalize_remote_comment_for_template(
+                merged or {},
+                request,
+                logged_in_id,
+                original_stub=stub,
+            )
+        )
+
     entry["comments"]["src"] = comments
     # Image api url
     image_api_url = None
@@ -832,10 +903,17 @@ def get_remote_entry(request,fqid):
         entry["markdown"] = render_safe_markdown(entry.get("content"))
     # HARCODED SOLUTION FOR fuschia
     if fuschia:
-        entry["like_count"] = entry.get("count",0)
+        entry["like_count"] = entry.get("count", 0)
     else:
-        entry["like_count"] = entry.get("likes").get("count")
-    entry["fetched_comments"] = entry.get("comments").get("src")
+        likes_obj = entry.get("likes") or {}
+        entry["like_count"] = likes_obj.get("count", 0)
+    base_url = request.build_absolute_uri("/")[:-1]
+    entry_fqid_for_like = (entry.get("id") or fqid).strip().rstrip("/")
+    user_fqid_remote = f"{base_url}/api/authors/{logged_in_id}" if logged_in_id else None
+    entry["liked_by_user"] = (
+        entry_liked_by_user(entry_fqid_for_like, user_fqid_remote) if user_fqid_remote else False
+    )
+    entry["fetched_comments"] = comments
 
     return_url = request.session.get('last_feed_url', reverse('stream'))
     return render(request, "entries/remoteentry.html", {

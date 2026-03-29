@@ -1,0 +1,829 @@
+/**
+ * Social-native shell: rail + mobile tabs + feed chrome.
+ * Loaded after core/entries styles; overrides layout only.
+ */
+@import url("https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap");
+
+:root {
+  --shell-rail-w: 248px;
+  --shell-tab-h: 64px;
+  --shell-mobile-top: 52px;
+  --shell-accent: #fe2c55;
+  --shell-accent-2: #25f4ee;
+  --shell-rail-bg: #0c0c0e;
+  --shell-rail-border: rgba(255, 255, 255, 0.06);
+  --shell-ink: #fafafa;
+  --shell-ink-dim: #8a8b8f;
+  --shell-main-bg: #f2f2f4;
+  --shell-card: #ffffff;
+  --shell-font-display: "Sora", system-ui, sans-serif;
+  --shell-font-body: "DM Sans", system-ui, sans-serif;
+}
+
+body.app-shell-social {
+  margin: 0;
+  font-family: var(--shell-font-body);
+  background: var(--shell-main-bg);
+  color: #0a0a0b;
+  background-image:
+    radial-gradient(ellipse 80% 50% at 100% 0%, rgba(254, 44, 85, 0.07), transparent),
+    radial-gradient(ellipse 60% 40% at 0% 100%, rgba(37, 244, 238, 0.06), transparent);
+}
+
+/* Main content links use core/entries styles; do NOT set global a { inherit } or the dark rail loses contrast. */
+
+/* ——— Desktop rail (TikTok-dark inspired) ——— */
+.shell-rail {
+  display: none;
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: var(--shell-rail-w);
+  z-index: 300;
+  flex-direction: column;
+  padding: 20px 14px 24px;
+  background: var(--shell-rail-bg);
+  border-right: 1px solid var(--shell-rail-border);
+  box-shadow: 8px 0 32px rgba(0, 0, 0, 0.25);
+}
+
+@media (min-width: 960px) {
+  .shell-rail {
+    display: flex;
+  }
+}
+
+.shell-rail__brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  color: var(--shell-ink) !important;
+  font-family: var(--shell-font-display);
+  font-weight: 800;
+  font-size: 1.35rem;
+  letter-spacing: -0.04em;
+  padding: 8px 10px 20px;
+  margin-bottom: 8px;
+}
+
+.shell-rail__glyph {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--shell-accent) 0%, #ff6b35 45%, var(--shell-accent-2) 100%);
+  display: grid;
+  place-items: center;
+  font-size: 1.15rem;
+  box-shadow: 0 4px 20px rgba(254, 44, 85, 0.35);
+}
+
+.shell-rail__nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.shell-rail__link {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  text-decoration: none;
+  color: var(--shell-ink-dim) !important;
+  font-weight: 600;
+  font-size: 0.95rem;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.shell-rail__link:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--shell-ink) !important;
+}
+
+.shell-rail__link--active {
+  background: linear-gradient(90deg, rgba(254, 44, 85, 0.2), transparent);
+  color: var(--shell-ink) !important;
+  border-left: 3px solid var(--shell-accent);
+  margin-left: -3px;
+}
+
+.shell-rail__emoji {
+  font-size: 1.35rem;
+  width: 28px;
+  text-align: center;
+  line-height: 1;
+}
+
+.shell-rail__create {
+  margin-top: 12px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  text-align: center;
+  text-decoration: none;
+  font-family: var(--shell-font-display);
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: #fff !important;
+  background: linear-gradient(135deg, var(--shell-accent), #ff1744);
+  box-shadow: 0 8px 24px rgba(254, 44, 85, 0.35);
+  transition: transform 0.12s ease;
+}
+
+.shell-rail__create:hover {
+  transform: scale(1.02);
+  color: #fff !important;
+}
+
+.shell-rail__foot {
+  margin-top: auto;
+  padding-top: 16px;
+  border-top: 1px solid var(--shell-rail-border);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.shell-rail__foot .shell-rail__link {
+  color: var(--shell-ink-dim) !important;
+}
+
+/* ——— Mobile top bar ——— */
+.shell-mobile-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  min-height: var(--shell-mobile-top);
+  background: rgba(12, 12, 14, 0.92);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  position: sticky;
+  top: 0;
+  z-index: 250;
+  border-bottom: 1px solid var(--shell-rail-border);
+}
+
+@media (min-width: 960px) {
+  .shell-mobile-top {
+    display: none;
+  }
+}
+
+.shell-mobile-top__logo {
+  font-family: var(--shell-font-display);
+  font-weight: 800;
+  font-size: 1.2rem;
+  color: var(--shell-ink) !important;
+  text-decoration: none;
+  letter-spacing: -0.03em;
+}
+
+.shell-mobile-top__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.shell-mobile-top__fab {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, var(--shell-accent), #ff1744);
+  color: #fff;
+  text-decoration: none;
+  font-size: 1.5rem;
+  font-weight: 300;
+  line-height: 1;
+  box-shadow: 0 4px 16px rgba(254, 44, 85, 0.4);
+}
+
+/* ——— Main stage ——— */
+.shell-stage {
+  min-height: 100vh;
+  padding-bottom: calc(var(--shell-tab-h) + env(safe-area-inset-bottom, 0px));
+}
+
+@media (min-width: 960px) {
+  .shell-stage {
+    margin-left: var(--shell-rail-w);
+    padding-bottom: 0;
+  }
+}
+
+body.app-shell-social .content-container {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 20px 16px 48px;
+}
+
+body.app-shell-social.feed-wide .content-container {
+  max-width: 920px;
+}
+
+@media (min-width: 960px) {
+  body.app-shell-social .content-container {
+    padding: 28px 24px 56px;
+  }
+}
+
+/* Wide pages (authors, connections, forms): break out of narrow feed */
+body.app-shell-social.shell-wide .content-container {
+  max-width: 1100px;
+}
+
+body.app-shell-social.shell-wide .shell-stage .page {
+  max-width: 1100px;
+}
+
+body.app-shell-social .page {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 0;
+}
+
+body.app-shell-social.shell-wide .page {
+  max-width: 1100px;
+}
+
+/* ——— Bottom tab bar (mobile) ——— */
+.shell-tabbar {
+  display: flex;
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 280;
+  min-height: var(--shell-tab-h);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  background: rgba(12, 12, 14, 0.94);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-top: 1px solid var(--shell-rail-border);
+  justify-content: space-around;
+  align-items: flex-start;
+  padding-top: 8px;
+}
+
+@media (min-width: 960px) {
+  .shell-tabbar {
+    display: none;
+  }
+}
+
+.shell-tabbar__item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  text-decoration: none;
+  color: var(--shell-ink-dim) !important;
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 4px 4px 8px;
+  max-width: 88px;
+}
+
+.shell-tabbar__item:hover,
+.shell-tabbar__item:focus {
+  color: var(--shell-ink) !important;
+}
+
+.shell-tabbar__item--mid {
+  position: relative;
+  top: -18px;
+}
+
+.shell-tabbar__mid-btn {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--shell-accent), #ff1744);
+  display: grid;
+  place-items: center;
+  color: #fff !important;
+  font-size: 1.75rem;
+  font-weight: 300;
+  line-height: 1;
+  box-shadow: 0 8px 24px rgba(254, 44, 85, 0.45);
+  text-decoration: none;
+}
+
+.shell-tabbar__ico {
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+/* Hide old sticky header from core when using social shell */
+body.app-shell-social .app-header {
+  display: none !important;
+}
+
+/* ——— Feed: Instagram-narrow column + post chrome ——— */
+body.app-shell-social .page-hero {
+  text-align: left;
+  margin-bottom: 20px;
+}
+
+body.app-shell-social .page-hero__title {
+  font-family: var(--shell-font-display);
+  font-size: 1.65rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  background: linear-gradient(90deg, #0a0a0b, #3a3a42);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+body.app-shell-social .page-hero__sub {
+  font-size: 0.9rem;
+  color: #5c5c66;
+}
+
+/* Wider feed column for two-up grid */
+body.app-shell-social .page-container.feed-page {
+  max-width: 920px;
+  gap: 16px;
+}
+
+.feed-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+  width: 100%;
+  align-items: stretch;
+}
+
+@media (min-width: 640px) {
+  .feed-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.feed-grid__empty {
+  grid-column: 1 / -1;
+}
+
+.social-post {
+  background: var(--shell-card);
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow:
+    0 1px 0 rgba(0, 0, 0, 0.04),
+    0 12px 40px rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(0, 0, 0, 0.04);
+  margin-bottom: 20px;
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.social-post.clickable:hover {
+  transform: translateY(-3px);
+  box-shadow:
+    0 1px 0 rgba(0, 0, 0, 0.06),
+    0 20px 50px rgba(254, 44, 85, 0.12);
+}
+
+.social-post__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px 10px;
+}
+
+.social-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: linear-gradient(145deg, #e8e8ec, #c4c4cc);
+  display: grid;
+  place-items: center;
+  font-family: var(--shell-font-display);
+  font-weight: 800;
+  font-size: 1rem;
+  color: #2a2a30;
+  flex-shrink: 0;
+  border: 2px solid #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.social-post__meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 44px;
+}
+
+.social-post__user {
+  display: block;
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: #0a0a0b;
+}
+
+.social-post__sub {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+
+.social-post__title {
+  margin: 0 16px 8px;
+  font-family: var(--shell-font-display);
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+}
+
+body.app-shell-social .social-post .entry-header {
+  display: none;
+}
+
+body.app-shell-social .social-post .entry-by {
+  display: none;
+}
+
+body.app-shell-social .social-post .entry-description {
+  margin: 0 16px 12px;
+  padding: 10px 12px;
+  background: #f7f7f9;
+  border-radius: 12px;
+  font-size: 0.9rem;
+  color: #3d3d45;
+}
+
+body.app-shell-social .social-post .entry-content {
+  margin: 0;
+  padding: 0 12px 12px;
+}
+
+body.app-shell-social .social-post .entry-image {
+  border-radius: 14px;
+  width: 100%;
+  margin: 0;
+}
+
+body.app-shell-social .social-post .entry-plain-text,
+body.app-shell-social .social-post .entry-markdown {
+  border-radius: 14px;
+  margin: 0;
+}
+
+body.app-shell-social .badge-visibility {
+  font-size: 0.62rem;
+  padding: 4px 10px;
+  background: #0a0a0b;
+  color: #e8e8ec;
+  border: none;
+  letter-spacing: 0.06em;
+}
+
+/* Action bar: IG-style */
+body.app-shell-social .social-post .interaction-row {
+  border-top: 1px solid #efeff2;
+  padding: 10px 14px 14px;
+  margin: 0;
+  gap: 8px;
+  background: linear-gradient(180deg, #fafafb, #fff);
+}
+
+body.app-shell-social .social-post .stat-item {
+  padding: 10px 16px;
+  border-radius: 14px;
+  background: #f2f2f5;
+  font-weight: 700;
+  font-size: 0.88rem;
+}
+
+body.app-shell-social .social-post .stat-item:hover {
+  background: #e8e8ed;
+}
+
+body.app-shell-social .social-post .liked {
+  background: rgba(254, 44, 85, 0.1);
+}
+
+/* My entries footer */
+body.app-shell-social .social-post .entry-footer {
+  border-top: 1px solid #efeff2;
+  padding: 12px 16px;
+  margin: 0 !important;
+  background: #fafafb;
+}
+
+/* Compact cards in two-column feed */
+body.app-shell-social .feed-grid .social-post--grid {
+  margin-bottom: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+body.app-shell-social .feed-grid .social-post--grid .social-post__head {
+  padding: 10px 12px 8px;
+}
+
+body.app-shell-social .feed-grid .social-post--grid .social-avatar {
+  width: 36px;
+  height: 36px;
+  font-size: 0.85rem;
+}
+
+body.app-shell-social .feed-grid .social-post--grid .social-post__meta {
+  min-height: 40px;
+}
+
+body.app-shell-social .feed-grid .social-post--grid .social-post__title {
+  margin: 0 12px 6px;
+  font-size: 0.95rem;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+body.app-shell-social .feed-grid .social-post--grid .entry-description {
+  margin: 0 12px 8px;
+  padding: 8px 10px;
+  font-size: 0.82rem;
+}
+
+body.app-shell-social .feed-grid .social-post--grid .entry-content {
+  flex: 1;
+  min-height: 0;
+  padding: 0 10px 10px;
+}
+
+body.app-shell-social .feed-grid .social-post--grid .entry-image {
+  max-height: 160px;
+  object-fit: cover;
+}
+
+body.app-shell-social .feed-grid .social-post--grid .entry-plain-text,
+body.app-shell-social .feed-grid .social-post--grid .entry-markdown {
+  max-height: 120px;
+  overflow: hidden;
+  font-size: 0.85rem;
+}
+
+body.app-shell-social .feed-grid .social-post--grid .interaction-row {
+  padding: 8px 10px 10px;
+  margin-top: auto;
+}
+
+body.app-shell-social .feed-grid .social-post--grid .stat-item {
+  padding: 8px 12px;
+  font-size: 0.8rem;
+}
+
+body.app-shell-social .feed-grid .social-post--grid .entry-footer {
+  padding: 10px 12px;
+  font-size: 0.82rem;
+}
+
+/* Profile IG header */
+.ig-profile {
+  position: relative;
+  background: var(--shell-card);
+  border-radius: 24px;
+  padding: 24px 20px 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.ig-profile__row {
+  display: flex;
+  gap: 28px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.ig-profile__avatar {
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 4px solid #fff;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
+  flex-shrink: 0;
+}
+
+.ig-profile__side {
+  flex: 1;
+  min-width: 200px;
+}
+
+.ig-profile__side h1 {
+  margin: 0 0 12px;
+  font-family: var(--shell-font-display);
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.ig-profile__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  margin-bottom: 14px;
+  font-size: 0.9rem;
+}
+
+.ig-profile__statlink {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  text-decoration: none !important;
+  color: inherit !important;
+  padding: 8px 12px;
+  margin: -8px -12px;
+  border-radius: 14px;
+  transition: background 0.15s ease;
+}
+
+.ig-profile__statlink:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.ig-profile__statlink strong {
+  display: block;
+  font-family: var(--shell-font-display);
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: #0a0a0b;
+}
+
+.ig-profile__statlink span {
+  color: #5c5c66;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.ig-profile__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.ig-profile__bio {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid #efeff2;
+  font-size: 0.92rem;
+  color: #3d3d45;
+  line-height: 1.5;
+}
+
+body.app-shell-social .entry-feed-panel {
+  border-radius: 24px;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.06);
+}
+
+body.app-shell-social .entry-feed-panel__head {
+  font-family: var(--shell-font-display);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  background: #0a0a0b;
+}
+
+/* Auth cards on dark-framed page */
+body.app-shell-social .auth-card {
+  border-radius: 24px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.12);
+}
+
+body.app-shell-social .empty-state {
+  border-radius: 20px;
+  border-style: solid;
+  background: #fff;
+}
+
+/* Entry detail + comments */
+.entry-content--open {
+  margin-top: 0 !important;
+  border-top: none !important;
+  padding-top: 0 !important;
+}
+
+.entry-comments-panel {
+  border-radius: 20px;
+  margin-top: 18px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  padding: 20px 22px 24px;
+}
+
+.entry-comments-panel__title {
+  font-family: var(--shell-font-display);
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin: 0 0 16px;
+  color: #3d3d45;
+}
+
+.comment-tile {
+  padding: 14px 0;
+  border-bottom: 1px solid #efeff2;
+}
+
+.comment-tile:last-of-type {
+  border-bottom: none;
+}
+
+.comment-tile__body {
+  margin: 8px 0 4px;
+}
+
+.comment-tile__actions {
+  padding: 6px 0 0 !important;
+  border: none !important;
+}
+
+.entry-add-comment-form {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid #efeff2;
+}
+
+/* Wide layouts: connections columns breathe */
+body.app-shell-social.shell-wide .connections__section {
+  max-width: 1200px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Authors directory: toolbar spacing so list never overlaps the CTA */
+body.app-shell-social .authors-toolbar {
+  margin-bottom: 1.25rem;
+}
+
+body.app-shell-social .authors-toolbar__cta {
+  margin: 0 0 0.25rem;
+}
+
+body.app-shell-social .authors-toolbar__cta .button.success {
+  display: inline-flex;
+}
+
+/* Authors directory (home): keep avatars perfect circles, aligned to row */
+body.app-shell-social .author-list {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  position: relative;
+  z-index: 0;
+}
+
+body.app-shell-social .author-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 72px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+body.app-shell-social .author-card .profile-pic {
+  width: 56px;
+  height: 56px;
+  min-width: 56px;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: center center;
+  display: block;
+  flex-shrink: 0;
+  border: 2px solid #e8e9ee;
+  background: #f0f1f5;
+  vertical-align: middle;
+}
+
+body.app-shell-social .author-info {
+  flex: 1;
+  min-width: 0;
+  align-self: center;
+}
+

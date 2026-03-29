@@ -1,20 +1,30 @@
 {% extends 'entries/base.html' %}
 {% load entry_extras %}
 
-{% block title %}My Entries{% endblock %}
+{% block body_extra_class %}feed-wide{% endblock %}
+
+{% block title %}My posts{% endblock %}
 
 {% block content %}
-<div class="page-container">
-    <h1>My Shared Thoughts and Pictures</h1>
-    <hr>
+<div class="page-container feed-page">
+    <header class="page-hero">
+        <h1 class="page-hero__title">My posts</h1>
+        <p class="page-hero__sub">Your grid on this node — edit or delete anytime.</p>
+    </header>
 
+    <div class="feed-grid">
     {% for entry in entries %}
-        <div class="entry-card clickable" data-url="{% url 'get_entry' entry.id %}">
-            
-            <div class="entry-header">
-                <h2 class="entry-title">{{ entry.title }}</h2>
-                <span class="badge-visibility">{{ entry.visibility }}</span>
+        <article class="entry-card social-post social-post--grid clickable" data-url="{% url 'get_entry' entry.id %}">
+            <div class="social-post__head">
+                <span class="social-avatar" aria-hidden="true">{{ entry.author.username|slice:":1"|upper }}</span>
+                <div class="social-post__meta">
+                    <span class="social-post__user">{{ entry.author.username }}</span>
+                    <div class="social-post__sub">
+                        <span class="badge-visibility">{{ entry.visibility }}</span>
+                    </div>
+                </div>
             </div>
+            <h2 class="social-post__title">{{ entry.title }}</h2>
 
             {% if entry.description %}
                 <p class="entry-description">{{ entry.description }}</p>
@@ -22,7 +32,7 @@
 
             <div class="entry-content">
                 {% if "image" in entry.contentType %}
-                    <img src="data:{{ entry.contentType|cut:';base64' }};base64,{{ entry.content }}" class="entry-image">
+                    <img src="data:{{ entry.contentType|cut:';base64' }};base64,{{ entry.content }}" class="entry-image" alt="">
                 {% elif entry.contentType == "text/markdown" %}
                     <div class="entry-markdown">{{ entry.content|safe }}</div>
                 {% else %}
@@ -54,7 +64,7 @@
                 </div>
             </div>
 
-            <div class="entry-footer" onclick="event.stopPropagation();" style="margin-top: 10px; border-top: none; padding-top: 0;">
+            <div class="entry-footer" onclick="event.stopPropagation();" style="margin-top: 0; border-top: none; padding-top: 0;">
                 <div class="footer-edit-delete-actions">
                     <a href="{% url 'edit_entry' entry.id %}" class="edit-link">Edit</a>
                     <form action="{% url 'delete_entry' entry.id %}" method="POST" style="display:inline;">
@@ -62,14 +72,14 @@
                         <button type="submit" class="btn-delete" onclick="return confirm('Delete this thought?')">Delete</button>
                     </form>
                 </div>
-                <span class="entry-date">Published: {{ entry.published|date:"M d, Y H:i" }}</span>
+                <span class="entry-date">{{ entry.published|date:"M j · g:i A" }}</span>
             </div>
-            
-        </div>
+        </article>
     {% empty %}
-        <div class="empty-state">
-            <p>You haven't posted anything yet!</p>
+        <div class="empty-state feed-grid__empty">
+            <p>You have not posted yet. Tap <strong>＋</strong> to share something.</p>
         </div>
     {% endfor %}
+    </div>
 </div>
 {% endblock %}

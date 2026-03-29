@@ -1,21 +1,31 @@
 {% extends 'entries/base.html' %}
 {% load entry_extras %}
 
-{% block title %}Stream{% endblock %}
+{% block body_extra_class %}feed-wide{% endblock %}
+
+{% block title %}For you{% endblock %}
 
 {% block content %}
-<div class="page-container">
-    <h1>Your Stream</h1>
-    <hr>
+<div class="page-container feed-page">
+    <header class="page-hero">
+        <h1 class="page-hero__title">For you</h1>
+        <p class="page-hero__sub">Scroll the latest from people you follow.</p>
+    </header>
+
+    <div class="feed-grid">
     {% for entry in entries %}
-        <div class="entry-card clickable" data-url="{% if entry.is_remote %}{% url 'remote_entry' entry.id %}{% else %}{% url 'get_entry' entry.id %}{% endif %}"{% if entry.is_remote %} data-remote="true"{% endif %}>
-            
-            <div class="entry-header">
-                <h2 class="entry-title">{{ entry.title }}</h2>
-                <span class="badge-visibility">{{ entry.visibility }}{% if entry.is_remote %} (remote){% endif %}</span>
+        <article class="entry-card social-post social-post--grid clickable" data-url="{% if entry.is_remote %}{% url 'remote_entry' entry.id %}{% else %}{% url 'get_entry' entry.id %}{% endif %}"{% if entry.is_remote %} data-remote="true"{% endif %}>
+            <div class="social-post__head">
+                <span class="social-avatar" aria-hidden="true">{{ entry.author.username|slice:":1"|upper }}</span>
+                <div class="social-post__meta">
+                    <span class="social-post__user">{{ entry.author.username }}</span>
+                    <div class="social-post__sub">
+                        <span class="badge-visibility">{{ entry.visibility }}{% if entry.is_remote %} · remote{% endif %}</span>
+                    </div>
+                </div>
             </div>
-            <p class="entry-by">by <strong>{{ entry.author.username }}</strong></p>
-            
+            <h2 class="social-post__title">{{ entry.title }}</h2>
+
             {% if entry.description %}
                 <p class="entry-description">{{ entry.description }}</p>
             {% endif %}
@@ -26,9 +36,9 @@
                         {% if entry.content|slice:':5' == 'data:' or entry.content|slice:':4' == 'http' or entry.image %}
                             <picture>
                                 {% if entry.image %}
-                                <img src="{{ entry.image }}" class="entry-image">
+                                <img src="{{ entry.image }}" class="entry-image" alt="">
                                 {% else %}
-                                <img src="data:{{ entry.contentType|cut:';base64' }};base64,{{ entry.content }}" class="entry-image">
+                                <img src="data:{{ entry.contentType|cut:';base64' }};base64,{{ entry.content }}" class="entry-image" alt="">
                                 {% endif %}
                             </picture>
                         {% else %}
@@ -72,7 +82,10 @@
                     </span>
                 </div>
             </div>
-        </div>
+        </article>
+    {% empty %}
+        <div class="empty-state feed-grid__empty">Nothing here yet. Follow authors from Home, then come back.</div>
     {% endfor %}
+    </div>
 </div>
 {% endblock %}
