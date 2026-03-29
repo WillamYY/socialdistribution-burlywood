@@ -27,7 +27,7 @@
                     {% if entry.image %}
                     <img src="{{ entry.image }}" class="entry-image">
                     {% else %}
-                    <img src="data:image/png;base64,{{ entry.content }}" class="entry-image">
+                    <img src="data:{{ entry.contentType|cut:';base64' }};base64,{{ entry.content }}" class="entry-image">
                     {% endif %}
                 </picture>
                 {% if image_api_url %}

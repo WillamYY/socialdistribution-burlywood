@@ -1,8 +1,9 @@
 from django.http import HttpResponse, Http404
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
-from .models import Author, FollowRequest, AuthorRequest, IncomingNode, RemoteFollow, RemoteFollowRequest, RemoteFollower, AdminHostedImage
-from entries.models import Entry
+from .models import Author, FollowRequest, AuthorRequest, IncomingNode, RemoteFollow, RemoteFollowRequest, RemoteFollower, AdminHostedImage, EntryDelivery
+from .remote  import  backfill_entries_to_remote_recipient, _credentials_for_remote_author, _post_entry_to_single_remote
+from entries.models import Entry, RemoteEntry
 from interactions.models import Like, Comment
 from django.contrib.auth.hashers import check_password
 from django.urls import reverse, resolve, Resolver404
@@ -405,6 +406,8 @@ def deny_follow(request, req_id):
 def _send_accept_to_requester(request, actor_fqid, accepter):
     """POST Accept to requester's inbox so their Remote Following updates when we approve."""
     try:
+        logger.info("ACCEPT start", actor_fqid, accepter.id)
+
         base = (accepter.host or "").strip().rstrip("/")
         if not base or not base.startswith("http"):
             base = request.build_absolute_uri("/")[:-1]
@@ -412,23 +415,47 @@ def _send_accept_to_requester(request, actor_fqid, accepter):
             base = base.rstrip("/") + "/api"
         if base.startswith("http://"):
             base = "https" + base[4:]
+        
         accepter_id = f"{base}/authors/{accepter.id}"
-        inbox_url = f"{_normalize_fqid(actor_fqid).rstrip('/')}/inbox"
+        actor_fqid = _normalize_fqid(actor_fqid)
+        inbox_url = f"{actor_fqid}/inbox"
+
         payload = {
             "type": "Accept",
             "actor": accepter_id,
-            "object": {"type": "Follow", "actor": actor_fqid, "object": accepter_id},
+            "object": {
+                "type": "Follow",
+                "actor": actor_fqid,
+                "object": accepter_id,
+            },
         }
-        credentials = get_object_or_404(IncomingNode, inbox_url[:inbox_url.index("/api")] + "/")
-        requests.post(
+        
+        auth = _credentials_for_remote_author(actor_fqid)
+        logger.info("ACCEPT auth", bool(auth), inbox_url)
+        if not auth:
+            logger.warning("Accept POST: no credentials for %s", actor_fqid)
+            return
+        
+        resp = requests.post(
             inbox_url,
             json=payload,
-            headers={"Content-Type": "application/json", "User-Agent": "SocialDistribution/1.0"},
+            headers={
+                "Content-Type": "application/json",
+                "User-Agent": "SocialDistribution/1.0",
+            },
             timeout=10,
-            auth=(credentials.username, credentials.password)
+            auth=auth,
         )
-    except Exception:
-        pass
+
+        logger.info(
+            "Accept POST status=%s url=%s body=%s",
+            resp.status_code,
+            inbox_url,
+            resp.text[:200],
+        )
+    except Exception as e:
+        logger.error("ACCEPT failed", repr(e))
+        logger.exception("Accept POST failed actor=%s accepter=%s error=%s", actor_fqid, accepter.id, e)
 
 
 def approve_remote_follow(request, req_id):
@@ -445,6 +472,13 @@ def approve_remote_follow(request, req_id):
     )
     # Notify requester so their Remote Following updates
     _send_accept_to_requester(request, actor_fqid=actor_fqid, accepter=target)
+    relation_type = "friend" if RemoteFollow.objects.filter(follower=target, followed_fqid=actor_fqid).exists() else "follower"
+    backfill_entries_to_remote_recipient(
+        author=target,
+        remote_recipient_fqid=actor_fqid,
+        relation_type=relation_type,
+        request=request,
+    )
     messages.success(request, f"You approved {name}'s follow request!", extra_tags='follow')
     return redirect('view_follow_requests')
 
@@ -486,12 +520,35 @@ def connections(request):
         if norm_fqid in following_fqids
     ]
     mutual_fqids = {rf["fqid"] for rf in remote_friends}
+    def _fallback_remote_name(fqid: str) -> str:
+        fqid = _normalize_fqid(fqid)
+
+        # If this remote author also in remote_followers_raw, reuse stored name
+        if fqid in follower_by_fqid:
+            return follower_by_fqid[fqid].actor_display_name or "Remote author"
+
+        # Try inbox entries from this remote author
+        latest_entry = (
+            RemoteEntry.objects
+            .filter(recipient=author, author_fqid=fqid)
+            .order_by("-updated_at")
+            .first()
+        )
+        if latest_entry and getattr(latest_entry, "author_display_name", ""):
+            return latest_entry.author_display_name
+
+        # Otherwise, try to fetch readable from the fqid
+        tail = fqid.rstrip("/").split("/")[-1]
+        return tail or "Remote author"
     # Remote following: only we follow them, they do NOT follow us (exclude mutual)
     remote_followings_display = []
     for rf in remote_followings:
         norm_fqid = _normalize_fqid(rf.followed_fqid)
         if norm_fqid not in mutual_fqids:
-            remote_followings_display.append({"fqid": norm_fqid, "display_name": "Remote author"})
+            remote_followings_display.append({
+                "fqid": norm_fqid,
+                "display_name": _fallback_remote_name(norm_fqid),
+            })
     # Remote followers: only they follow us, we do NOT follow them (exclude mutual)
     remote_followers = [
         r for r in remote_followers_raw
@@ -574,25 +631,44 @@ def follow_remote_author(request, fqid):
                 "User-Agent": "SocialDistribution/1.0 (+https://github.com/uofa-cmput404/w26-socialdistribution-project-burlywood)",
             }
             payload = {"type": "follow", "actor": actor_info, "object": object_info}
-            logger.info("Sending follow to inbox url=%s actor=%s object=%s", inbox_url, actor_info.get("id"), normalized)
-            credentials = get_object_or_404(IncomingNode, url = inbox_url[:inbox_url.index("/api")] + "/")
-            print(inbox_url)
+
+            auth = _credentials_for_remote_author(normalized)
+            if not auth:
+                messages.error(request, "No node credentials configured for that remote author.")
+                logger.warning("Follow POST: no credentials for %s", normalized)
+                return redirect(request.META.get("HTTP_REFERER", "/"))
+
+            logger.info(
+                "Sending follow to inbox url=%s actor=%s object=%s",
+                inbox_url,
+                actor_info.get("id"),
+                normalized,
+            )
+
             resp = requests.post(
                 inbox_url,
                 json=payload,
                 headers=headers,
                 timeout=15,
                 allow_redirects=False,
-                auth=(credentials.username, credentials.password)
+                auth=auth,
             )
             logger.info("Follow POST response status=%s url=%s body=%s", resp.status_code, inbox_url, resp.text[:200] if resp.text else "")
             if resp.status_code in (301, 302, 307, 308):
                 loc = resp.headers.get("Location", "")
                 if loc and loc != inbox_url:
-                    credentials = get_object_or_404(IncomingNode, url = loc[:loc.index("/api")] + "/")
-                    resp = requests.post(loc, json=payload, headers=headers, timeout=15, auth=(credentials.username, credentials.password))
+                    redirect_auth = _credentials_for_remote_author(loc)
+                    if not redirect_auth:
+                        redirect_auth = auth
+                    resp = requests.post(
+                        loc,
+                        json=payload,
+                        headers=headers,
+                        timeout=15,
+                        auth=redirect_auth,
+                    )
+
             if resp.status_code in (200, 202, 204):
-                RemoteFollow.objects.create(follower=me, followed_fqid=normalized)
                 messages.success(request, "Follow request sent!", extra_tags="follow")
             else:
                 err_detail = resp.reason or ""
@@ -606,10 +682,15 @@ def follow_remote_author(request, fqid):
                     err_detail = resp.text[:100] if resp.text else "no details"
                 messages.error(
                     request,
-                    f"Inbox rejected ({resp.status_code}): {err_detail} — armdb may not have received the request.",
+                    f"Inbox rejected ({resp.status_code}): {err_detail}",
                 )
-                logger.warning("Follow inbox rejected status=%s body=%s", resp.status_code, resp.text[:300])
-        except requests.exceptions.RequestException as e:
+                logger.warning(
+                    "Follow inbox rejected status=%s body=%s",
+                    resp.status_code,
+                    resp.text[:300],
+                )
+
+        except requests.RequestException as e:
             messages.error(request, f"Could not reach remote inbox: {str(e)[:100]}")
             logger.warning("Follow POST failed: %s", e)
 
@@ -623,7 +704,6 @@ def follow_remote_author(request, fqid):
         except (Resolver404, ValueError):
             pass
     return redirect(request.session.get("last_feed_url", referer or "/"))
-
 
 def unfollow_remote_author(request, fqid):
     """
@@ -660,6 +740,15 @@ def remove_remote_follower(request, fqid):
     normalized = _normalize_fqid(fqid)
     deleted, _ = RemoteFollower.objects.filter(actor_fqid=normalized, target=me).delete()
     if deleted:
+        # retract previously delivered entries from this remote follower
+        delivered_entry_ids = EntryDelivery.objects.filter(
+            recipient_fqid=normalized,
+            entry__author=me,
+        ).values_list("entry_id", flat=True)
+
+        for entry in Entry.objects.filter(id__in=delivered_entry_ids):
+            _post_entry_to_single_remote(entry, request, normalized, visibility_override="DELETED")
+
         messages.success(request, "Remote follower removed.", extra_tags="follow")
     else:
         messages.info(request, "Follower was already removed.", extra_tags="follow")

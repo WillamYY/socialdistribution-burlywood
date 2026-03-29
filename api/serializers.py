@@ -292,7 +292,7 @@ class EntrySerializer(serializers.ModelSerializer):
         # Construct the base URL for the likes endpoint
         base_url = self.get_id(obj)
         
-        likes_url = f"{base_url}likes" 
+        likes_url = f"{base_url.rstrip('/')}/likes"
         # Handles both http and http requests
         search = re.search("entr(?:y|ies)/([^/]+)",base_url)
         # Prevents crashes
