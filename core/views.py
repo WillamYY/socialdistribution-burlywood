@@ -807,7 +807,7 @@ def RemoteProfileDisplay(request, fqid):
         if not is_following:
             print(f"{base_host}/api/authors/{author_id}/followers/{user_fqid}")
             base_host = remote_author_url.split("/api/authors/")[0]
-            credentials = get_object_or_404(IncomingNode, url = base_host)
+            credentials = get_object_or_404(IncomingNode, url = base_host + "/")
             print("===============USER FQID================", user_fqid)
             is_following = requests.get(
                 f"{remote_author_url}/api/authors/followers/{user_fqid}",
