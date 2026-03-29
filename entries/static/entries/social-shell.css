@@ -856,14 +856,6 @@ body.app-shell-social .authors-home-lead {
   font-size: 0.92rem;
 }
 
-body.app-shell-social .authors-toolbar--inline {
-  margin-bottom: 0;
-}
-
-body.app-shell-social .authors-toolbar--inline .authors-toolbar__cta {
-  margin: 0;
-}
-
 /* Radio-driven tabs (no JS): inputs first, then labels, then panels */
 body.app-shell-social .authors-seg {
   position: relative;
@@ -928,6 +920,26 @@ body.app-shell-social .authors-panel {
 body.app-shell-social #authors-v-local:checked ~ .authors-panel--local,
 body.app-shell-social #authors-v-remote:checked ~ .authors-panel--remote,
 body.app-shell-social #authors-v-all:checked ~ .authors-panel--all {
+  display: block;
+}
+
+/* For you: same segmented UX, separate radio group (feed-v-*) */
+body.app-shell-social .stream-feed-seg .feed-panel {
+  display: none;
+}
+
+body.app-shell-social #feed-v-local:checked ~ .authors-seg__tabs label[for="feed-v-local"],
+body.app-shell-social #feed-v-remote:checked ~ .authors-seg__tabs label[for="feed-v-remote"],
+body.app-shell-social #feed-v-all:checked ~ .authors-seg__tabs label[for="feed-v-all"] {
+  background: linear-gradient(135deg, rgba(254, 44, 85, 0.12), rgba(255, 152, 0, 0.1));
+  border-color: rgba(254, 44, 85, 0.35);
+  color: #0a0a0b;
+  box-shadow: 0 2px 10px rgba(254, 44, 85, 0.12);
+}
+
+body.app-shell-social #feed-v-local:checked ~ .feed-panel--local,
+body.app-shell-social #feed-v-remote:checked ~ .feed-panel--remote,
+body.app-shell-social #feed-v-all:checked ~ .feed-panel--all {
   display: block;
 }
 

@@ -11,13 +11,6 @@
     <header class="authors-home-header">
       <h1 class="authors-home-title">Authors</h1>
       <p class="muted authors-home-lead">People on this node and across the network.</p>
-      {% if request.session.author_id %}
-        <div class="authors-toolbar authors-toolbar--inline">
-          <p class="authors-toolbar__cta">
-            <a href="{% url 'stream' %}" class="button success">Go to stream</a>
-          </p>
-        </div>
-      {% endif %}
     </header>
 
     <div class="authors-seg">

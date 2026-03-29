@@ -575,10 +575,19 @@ def stream_view(request):
         entry.like_count = like_count_for_object(entry_url)
         user_fqid = f"{base_url}/api/authors/{viewer.id}"
         entry.liked_by_user = entry_liked_by_user(entry_url, user_fqid)
+
+    entries_local = [e for e in entries if not getattr(e, "is_remote", False)]
+    entries_remote = [e for e in entries if getattr(e, "is_remote", False)]
+
     return render(
         request,
         "entries/stream.html",
-        {"entries": entries, "viewer": viewer},
+        {
+            "entries": entries,
+            "entries_local": entries_local,
+            "entries_remote": entries_remote,
+            "viewer": viewer,
+        },
     )
 
 
