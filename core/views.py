@@ -15,6 +15,7 @@ from api.serializers import EntrySerializer
 import re
 import base64
 from entries.views import render_safe_markdown
+from urllib.parse import quote
 
 logger = logging.getLogger(__name__)
 
@@ -805,13 +806,15 @@ def RemoteProfileDisplay(request, fqid):
             follower_id=logged_in_id, followed_fqid=normalized_fqid
         ).exists()
         if not is_following:
-            print(f"{base_host}/api/authors/{author_id}/followers/{user_fqid}")
+            print(f"{base_host}/api/authors/{author_id}/followers/{quote(user_fqid)}")
             base_host = remote_author_url.split("/api/authors/")[0]
             credentials = get_object_or_404(IncomingNode, url = base_host + "/")
             print("===============USER FQID================", user_fqid)
             is_following = requests.get(
-                f"{remote_author_url}/followers/{user_fqid}",
-                auth=(credentials.username, credentials.password)
+                f"{remote_author_url}/followers/{quote(user_fqid)}",
+                headers={"Accept": "application/json"},
+                auth=(credentials.username, credentials.password),
+                timeout=10
             )
             print(is_following)
             is_following.raise_for_status()
