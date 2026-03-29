@@ -804,6 +804,18 @@ def RemoteProfileDisplay(request, fqid):
         is_following = RemoteFollow.objects.filter(
             follower_id=logged_in_id, followed_fqid=normalized_fqid
         ).exists()
+        if not is_following:
+            logged_in_fqid = f"{me.host}/authors/{me.id}"
+            print(f"{base_host}/api/authors/{author_id}/followers/{logged_in_fqid}")
+            base_host = remote_author_url.split("/api/authors/")[0]
+            credentials = get_object_or_404(IncomingNode, url = base_host)
+            is_following = requests.get(
+                f"{remote_author_url}/api/authors/followers/{logged_in_fqid}",
+                auth=(credentials.username, credentials.password)
+            )
+            print(is_following)
+            is_following.raise_for_status()
+    is_following = False
 
     request_sent = False
 
