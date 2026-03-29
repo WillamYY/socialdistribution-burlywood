@@ -1,34 +1,111 @@
 {% load static %}
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#0c0c0e">
     <title>{% block title %}Social Distribution Node{% endblock %}</title>
     <link rel="stylesheet" href="{% static 'core/styles.css' %}">
     <link rel="stylesheet" href="{% static 'entries/styles.css' %}">
+    <link rel="stylesheet" href="{% static 'entries/social-shell.css' %}">
     {% block style %}{% endblock %}
 </head>
-<body>
-    <nav class="top-nav">
-        <a href="{% url 'NodeDisplay' %}">Home</a>
-        <a href="{% url 'stream' %}">Stream</a>
-        <a href="{% url 'view_my_entries' %}">My Entries</a>
-        <a href="{% url 'create_entry' %}">Create Entry</a>
+<body class="app-shell-social {% block body_extra_class %}{% endblock %}">
+    {% with url_name=request.resolver_match.url_name|default:'' %}
+    <aside class="shell-rail" aria-label="Main navigation">
+        <a href="{% url 'NodeDisplay' %}" class="shell-rail__brand">
+            <span class="shell-rail__glyph" aria-hidden="true">◆</span>
+            <span>Node</span>
+        </a>
+        <nav class="shell-rail__nav">
+            <a href="{% url 'NodeDisplay' %}" class="shell-rail__link{% if url_name == 'NodeDisplay' or url_name == 'Home' %} shell-rail__link--active{% endif %}">
+                <span class="shell-rail__emoji" aria-hidden="true">⌂</span>
+                <span>Home</span>
+            </a>
+            <a href="{% url 'stream' %}" class="shell-rail__link{% if url_name == 'stream' or url_name == 'get_entry' or url_name == 'remote_entry' %} shell-rail__link--active{% endif %}">
+                <span class="shell-rail__emoji" aria-hidden="true">▶</span>
+                <span>For you</span>
+            </a>
+            <a href="{% url 'view_my_entries' %}" class="shell-rail__link{% if url_name == 'view_my_entries' or url_name == 'edit_entry' %} shell-rail__link--active{% endif %}">
+                <span class="shell-rail__emoji" aria-hidden="true">▦</span>
+                <span>My posts</span>
+            </a>
+            {% if request.session.author_id %}
+            <a href="{% url 'create_entry' %}" class="shell-rail__create">＋ New post</a>
+            <a href="{% url 'ProfileView' %}" class="shell-rail__link{% if url_name == 'ProfileView' or url_name == 'EditProfileView' %} shell-rail__link--active{% endif %}">
+                <span class="shell-rail__emoji" aria-hidden="true">☺</span>
+                <span>Profile</span>
+            </a>
+            {% else %}
+            <a href="{% url 'Login' %}" class="shell-rail__link{% if url_name == 'Login' %} shell-rail__link--active{% endif %}">
+                <span class="shell-rail__emoji" aria-hidden="true">→</span>
+                <span>Log in</span>
+            </a>
+            <a href="{% url 'SignUp' %}" class="shell-rail__link{% if url_name == 'SignUp' %} shell-rail__link--active{% endif %}">
+                <span class="shell-rail__emoji" aria-hidden="true">✦</span>
+                <span>Sign up</span>
+            </a>
+            {% endif %}
+        </nav>
+        <div class="shell-rail__foot">
+            {% if request.session.author_id %}
+            <a href="{% url 'Logout' %}" class="shell-rail__link">
+                <span class="shell-rail__emoji" aria-hidden="true">⎋</span>
+                <span>Log out</span>
+            </a>
+            {% endif %}
+        </div>
+    </aside>
+
+    <header class="shell-mobile-top">
+        <a href="{% url 'NodeDisplay' %}" class="shell-mobile-top__logo">Node</a>
+        <div class="shell-mobile-top__actions">
+            {% if request.session.author_id %}
+            <a href="{% url 'create_entry' %}" class="shell-mobile-top__fab" title="New post" aria-label="New post">＋</a>
+            {% endif %}
+        </div>
+    </header>
+
+    <main class="shell-stage">
+        <div class="content-container">
+            {% block content %}
+            {% endblock %}
+        </div>
+    </main>
+
+    <nav class="shell-tabbar" aria-label="Primary">
+        <a href="{% url 'NodeDisplay' %}" class="shell-tabbar__item">
+            <span class="shell-tabbar__ico" aria-hidden="true">⌂</span>
+            <span>Home</span>
+        </a>
+        <a href="{% url 'stream' %}" class="shell-tabbar__item">
+            <span class="shell-tabbar__ico" aria-hidden="true">▶</span>
+            <span>Feed</span>
+        </a>
         {% if request.session.author_id %}
-            <a href="/app/profile/">My Profile</a>
-            <a href="/app/follow-requests/">Follow Requests</a>
-            <a href="/app/logout/">Logout</a>
+        <a href="{% url 'create_entry' %}" class="shell-tabbar__item shell-tabbar__item--mid">
+            <span class="shell-tabbar__mid-btn" aria-hidden="true">＋</span>
+            <span>Create</span>
+        </a>
+        <a href="{% url 'ProfileView' %}" class="shell-tabbar__item">
+            <span class="shell-tabbar__ico" aria-hidden="true">☺</span>
+            <span>Me</span>
+        </a>
         {% else %}
-            <a href="/app/login/">Login</a>
-            <a href="/app/signup/">Sign Up</a>
+        <a href="{% url 'Login' %}" class="shell-tabbar__item">
+            <span class="shell-tabbar__ico" aria-hidden="true">→</span>
+            <span>Log in</span>
+        </a>
+        <a href="{% url 'SignUp' %}" class="shell-tabbar__item">
+            <span class="shell-tabbar__ico" aria-hidden="true">✦</span>
+            <span>Join</span>
+        </a>
         {% endif %}
     </nav>
+    {% endwith %}
 
-    <main class="content-container">
-        {% block content %}
-        {% endblock %}
-    </main>
-    
     <script src="{% static 'entries/js/main.js' %}"></script>
+    {% block scripts %}{% endblock %}
 </body>
 </html>

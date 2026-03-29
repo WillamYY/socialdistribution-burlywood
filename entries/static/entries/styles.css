@@ -1,45 +1,51 @@
-/* Color Palette & Variables */
+/*
+ * Entry & feed components. Global tokens: core/static/core/styles.css
+ */
 :root {
-    /* Backgrounds */
-    --bg-page: #ffffff;
-    --bg-muted: #f9fafb;
-    --bg-code: #f3f4f6;
-    
-    /* Text Colors */
-    --text-main: #1a1a1a;
-    --text-body: #1f2937;
-    --text-muted: #6b7280;
-    --text-date: #9ca3af;
-    
-    /* Borders & Accents */
-    --border-light: #f3f4f6;
-    --border-main: #e5e7eb;
-    --border-card: #e1e4e8;
-    
-    /* Action Colors */
-    --link-blue: #2563eb;
-    --link-hover: #1d4ed8;
-    --btn-delete: #dc2626;
-    --btn-save: #FF9800;
-    --btn-save-hover: #e68900;
-    
-    /* Layout */
-    --card-radius: 12px;
-    --input-radius: 6px;
-    --max-width: 850px;
+    --max-width: 680px;
+    --card-radius: var(--radius-lg);
+    --input-radius: var(--radius-sm);
+    --border-main: var(--border);
+    --border-light: #f1f5f9;
+    --border-card: var(--border);
+    --text-body: var(--text);
+    --text-main: var(--text);
+    --text-date: var(--text-faint);
+    --bg-page: var(--bg-elevated);
+    --bg-muted: #f8fafc;
+    --bg-code: #f1f5f9;
+    --link-blue: var(--accent);
+    --link-hover: var(--accent-hover);
+    --btn-delete: var(--danger);
+    --btn-save: var(--coral);
+    --btn-save-hover: var(--coral-hover);
 }
 
 .page-container {
     display: flex;
-    flex-direction: column; /* Stack the cards vertically */
-    align-items: center;    /* Center the cards horizontally */
-    gap: 20px;              /* Spacing between every card */
+    flex-direction: column;
+    align-items: stretch;
+    gap: 20px;
     max-width: var(--max-width);
-    margin: 40px auto;
-    padding: 0 15px;
+    margin: 0 auto;
+    padding: 0;
+    width: 100%;
+}
 
-    /* Set the default font for everything inside .page-container for any OS */
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+.empty-state {
+    text-align: center;
+    padding: 48px 24px;
+    background: var(--bg-muted);
+    border: 1px dashed var(--border);
+    border-radius: var(--card-radius);
+    color: var(--text-muted);
+    font-size: 1.05rem;
+}
+
+.entry-back-row {
+    width: 100%;
+    max-width: var(--max-width);
+    margin-bottom: 16px;
 }
 
 /* Navigation */
@@ -71,8 +77,8 @@
     background: var(--bg-page);
     border: 1px solid var(--border-card);
     border-radius: var(--card-radius);
-    padding: 25px;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+    padding: 22px 24px;
+    box-shadow: var(--shadow, 0 4px 16px rgba(15, 23, 42, 0.08));
     display: flex;
     flex-direction: column;
     box-sizing: border-box;
@@ -155,13 +161,15 @@
 }
 
 .badge-visibility {
-    background-color: var(--bg-code);
-    color: var(--text-muted);
-    padding: 4px 12px;
+    background: linear-gradient(135deg, var(--bg-muted), var(--bg-subtle, #e8ecf4));
+    color: var(--text-secondary);
+    padding: 5px 12px;
     border-radius: 20px;
-    font-size: 0.75rem;
-    font-weight: bold;
+    font-size: 0.7rem;
+    font-weight: 700;
     text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border: 1px solid var(--border);
 }
 
 .entry-content, .entry-plain-text, .entry-markdown, .entry-description {
@@ -527,4 +535,54 @@
 
 .btn-save:hover {
     background-color: var(--btn-save-hover);
+}
+
+.btn-cancel {
+    display: inline-flex;
+    align-items: center;
+    padding: 10px 18px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-decoration: none;
+    border-radius: var(--input-radius);
+    transition:
+        color 0.18s ease,
+        background 0.18s ease;
+}
+
+.btn-cancel:hover {
+    color: var(--accent);
+    background: var(--accent-soft);
+}
+
+.inline-comment-form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    margin-left: 12px;
+}
+
+.inline-comment-form input[type="text"] {
+    flex: 1;
+    min-width: 200px;
+    padding: 8px 12px;
+    border: 1px solid var(--border-main);
+    border-radius: var(--input-radius);
+    font-family: inherit;
+    font-size: 0.9rem;
+}
+
+.comments-list-remote {
+    margin-top: 12px;
+}
+
+.comment-bubble-remote {
+    padding: 10px 14px;
+    margin-bottom: 8px;
+    background: var(--bg-muted);
+    border-radius: var(--input-radius);
+    border: 1px solid var(--border-main);
+    font-size: 0.9rem;
+    line-height: 1.45;
 }
