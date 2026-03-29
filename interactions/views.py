@@ -1,4 +1,5 @@
 from email.mime import base
+from threading import local
 from urllib import request
 import uuid
 from django.shortcuts import redirect, get_object_or_404
@@ -7,7 +8,7 @@ from .models import Like, Comment
 from entries.models import Entry
 from core.models import Author, IncomingNode
 import requests
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 import re
 from django.http import JsonResponse
@@ -116,25 +117,29 @@ def add_comment(request, entry_id):
     """Creates a Comment object using the Entry's FQID (URL)."""
     if request.method == "POST":
         author_id = request.session.get("author_id")
-        
         if not author_id:
             return redirect('/app/login/')
 
         entry = get_object_or_404(Entry, id=entry_id)
-        comment_text = request.POST.get("comment")
-        
-        if comment_text:
-            base = request.build_absolute_uri('/')[:-1]
-            entry_fqid = f"{base}/api/authors/{entry.author.id}/entries/{entry.id}"
-            author_fqid = f"{base}/api/authors/{author_id}"
+        comment_text = (request.POST.get("comment") or "").strip()
+        if not comment_text:
+            return redirect(request.META.get('HTTP_REFERER', '/app/stream/'))
 
-            Comment.objects.create(
-                id=f"{request.build_absolute_uri('/')[:-1]}/api/authors/{author_id}/commented/{uuid.uuid4()}",
-                author=author_fqid,
-                entry=entry_fqid,
-                comment=comment_text,
-                contentType="text/plain"
-            )
+        base = request.build_absolute_uri("/").rstrip("/")
+        if base.startswith("http://"):
+            base = "https://" + base[len("http://"):]
+
+        author_fqid = f"{base}/api/authors/{author_id}"
+        entry_fqid = f"{base}/api/authors/{entry.author.id}/entries/{entry.id}"
+        comment_fqid = f"{author_fqid}/commented/{uuid.uuid4()}"
+
+        Comment.objects.create(
+            id=comment_fqid,
+            author=author_fqid,
+            entry=entry_fqid,
+            comment=comment_text,
+            contentType="text/plain",
+        )
 
     return redirect(request.META.get('HTTP_REFERER', '/app/stream/'))
 
@@ -160,8 +165,12 @@ def add_remote_comment(request, entry_id):
         author = get_object_or_404(Author, pk=author_id)
 
         # keep a local copy so your side can still display it
-        base = request.build_absolute_uri('/')[:-1].replace("http://", "https://")
-        local_author_fqid = f"{base}/api/authors/{author.id}"
+        base = request.build_absolute_uri("/").rstrip("/")
+        if base.startswith("http://"):
+            base = "https://" + base[len("http://"):]
+
+        local_host = f"{base}/api"
+        local_author_fqid = f"{local_host}/authors/{author.id}"
         # Parse the remote host + remote author id from the entry FQID.
         m = re.match(r"^(https?://[^/]+)/api/authors/([^/]+)/entries/([^/]+)$", remote_entry_url)
         if not m:
@@ -181,19 +190,20 @@ def add_remote_comment(request, entry_id):
         author_info = {
             "type": "author",
             "id": local_author_fqid,
-            "host": author.host,
+            "host": local_host,
             "displayName": author.name or author.username,
             "github": author.github,
             "profileImage": author.picture_url,
             "web": author.web,
         }
         comment_uuid = uuid.uuid4()
+        comment_fqid = f"{local_author_fqid}/commented/{comment_uuid}"
         id = f"{request.build_absolute_uri('/')[:-1]}/api/authors/{author_id}/commented/{comment_uuid}"
         payload = {
             "type": "comment",
             "author": author_info,
-            "published": datetime.now().isoformat(),
-            "id": id,
+            "published": timezone.now().isoformat(),
+            "id": comment_fqid,
             "comment": comment_text,
             "contentType": "text/plain",
             "object": remote_entry_url,

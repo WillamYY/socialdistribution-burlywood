@@ -73,6 +73,61 @@ def _stored_remote_entry_to_stream_obj(remote_entry, viewer_fqid=None):
         stored_remote=True,
     )
 
+def _normalize_url_for_match(url):
+    if not url:
+        return ""
+    url = str(url).strip().rstrip("/")
+    if url.startswith("http://"):
+        url = "https://" + url[len("http://"):]
+    return url
+
+
+def _comment_matches_entry(comment_entry_url, canonical_entry_fqid):
+    left = _normalize_url_for_match(comment_entry_url)
+    right = _normalize_url_for_match(canonical_entry_fqid)
+
+    if not left or not right:
+        return False
+
+    if left == right:
+        return True
+
+    return left.split("/")[-1] == right.split("/")[-1]
+
+
+def _serialize_local_comment_for_page(comment):
+    """
+    Safe fallback serializer for local comments when remote/detail lookup fails.
+    """
+    author_name = "Unknown"
+    try:
+        match = re.search(r"/authors/(\d+)/?$", str(comment.author).rstrip("/"))
+        if match:
+            author_obj = Author.objects.filter(id=int(match.group(1))).first()
+            if author_obj:
+                author_name = author_obj.name or author_obj.username
+        else:
+            author_name = str(comment.author).rstrip("/").split("/")[-1]
+    except Exception:
+        author_name = str(comment.author).rstrip("/").split("/")[-1]
+
+    return {
+        "type": "comment",
+        "id": str(comment.id).rstrip("/"),
+        "author": {
+            "id": str(comment.author).rstrip("/"),
+            "displayName": author_name,
+        },
+        "author_name": author_name,
+        "comment": comment.comment,
+        "contentType": comment.contentType,
+        "published": comment.published,
+        "local": True,
+        "like_count": Like.objects.filter(object__endswith=str(comment.id).rstrip("/").split("/")[-1]).count()
+                     + Like.objects.filter(object=str(comment.id).rstrip("/")).count(),
+        "liked_by_user": False,
+    }
+
 def check_visibility(entry, viewer_id, is_list=False):
     """
     Helper function to verify if a user can see an entry.
@@ -692,50 +747,102 @@ def get_entry(request, entry_id):
     # Default to Stream if don't have a saved feed yet
     return_url = request.session.get('last_feed_url', reverse('stream'))
 
-    # Base Entry Interactions
-    entry.like_count = Like.objects.filter(object=entry_url).count()
-    entry.fetched_comments = Comment.objects.filter(entry__endswith=entry.id).order_by('published')
+    canonical_entry_fqid = f"{base_url}/api/authors/{entry.author.id}/entries/{entry.id}".rstrip("/")
 
-    # Check if the logged-in user liked the this entry
+    entry.like_count = Like.objects.filter(object=entry_url).count()
+
+    all_known_comments = Comment.objects.all().order_by("published")
+    entry_comments = [
+        c for c in all_known_comments
+        if _comment_matches_entry(c.entry, canonical_entry_fqid)
+    ]
+
     if logged_in_id:
         user_fqid = f"{base_url}/api/authors/{logged_in_id}"
         entry.liked_by_user = Like.objects.filter(object=entry_url, author=user_fqid).exists()
     else:
+        user_fqid = None
         entry.liked_by_user = False
 
     comments = []
-    # Gets all the comments (Have to fetch each one individually :( )
-    for comment in entry.fetched_comments:
-        comment_id = comment.id
-        comment_part_host = re.search("https?://([^/]+)",comment_id).group(1)
-        # If it is our comment get it
-        if comment_part_host == request.get_host():
-            # Try and except incase the api returns faulty data
-            try:
-                comment = Comment.objects.get(id__endswith = re.search("/commented/([^/]+)",comment_id).group(0))
-                serialized_comment = CommentSerializer(comment).data
-                serialized_comment["local"] = True
-                serialized_comment["like_count"] = Like.objects.filter(object=comment.id).count()
-                comments.append(serialized_comment)
-            except:
-                pass
-        else:
-            # Tries to get the comment info (Passes if the comment is faulty or we don't have the host)
-            try:
-                comment_full_host = re.search("https?://[^/]+",comment_id).group(0)
-                comment_node = IncomingNode.objects.get(url = comment_full_host + "/")
-                comment_credentials = (comment_node.username,comment_node.password)
-                comment_info = requests.get(comment_id,auth = comment_credentials)
-                # If we failed to get the comment raise an error
-                if comment_info.status_code >= 400:
-                    raise ConnectionError
-                comment_json = json.loads(comment_info.text)
-                comment_json["local"] = False
-                comment_json["like_count"] = comment_json["likes"]["count"]
-                comments.append(comment_json)
-            except:
-                pass
-    # Replaces the comments in the entry with the comments pulled from their respective databases
+
+    for stored_comment in entry_comments:
+        comment_id = str(stored_comment.id).rstrip("/")
+
+        # Default fallback: always keep something displayable
+        fallback_comment = _serialize_local_comment_for_page(stored_comment)
+
+        if user_fqid:
+            fallback_comment["liked_by_user"] = (
+                Like.objects.filter(author=user_fqid, object=comment_id).exists()
+                or Like.objects.filter(
+                    author=user_fqid,
+                    object__endswith=comment_id.split("/")[-1]
+                ).exists()
+            )
+
+        # If comment is local, do not re-fetch it from API just to render it
+        try:
+            comment_host_match = re.search(r"^https?://([^/]+)", comment_id)
+            comment_host = comment_host_match.group(1) if comment_host_match else None
+        except Exception:
+            comment_host = None
+
+        if comment_host == request.get_host():
+            comments.append(fallback_comment)
+            continue
+
+        # Remote comment: try to refresh from remote detail endpoint, but keep fallback on failure
+        try:
+            comment_full_host_match = re.search(r"^https?://[^/]+", comment_id)
+            if not comment_full_host_match:
+                comments.append(fallback_comment)
+                continue
+
+            comment_full_host = comment_full_host_match.group(0)
+            comment_node = IncomingNode.objects.filter(url=comment_full_host + "/").first()
+
+            if not comment_node:
+                comments.append(fallback_comment)
+                continue
+
+            comment_info = requests.get(
+                comment_id,
+                auth=(comment_node.username, comment_node.password),
+                timeout=8,
+            )
+
+            if comment_info.status_code >= 400:
+                comments.append(fallback_comment)
+                continue
+
+            comment_json = json.loads(comment_info.text)
+            comment_json["local"] = False
+            comment_json["like_count"] = ((comment_json.get("likes") or {}).get("count", 0))
+
+            author_obj = comment_json.get("author") or {}
+            comment_json["author_name"] = (
+                author_obj.get("displayName")
+                or author_obj.get("username")
+                or fallback_comment["author_name"]
+            )
+
+            if user_fqid:
+                comment_json["liked_by_user"] = (
+                    Like.objects.filter(author=user_fqid, object=comment_id).exists()
+                    or Like.objects.filter(
+                        author=user_fqid,
+                        object__endswith=comment_id.split("/")[-1]
+                    ).exists()
+                )
+            else:
+                comment_json["liked_by_user"] = False
+
+            comments.append(comment_json)
+
+        except Exception:
+            comments.append(fallback_comment)
+
     entry.fetched_comments = comments
 
     # Check the visibility for the logged-in user

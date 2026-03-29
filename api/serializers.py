@@ -157,16 +157,10 @@ class CommentSerializer(serializers.ModelSerializer):
         ]
 
     def get_id(self, obj):
-        # If your Comment model already stores a URL id, use that
-        if isinstance(obj.id, str) and obj.id.startswith("http"):
-            return obj.id
-
-        # Fallback: try to construct from object field if it exists
-        object_url = getattr(obj, "object", None)
-        if object_url:
-            return f"{str(object_url).rstrip('/')}/commented/{obj.id}"
-
-        return str(obj.id)
+        """
+        Always return the canonical stored comment FQID.
+        """
+        return str(obj.id).rstrip("/")
 
     def get_author(self, obj):
         author_value = getattr(obj, "author", None)
