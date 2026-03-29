@@ -827,3 +827,238 @@ body.app-shell-social .author-info {
   align-self: center;
 }
 
+/* ——— Authors home: segmented views + compact grid tiles ——— */
+body.app-shell-social .authors-directory-page {
+  max-width: 920px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+body.app-shell-social .authors-home-card {
+  padding: 24px 22px 28px;
+}
+
+body.app-shell-social .authors-home-header {
+  margin-bottom: 1.25rem;
+}
+
+body.app-shell-social .authors-home-title {
+  margin: 0 0 6px;
+  font-family: var(--shell-font-display);
+  font-size: 1.65rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: #0a0a0b;
+}
+
+body.app-shell-social .authors-home-lead {
+  margin: 0 0 12px;
+  font-size: 0.92rem;
+}
+
+/* Radio-driven tabs (no JS): inputs first, then labels, then panels */
+body.app-shell-social .authors-seg {
+  position: relative;
+}
+
+body.app-shell-social .authors-seg__radio {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+body.app-shell-social .authors-seg__tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+
+body.app-shell-social .authors-seg__tab {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  padding: 10px 12px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #5c5c66;
+  background: #f2f2f5;
+  border: 1px solid #e4e4ea;
+  border-radius: 12px;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+body.app-shell-social .authors-seg__tab:hover {
+  background: #eaeaf0;
+  color: #2a2a30;
+}
+
+body.app-shell-social #authors-v-local:checked ~ .authors-seg__tabs label[for="authors-v-local"],
+body.app-shell-social #authors-v-remote:checked ~ .authors-seg__tabs label[for="authors-v-remote"],
+body.app-shell-social #authors-v-all:checked ~ .authors-seg__tabs label[for="authors-v-all"] {
+  background: linear-gradient(135deg, rgba(254, 44, 85, 0.12), rgba(255, 152, 0, 0.1));
+  border-color: rgba(254, 44, 85, 0.35);
+  color: #0a0a0b;
+  box-shadow: 0 2px 10px rgba(254, 44, 85, 0.12);
+}
+
+body.app-shell-social .authors-panel {
+  display: none;
+}
+
+body.app-shell-social #authors-v-local:checked ~ .authors-panel--local,
+body.app-shell-social #authors-v-remote:checked ~ .authors-panel--remote,
+body.app-shell-social #authors-v-all:checked ~ .authors-panel--all {
+  display: block;
+}
+
+/* For you: same segmented UX, separate radio group (feed-v-*) */
+body.app-shell-social .stream-feed-seg .feed-panel {
+  display: none;
+}
+
+body.app-shell-social #feed-v-local:checked ~ .authors-seg__tabs label[for="feed-v-local"],
+body.app-shell-social #feed-v-remote:checked ~ .authors-seg__tabs label[for="feed-v-remote"],
+body.app-shell-social #feed-v-all:checked ~ .authors-seg__tabs label[for="feed-v-all"] {
+  background: linear-gradient(135deg, rgba(254, 44, 85, 0.12), rgba(255, 152, 0, 0.1));
+  border-color: rgba(254, 44, 85, 0.35);
+  color: #0a0a0b;
+  box-shadow: 0 2px 10px rgba(254, 44, 85, 0.12);
+}
+
+body.app-shell-social #feed-v-local:checked ~ .feed-panel--local,
+body.app-shell-social #feed-v-remote:checked ~ .feed-panel--remote,
+body.app-shell-social #feed-v-all:checked ~ .feed-panel--all {
+  display: block;
+}
+
+body.app-shell-social .authors-panel__subsection-title {
+  font-family: var(--shell-font-display);
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #6b6b76;
+  margin: 1.25rem 0 10px;
+}
+
+body.app-shell-social .authors-panel__subsection-title:first-child,
+body.app-shell-social .authors-panel__subsection-title--first {
+  margin-top: 0;
+}
+
+body.app-shell-social .author-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+@media (min-width: 640px) {
+  body.app-shell-social .author-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 900px) {
+  body.app-shell-social .author-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+body.app-shell-social .author-grid--tight-top {
+  margin-top: 0;
+}
+
+body.app-shell-social .author-grid__empty {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 28px 16px;
+  background: #f7f7f9;
+  border-radius: 14px;
+  border: 1px dashed #dcdce2;
+  font-size: 0.9rem;
+}
+
+body.app-shell-social .author-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 14px 10px 12px;
+  min-height: 100%;
+  box-sizing: border-box;
+  background: var(--shell-card);
+  border-radius: 16px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow:
+    0 1px 0 rgba(0, 0, 0, 0.04),
+    0 10px 28px rgba(0, 0, 0, 0.06);
+  text-decoration: none;
+  color: inherit;
+  transition:
+    transform 0.16s ease,
+    box-shadow 0.16s ease;
+}
+
+body.app-shell-social .author-tile:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 1px 0 rgba(0, 0, 0, 0.05),
+    0 14px 36px rgba(254, 44, 85, 0.1);
+}
+
+body.app-shell-social .author-tile__pic {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: center;
+  border: 2px solid #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  background: #f0f1f5;
+}
+
+body.app-shell-social .author-tile__name {
+  margin-top: 10px;
+  font-weight: 700;
+  font-size: 0.88rem;
+  color: #0a0a0b;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.app-shell-social .author-tile__sub {
+  margin-top: 2px;
+  font-size: 0.74rem;
+  color: #6b6b76;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.app-shell-social .author-tile__cta {
+  margin-top: 10px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--shell-accent);
+}
+
