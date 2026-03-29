@@ -598,6 +598,7 @@ def follow_remote_author(request, fqid):
                     credentials = get_object_or_404(IncomingNode, url = loc[:loc.index("/api")] + "/")
                     resp = requests.post(loc, json=payload, headers=headers, timeout=15, auth=(credentials.username, credentials.password))
                 """
+            print("AAAAAAAAAAAAAAAAAAAAAAAAA STATUS CODE:", resp.status_code)
             if resp.status_code in (200, 202, 204):
                 RemoteFollow.objects.create(follower=me, followed_fqid=normalized)
                 messages.success(request, "Follow request sent!", extra_tags="follow")
@@ -816,7 +817,7 @@ def RemoteProfileDisplay(request, fqid):
                 auth=(credentials.username, credentials.password),
                 timeout=10
             )
-            is_following = follow_query.status_code == 400
+            is_following = follow_query.status_code < 400
 
     request_sent = False
 
