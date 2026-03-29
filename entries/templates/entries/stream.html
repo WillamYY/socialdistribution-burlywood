@@ -1,32 +1,20 @@
 {% extends 'entries/base.html' %}
 {% load entry_extras %}
 
+{% block body_extra_class %}feed-wide{% endblock %}
+
 {% block title %}For you{% endblock %}
 
 {% block content %}
-<div class="page-container">
+<div class="page-container feed-page">
     <header class="page-hero">
         <h1 class="page-hero__title">For you</h1>
         <p class="page-hero__sub">Scroll the latest from people you follow.</p>
     </header>
 
-    <div class="feed-strip" aria-hidden="true">
-        <div class="feed-strip__pill">
-            <div class="feed-strip__ring"><div class="feed-strip__inner">✦</div></div>
-            <span class="feed-strip__label">Live</span>
-        </div>
-        <div class="feed-strip__pill">
-            <div class="feed-strip__ring"><div class="feed-strip__inner">★</div></div>
-            <span class="feed-strip__label">Fresh</span>
-        </div>
-        <div class="feed-strip__pill">
-            <div class="feed-strip__ring"><div class="feed-strip__inner">↻</div></div>
-            <span class="feed-strip__label">Sync</span>
-        </div>
-    </div>
-
+    <div class="feed-grid">
     {% for entry in entries %}
-        <article class="entry-card social-post clickable" data-url="{% if entry.is_remote %}{% url 'remote_entry' entry.id %}{% else %}{% url 'get_entry' entry.id %}{% endif %}"{% if entry.is_remote %} data-remote="true"{% endif %}>
+        <article class="entry-card social-post social-post--grid clickable" data-url="{% if entry.is_remote %}{% url 'remote_entry' entry.id %}{% else %}{% url 'get_entry' entry.id %}{% endif %}"{% if entry.is_remote %} data-remote="true"{% endif %}>
             <div class="social-post__head">
                 <span class="social-avatar" aria-hidden="true">{{ entry.author.username|slice:":1"|upper }}</span>
                 <div class="social-post__meta">
@@ -96,7 +84,8 @@
             </div>
         </article>
     {% empty %}
-        <div class="empty-state">Nothing here yet. Follow authors from Home, then come back.</div>
+        <div class="empty-state feed-grid__empty">Nothing here yet. Follow authors from Home, then come back.</div>
     {% endfor %}
+    </div>
 </div>
 {% endblock %}

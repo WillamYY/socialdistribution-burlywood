@@ -10,10 +10,12 @@
     <div class="card">
       <h1>Authors on this node</h1>
       {% if request.session.author_id %}
-        <p class="muted">Browse people on this server or open your stream.</p>
-        <p>
-          <a href="{% url 'stream' %}" class="button success">Go to stream</a>
-        </p>
+        <div class="authors-toolbar">
+          <p class="muted">Browse people on this server or open your stream.</p>
+          <p class="authors-toolbar__cta">
+            <a href="{% url 'stream' %}" class="button success">Go to stream</a>
+          </p>
+        </div>
       {% endif %}
       <ul class="author-list">
         {% for user in users %}
@@ -46,10 +48,12 @@
     <div class="card">
       <h1>Authors on other nodes</h1>
       {% if request.session.author_id %}
-        <p class="muted">People discovered via federation.</p>
-        <p>
-          <a href="{% url 'stream' %}" class="button success">Go to stream</a>
-        </p>
+        <div class="authors-toolbar">
+          <p class="muted">People discovered via federation.</p>
+          <p class="authors-toolbar__cta">
+            <a href="{% url 'stream' %}" class="button success">Go to stream</a>
+          </p>
+        </div>
       {% endif %}
       <ul class="author-list">
         {% for user in other_users %}

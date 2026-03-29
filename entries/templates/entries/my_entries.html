@@ -1,17 +1,20 @@
 {% extends 'entries/base.html' %}
 {% load entry_extras %}
 
+{% block body_extra_class %}feed-wide{% endblock %}
+
 {% block title %}My posts{% endblock %}
 
 {% block content %}
-<div class="page-container">
+<div class="page-container feed-page">
     <header class="page-hero">
         <h1 class="page-hero__title">My posts</h1>
         <p class="page-hero__sub">Your grid on this node — edit or delete anytime.</p>
     </header>
 
+    <div class="feed-grid">
     {% for entry in entries %}
-        <article class="entry-card social-post clickable" data-url="{% url 'get_entry' entry.id %}">
+        <article class="entry-card social-post social-post--grid clickable" data-url="{% url 'get_entry' entry.id %}">
             <div class="social-post__head">
                 <span class="social-avatar" aria-hidden="true">{{ entry.author.username|slice:":1"|upper }}</span>
                 <div class="social-post__meta">
@@ -73,9 +76,10 @@
             </div>
         </article>
     {% empty %}
-        <div class="empty-state">
+        <div class="empty-state feed-grid__empty">
             <p>You have not posted yet. Tap <strong>＋</strong> to share something.</p>
         </div>
     {% endfor %}
+    </div>
 </div>
 {% endblock %}
