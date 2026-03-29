@@ -178,7 +178,6 @@ def _stored_remote_entry_to_stream_obj(remote_entry, viewer_fqid=None):
         stored_remote=True,
     )
 
-<<<<<<< HEAD
 def _normalize_url_for_match(url):
     if not url:
         return ""
@@ -266,8 +265,6 @@ def _serialize_local_comment_for_page(comment, request=None):
                      + Like.objects.filter(object=str(comment.id).rstrip("/")).count(),
         "liked_by_user": False,
     }
-=======
->>>>>>> f2c5b6e9d9dd089aeb114823d66912929b567445
 
 def check_visibility(entry, viewer_id, is_list=False):
     """
@@ -869,7 +866,6 @@ def get_entry(request, entry_id):
     # Default to Stream if don't have a saved feed yet
     return_url = request.session.get('last_feed_url', reverse('stream'))
 
-<<<<<<< HEAD
     canonical_entry_fqid = f"{base_url}/api/authors/{entry.author.id}/entries/{entry.id}".rstrip("/")
 
     entry.like_count = Like.objects.filter(object=entry_url).count()
@@ -967,14 +963,6 @@ def get_entry(request, entry_id):
             comments.append(fallback_comment)
 
     entry.fetched_comments = comments
-=======
-    # Base Entry Interactions (variants: same as ProfileDisplay — http/https mismatch breaks heart state)
-    entry.like_count = like_count_for_object(entry_url)
-    comments_qs = Comment.objects.filter(entry__endswith=entry.id)
-    user_fqid = f"{base_url}/api/authors/{logged_in_id}" if logged_in_id else None
-    entry.liked_by_user = entry_liked_by_user(entry_url, user_fqid) if user_fqid else False
-    entry.fetched_comments = comments_display_from_queryset(comments_qs, request, logged_in_id)
->>>>>>> f2c5b6e9d9dd089aeb114823d66912929b567445
 
     # Check the visibility for the logged-in user
     allowed = check_visibility(entry, logged_in_id)
