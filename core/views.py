@@ -806,12 +806,12 @@ def RemoteProfileDisplay(request, fqid):
             follower_id=logged_in_id, followed_fqid=normalized_fqid
         ).exists()
         if not is_following:
-            print(f"{base_host}/api/authors/{author_id}/followers/{quote(user_fqid)}")
+            print(f"{base_host}/api/authors/{author_id}/followers/{quote(user_fqid, safe="")}")
             base_host = remote_author_url.split("/api/authors/")[0]
             credentials = get_object_or_404(IncomingNode, url = base_host + "/")
-            print("===============USER FQID================", user_fqid)
+            print("===============USER FQID================", quote(user_fqid, safe=""))
             is_following = requests.get(
-                f"{remote_author_url}/followers/{quote(user_fqid)}",
+                f"{remote_author_url}/followers/{quote(user_fqid, safe="")}",
                 headers={"Accept": "application/json"},
                 auth=(credentials.username, credentials.password),
                 timeout=10
