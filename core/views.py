@@ -810,15 +810,13 @@ def RemoteProfileDisplay(request, fqid):
             base_host = remote_author_url.split("/api/authors/")[0]
             credentials = get_object_or_404(IncomingNode, url = base_host + "/")
             print("===============USER FQID================", quote(user_fqid, safe=""))
-            is_following = requests.get(
+            follow_query = requests.get(
                 f"{remote_author_url}/followers/{quote(user_fqid, safe="")}",
                 headers={"Accept": "application/json"},
                 auth=(credentials.username, credentials.password),
                 timeout=10
             )
-            print(is_following)
-            is_following.raise_for_status()
-    is_following = False
+            is_following = follow_query.status_code == 400
 
     request_sent = False
 
