@@ -1,97 +1,37 @@
+{% extends 'entries/base.html' %}
 {% load static %}
-<html></html>
-  <head>
-    <title>My Profile</title>
-    <link rel="stylesheet" href="{% static 'core/styles.css' %}">
-    <style>
-      .profile-pic {
-        display: block;
-        margin: 10px auto;
-        width: 120px;
-        height: 120px;
-        border-radius: 50%;
-        object-fit: cover;
-      }
-      .follow-requests-btn {
-        font-size: 20px;
-        background-color: var(--primary);
-        width: 40px;
-        height: 40px;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: white;
-        text-decoration: none;
-        position: absolute;
-        top: 15px;
-        right: 15px;
-        cursor: pointer;
-      }
-      .follow-requests-btn:hover {
-        background-color: var(--primary-hover);
-      }
-      .notification-count {
-        position: absolute;
-        top: -5px;
-        right: -5px;
-        background: var(--danger);
-        color: white;
-        font-size: 12px;
-        font-weight: bold;
-        border-radius: 50%;
-        width: 18px;
-        height: 18px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
-      .profile-card {
-        position: relative;
-      }
-      .action-row {
-        display: flex;
-        justify-content: center;
-        gap: 10px;
-        flex-wrap: wrap;
-      }
-    </style>
-  </head>
-  <body>
-    <nav class="top-nav">
-      <a href="/">Home</a>
-      <a href="/app/stream/">Stream</a>
-      <a href="/app/my-entries/">My Entries</a>
-      <a href="/app/create-entry/">Create Entry</a>
-      <a href="/app/profile/">My Profile</a>
-      <a href="/app/follow-requests/">Follow Requests</a>
-      <a href="/app/logout/">Logout</a>
-    </nav>
-    <div class="page">
-      <div class="card profile-card">
-        <h2>{{ author.name|default:author.username }}</h2>
+
+{% block title %}My Profile{% endblock %}
+
+{% block content %}
+<div class="page">
+    <div class="card profile-layout profile-card">
         {% if author.picture_url %}
-          <img src="{{ author.picture_url }}" class="profile-pic">
+          <img src="{{ author.picture_url }}" class="profile-pic" alt="">
         {% elif author.picture and author.picture.url %}
-          <img src="{{ author.picture.url }}" class="profile-pic">
+          <img src="{{ author.picture.url }}" class="profile-pic" alt="">
         {% else %}
-          <img src="{% static 'images/default_profile.jpg' %}" class="profile-pic" alt="Profile Picture"> 
-      {% endif %}
+          <img src="{% static 'images/default_profile.jpg' %}" class="profile-pic" alt="Profile picture">
+        {% endif %}
 
-        <p><strong>Username:</strong> {{ author.username }}</p>
-        <p><strong>Description:</strong> {{ author.description|default:"No description yet." }}</p>
-        <p><strong>GitHub:</strong> 
-          {% if author.github %}
-            <a href="{{ author.github }}" target="_blank">{{ author.github }}</a>
-          {% else %}
-            Not provided
-          {% endif %}
-        </p>
+        <h2 class="profile-name">{{ author.name|default:author.username }}</h2>
 
-        <ul>
-          <li><a href="{% url 'connections' %}#followers"><strong>Followers:</strong> {{ followers_count }}</a></li>
-          <li><a href="{% url 'connections' %}#following"><strong>Following:</strong> {{ following_count }}</a></li>
-          <li><a href="{% url 'connections' %}#friends"><strong>Friends:</strong> {{ friends_count }}</a></li>
+        <div class="profile-meta">
+          <p><strong>Username</strong> — {{ author.username }}</p>
+          <p><strong>About</strong> — {{ author.description|default:"No description yet." }}</p>
+          <p><strong>GitHub</strong> —
+            {% if author.github %}
+              <a href="{{ author.github }}" target="_blank" rel="noopener">{{ author.github }}</a>
+            {% else %}
+              Not provided
+            {% endif %}
+          </p>
+        </div>
+
+        <ul class="profile-stats">
+          <li><a href="{% url 'connections' %}#followers">Followers <strong>{{ followers_count }}</strong></a></li>
+          <li><a href="{% url 'connections' %}#following">Following <strong>{{ following_count }}</strong></a></li>
+          <li><a href="{% url 'connections' %}#friends">Friends <strong>{{ friends_count }}</strong></a></li>
         </ul>
 
         <div class="action-row">
@@ -99,18 +39,17 @@
           <a href="/app/logout" class="button secondary">Logout</a>
           <a href="{% url 'stream' %}" class="button">Stream</a>
           <a href="{% url 'create_entry' %}" class="button success">Create Entry</a>
-          <a href="/app/" class="button secondary">View All Authors</a>
+          <a href="/app/" class="button-ghost">All authors</a>
         </div>
 
         {% if request.session.author_id == author.id %}
-          <a href="{% url 'view_follow_requests' %}" class="follow-requests-btn" title="Follow Requests">
+          <a href="{% url 'view_follow_requests' %}" class="follow-requests-btn" title="Follow requests" aria-label="Follow requests">
             👤+
             {% if pending_requests_count > 0 %}
               <span class="notification-count">{{ pending_requests_count }}</span>
             {% endif %}
           </a>
         {% endif %}
-      </div>
     </div>
-  </body>
-</html>
+</div>
+{% endblock %}

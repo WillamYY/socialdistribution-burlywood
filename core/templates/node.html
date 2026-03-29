@@ -1,66 +1,19 @@
+{% extends 'entries/base.html' %}
 {% load static %}
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Authors Directory</title>
-  <link rel="stylesheet" href="{% static 'core/styles.css' %}">
-  <style>
-    .author-card {
-      display: flex;
-      align-items: center;
-      gap: 15px;
-      border-bottom: 1px solid #eee;
-      padding: 12px 0;
-    }
-    .profile-pic {
-      width: 60px;
-      height: 60px;
-      border-radius: 50%;
-      object-fit: cover;
-      flex-shrink: 0;
-    }
-    .author-info {
-      flex: 1;
-    }
-    .author-info h3 {
-      margin: 0;
-      font-size: 18px;
-      color: #111827;
-    }
-    .author-info p {
-      margin: 2px 0;
-      font-size: 14px;
-      color: #6b7280;
-    }
-  </style>
-</head>
-<body>
-  <nav class="top-nav">
-    <a href="/">Home</a>
-    <a href="/app/stream/">Stream</a>
-    <a href="/app/my-entries/">My Entries</a>
-    <a href="/app/create-entry/">Create Entry</a>
-    {% if request.session.author_id %}
-      <a href="/app/profile/">My Profile</a>
-      <a href="/app/follow-requests/">Follow Requests</a>
-      <a href="/app/logout/">Logout</a>
-    {% else %}
-      <a href="/app/login/">Login</a>
-      <a href="/app/signup/">Sign Up</a>
-    {% endif %}
-  </nav>
 
-  <div class="page">
+{% block title %}Authors{% endblock %}
+
+{% block content %}
+<div class="page">
     <div class="card">
-      <h1>All Authors on This Node</h1>
+      <h1>Authors on this node</h1>
       {% if request.session.author_id %}
-        <p class="muted">Browse authors or jump to your stream.</p>
+        <p class="muted">Browse people on this server or open your stream.</p>
         <p>
-          <a href="{% url 'stream' %}" class="button success">Go to Stream</a>
+          <a href="{% url 'stream' %}" class="button success">Go to stream</a>
         </p>
       {% endif %}
-      <ul style="list-style:none; padding:0;">
+      <ul class="author-list">
         {% for user in users %}
           <li>
             <div class="author-card">
@@ -69,9 +22,9 @@
                 {% elif user.picture_url %}
                 <img src="{{ user.picture_url}}" class="profile-pic" alt="{{ user.username }}">
               {% else %}
-                <img src="{% if user.picture %}{{ user.picture.url }}{% else %}{% static 'images/default_profile.jpg' %}{% endif %}" class="profile-pic" alt="Profile Picture">
+                <img src="{% if user.picture %}{{ user.picture.url }}{% else %}{% static 'images/default_profile.jpg' %}{% endif %}" class="profile-pic" alt="">
               {% endif %}
-              
+
               <div class="author-info">
                 <h3>{{ user.username }}</h3>
                 {% if user.name %}
@@ -79,7 +32,7 @@
                 {% endif %}
               </div>
 
-              <a href="{% url 'ProfileDisplay' user.id %}" class="button">View Profile</a>
+              <a href="{% url 'ProfileDisplay' user.id %}" class="button">View profile</a>
             </div>
           </li>
         {% empty %}
@@ -87,24 +40,25 @@
         {% endfor %}
       </ul>
     </div>
+
     <div class="card">
-      <h1>All Authors on other Nodes</h1>
+      <h1>Authors on other nodes</h1>
       {% if request.session.author_id %}
-        <p class="muted">Browse authors or jump to your stream.</p>
+        <p class="muted">People discovered via federation.</p>
         <p>
-          <a href="{% url 'stream' %}" class="button success">Go to Stream</a>
+          <a href="{% url 'stream' %}" class="button success">Go to stream</a>
         </p>
       {% endif %}
-      <ul style="list-style:none; padding:0;">
+      <ul class="author-list">
         {% for user in other_users %}
           <li>
             <div class="author-card">
               {% if user.profileImage %}
                 <img src="{{ user.profileImage}}" class="profile-pic" alt="{{ user.displayName }}">
               {% else %}
-                <img src="{% if user.picture %}{{ user.picture.url }}{% else %}{% static 'images/default_profile.jpg' %}{% endif %}" class="profile-pic" alt="Profile Picture">
+                <img src="{% if user.picture %}{{ user.picture.url }}{% else %}{% static 'images/default_profile.jpg' %}{% endif %}" class="profile-pic" alt="">
               {% endif %}
-              
+
               <div class="author-info">
                 <h3>{{ user.displayName }}</h3>
                 {% if user.name %}
@@ -112,7 +66,7 @@
                 {% endif %}
               </div>
 
-              <a href="{% url 'RemoteProfileDisplay' user.id %}" class="button">View Profile</a>
+              <a href="{% url 'RemoteProfileDisplay' user.id %}" class="button">View profile</a>
             </div>
           </li>
         {% empty %}
@@ -120,6 +74,5 @@
         {% endfor %}
       </ul>
     </div>
-  </div>
-</body>
-</html>
+</div>
+{% endblock %}

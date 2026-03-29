@@ -4,8 +4,11 @@
 {% block title %}{{ author.username }}'s Entries{% endblock %}
 
 {% block content %}
-<div class="page-container" style="max-width: 800px; margin: auto;">
-    <h1>{{ author.username }}’s Entries</h1>
+<div class="page-container">
+    <header class="page-hero">
+        <h1 class="page-hero__title">{{ author.username }}’s entries</h1>
+        <p class="page-hero__sub">Posts shared with you on this node.</p>
+    </header>
 
     {% for entry in entries %}
     <div class="entry-card clickable" data-url="{% url 'get_entry' entry.id %}">
@@ -56,7 +59,7 @@
         </div>
     </div>
     {% empty %}
-        <p>No entries found for this author.</p>
+        <div class="empty-state">No entries found for this author.</div>
     {% endfor %}
 </div>
 {% endblock %}

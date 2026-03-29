@@ -5,8 +5,10 @@
 
 {% block content %}
 <div class="page-container">
-    <h1>Your Stream</h1>
-    <hr>
+    <header class="page-hero">
+        <h1 class="page-hero__title">Your stream</h1>
+        <p class="page-hero__sub">Posts from authors you follow — local and remote.</p>
+    </header>
     {% for entry in entries %}
         <div class="entry-card clickable" data-url="{% if entry.is_remote %}{% url 'remote_entry' entry.id %}{% else %}{% url 'get_entry' entry.id %}{% endif %}"{% if entry.is_remote %} data-remote="true"{% endif %}>
             
@@ -73,6 +75,8 @@
                 </div>
             </div>
         </div>
+    {% empty %}
+        <div class="empty-state">Nothing in your stream yet. Follow authors from the home page or wait for new posts.</div>
     {% endfor %}
 </div>
 {% endblock %}

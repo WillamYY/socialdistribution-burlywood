@@ -5,8 +5,10 @@
 
 {% block content %}
 <div class="page-container">
-    <h1>My Shared Thoughts and Pictures</h1>
-    <hr>
+    <header class="page-hero">
+        <h1 class="page-hero__title">My entries</h1>
+        <p class="page-hero__sub">Everything you have shared on this node.</p>
+    </header>
 
     {% for entry in entries %}
         <div class="entry-card clickable" data-url="{% url 'get_entry' entry.id %}">

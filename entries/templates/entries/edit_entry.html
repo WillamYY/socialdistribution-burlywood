@@ -4,9 +4,13 @@
 
 {% block content %}
 <div class="page-container">
+    <header class="page-hero">
+        <h1 class="page-hero__title">Edit entry</h1>
+        <p class="page-hero__sub">Update visibility, content, or formatting.</p>
+    </header>
 
-    <div class="card">
-        <h1>Edit Entry</h1>
+    <div class="card form-card">
+        <h2 style="margin-top:0;font-size:1.25rem;">Changes</h2>
         <form method="POST" enctype="multipart/form-data" class="form-container">
             {% include 'entries/entry_form.html' %}
             <div class="form-footer">

@@ -1,145 +1,56 @@
+{% extends 'entries/base.html' %}
 {% load static %}
 {% load entry_extras %}
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>{{ author.username }}'s Profile</title>
-    <link rel="stylesheet" href="{% static 'core/styles.css' %}">
-    <link rel="stylesheet" href="{% static 'entries/styles.css' %}">
-    <style>
-        .profile-card {
-            text-align: center;
-        }
-        .profile-picture {
-            width: 120px;
-            height: 120px;
-            border-radius: 50%;
-            object-fit: cover;
-            margin-bottom: 15px;
-        }
-        .profile-info p {
-            margin: 5px 0;
-            font-size: 16px;
-            color: #4b5563;
-        }
-        .follow-btn {
-            display: inline-block;
-            margin-top: 15px;
-            padding: 8px 16px;
-            border-radius: 8px;
-            font-size: 15px;
-            cursor: pointer;
-            text-decoration: none;
-            color: white;
-        }
-        .follow { background-color: var(--primary); }
-        .unfollow { background-color: var(--danger); }
-        .request-sent { background-color: #9ca3af; cursor: default; }
-        .view-entries { background-color: var(--success); }
-        .stats {
-            margin-top: 15px;
-            font-size: 14px;
-            color: #6b7280;
-        }
-        .entry__container {
-            margin-top: 1em;
-            border: none;
-            box-shadow: 0.1rem 0.1rem 1rem rgba(0, 0, 0, 0.5);
-            border-radius: 1em;
-            overflow-y: auto;
-            height: 30em;
-            display: flex;
-            flex-flow: column nowrap;
-            align-items: center;
-        }
 
-        .h2__container {
-            position: sticky;
-            top: 0;
-            width: 100%;
-            margin-top: 0;
-            padding: 1em;
-            background-color: var(--primary);
-            color: white;
-            z-index: 3;
-        }
+{% block title %}{{ author.username }} — Profile{% endblock %}
 
-        .entry__section {
-            border: none;
-            margin: 2em;
-            padding: 1em;
-            border-radius: 1em;
-            background-color: green;
-        }
+{% block content %}
+<div class="page">
+    <div class="card profile-card--public">
+        <img src="{% if author.picture %}{{ author.picture.url }}{% elif author.picture_url %}{{ author.picture_url }}{% else %}{% static 'images/default_profile.jpg' %}{% endif %}"
+             alt=""
+             class="profile-picture">
 
-        .entry-card {
-            margin: 1em;
-            width: 90%;
-        }
+        <h1 style="margin:0 0 8px;font-size:1.5rem;">{{ author.username }}</h1>
 
-        .liked .icon { color: #ed4956; }
-    </style>
-</head>
-<body>
-    <nav class="top-nav">
-        <a href="/">Home</a>
-        <a href="/app/stream/">Stream</a>
-        <a href="/app/my-entries/">My Entries</a>
-        <a href="/app/create-entry/">Create Entry</a>
-        {% if request.session.author_id %}
-            <a href="/app/profile/">My Profile</a>
-            <a href="/app/follow-requests/">Follow Requests</a>
-            <a href="/app/logout/">Logout</a>
-        {% else %}
-            <a href="/app/login/">Login</a>
-            <a href="/app/signup/">Sign Up</a>
-        {% endif %}
-    </nav>
-    <div class="page">
-        <div class="card profile-card">
-            <img src="{% if author.picture %}{{ author.picture.url }}{% elif author.picture_url %}{{ author.picture_url }}{% else %}{% static 'images/default_profile.jpg' %}{% endif %}" 
-                 alt="Profile Picture" 
-                 class="profile-picture">
-
-            <h1>{{ author.username }}</h1>
-
-            <div class="profile-info">
-                {% if author.name %}
-                    <p><strong>Name:</strong> {{ author.name }}</p>
-                {% endif %}
-                {% if author.description %}
-                    <p><strong>Description:</strong> {{ author.description }}</p>
-                {% endif %}
-                {% if author.github %}
-                    <p><strong>GitHub:</strong> <a href="{{ author.github }}" target="_blank">{{ author.github }}</a></p>
-                {% endif %}
-            </div>
-
-            <div class="stats">
-                <p><strong>Followers:</strong> {{ followers_count }} | <strong>Following:</strong> {{ following_count }}</p>
-            </div>
-
-            {% if logged_in_id and logged_in_id != author.id %}
-                {% if is_following %}
-                    <a href="{% url 'UnfollowAuthor' author.id %}" class="follow-btn unfollow">Unfollow</a>
-                {% elif request_sent %}
-                    <button class="follow-btn request-sent" disabled>Request Sent</button>
-                {% else %}
-                    <a href="{% url 'FollowAuthor' author.id %}" class="follow-btn follow">Follow</a>
-                {% endif %}
-                <a href="{% url 'view_entries' author.id %}" class="follow-btn view-entries">View Entries</a>
+        <div class="profile-info">
+            {% if author.name %}
+                <p><strong>Name</strong> — {{ author.name }}</p>
+            {% endif %}
+            {% if author.description %}
+                <p><strong>About</strong> — {{ author.description }}</p>
+            {% endif %}
+            {% if author.github %}
+                <p><strong>GitHub</strong> — <a href="{{ author.github }}" target="_blank" rel="noopener">{{ author.github }}</a></p>
             {% endif %}
         </div>
-        <section class="entry__container">
-            <h2 class="h2__container">Public entries</h2>
+
+        <div class="stats">
+            <p><strong>Followers</strong> {{ followers_count }} · <strong>Following</strong> {{ following_count }}</p>
+        </div>
+
+        {% if logged_in_id and logged_in_id != author.id %}
+            {% if is_following %}
+                <a href="{% url 'UnfollowAuthor' author.id %}" class="follow-btn unfollow">Unfollow</a>
+            {% elif request_sent %}
+                <button type="button" class="follow-btn request-sent" disabled>Request sent</button>
+            {% else %}
+                <a href="{% url 'FollowAuthor' author.id %}" class="follow-btn follow">Follow</a>
+            {% endif %}
+            <a href="{% url 'view_entries' author.id %}" class="follow-btn view-entries">View entries</a>
+        {% endif %}
+    </div>
+
+    <div class="entry-feed-panel">
+        <h2 class="entry-feed-panel__head">Public entries</h2>
+        <div class="entry-feed-panel__body">
             {% for entry in public_entries %}
                 <div class="entry-card clickable" data-url="{% url 'get_entry' entry.id %}">
                     <div class="entry-header">
                         <h2 class="entry-title">{{ entry.title }}</h2>
                     </div>
-                    
-                    <p class="entry-by">Published: {{ entry.published|date:"M d, Y" }}</p>
+
+                    <p class="entry-by">Published {{ entry.published|date:"M d, Y" }}</p>
 
                     {% if entry.description %}
                         <p class="entry-description">{{ entry.description }}</p>
@@ -147,14 +58,14 @@
 
                     <div class="entry-content">
                         {% if "image" in entry.contentType %}
-                            <img src="{% url 'api:ApiEntryImage' author_id=entry.author.id entry_id=entry.id %}" class="entry-image">
+                            <img src="{% url 'api:ApiEntryImage' author_id=entry.author.id entry_id=entry.id %}" class="entry-image" alt="">
                         {% elif entry.contentType == "text/markdown" %}
                             <div class="entry-markdown">{{ entry.content|safe }}</div>
                         {% else %}
                             <div class="entry-plain-text">{{ entry.content|linebreaks }}</div>
                         {% endif %}
                     </div>
-                    
+
                     <div class="interaction-row" onclick="event.stopPropagation();">
                         {% if request.session.author_id %}
                         <form method="POST" action="{% url 'interactions:add_like' entry.id %}">
@@ -179,9 +90,10 @@
                         </div>
                     </div>
                 </div>
+            {% empty %}
+                <p class="muted text-center" style="padding:24px;">No public entries yet.</p>
             {% endfor %}
-        </section>
+        </div>
     </div>
-    <script src="{% static 'entries/js/main.js' %}"></script>
-</body>
-</html>
+</div>
+{% endblock %}

@@ -1,34 +1,48 @@
 {% load static %}
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#4f46e5">
     <title>{% block title %}Social Distribution Node{% endblock %}</title>
     <link rel="stylesheet" href="{% static 'core/styles.css' %}">
     <link rel="stylesheet" href="{% static 'entries/styles.css' %}">
     {% block style %}{% endblock %}
 </head>
 <body>
-    <nav class="top-nav">
-        <a href="{% url 'NodeDisplay' %}">Home</a>
-        <a href="{% url 'stream' %}">Stream</a>
-        <a href="{% url 'view_my_entries' %}">My Entries</a>
-        <a href="{% url 'create_entry' %}">Create Entry</a>
-        {% if request.session.author_id %}
-            <a href="/app/profile/">My Profile</a>
-            <a href="/app/follow-requests/">Follow Requests</a>
-            <a href="/app/logout/">Logout</a>
-        {% else %}
-            <a href="/app/login/">Login</a>
-            <a href="/app/signup/">Sign Up</a>
-        {% endif %}
-    </nav>
+    <header class="app-header">
+        <div class="app-header__inner">
+            <a href="{% url 'NodeDisplay' %}" class="app-brand">
+                <span class="app-brand__mark" aria-hidden="true">◇</span>
+                <span class="app-brand__text">
+                    <span class="app-brand__name">Node</span>
+                    <span class="app-brand__tag">Social</span>
+                </span>
+            </a>
+            <nav class="top-nav" aria-label="Main">
+                <a href="{% url 'NodeDisplay' %}">Home</a>
+                <a href="{% url 'stream' %}">Stream</a>
+                <a href="{% url 'view_my_entries' %}">My Entries</a>
+                <a href="{% url 'create_entry' %}">Create Entry</a>
+                {% if request.session.author_id %}
+                    <a href="/app/profile/">My Profile</a>
+                    <a href="/app/follow-requests/">Follow Requests</a>
+                    <a href="/app/logout/">Logout</a>
+                {% else %}
+                    <a href="/app/login/">Login</a>
+                    <a href="/app/signup/">Sign up</a>
+                {% endif %}
+            </nav>
+        </div>
+    </header>
 
     <main class="content-container">
         {% block content %}
         {% endblock %}
     </main>
-    
+
     <script src="{% static 'entries/js/main.js' %}"></script>
+    {% block scripts %}{% endblock %}
 </body>
 </html>
