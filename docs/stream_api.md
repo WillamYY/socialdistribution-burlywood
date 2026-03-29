@@ -7,7 +7,7 @@ This document covers the API implementation and expected behavior for the **Stre
 - **#28** Stream shows the latest version of edited entries.
 - **#29** Stream excludes deleted entries.
 - **#31** Stream sorted with most recent entries first.
-- **#37** Friends see friends-only, unlisted, and public entries
+- **#37** Friends see friends-only, unlisted, and public entries.
 - **#38** Followers see unlisted and public entries in stream.
 - **#39** Everyone sees public entries in stream.
 
