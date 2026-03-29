@@ -23,8 +23,14 @@
             <div class="entry-content">
                 {% if "image" in entry.contentType %}
                     {% if entry.is_remote %}
-                        {% if entry.content|slice:':5' == 'data:' or entry.content|slice:':4' == 'http' %}
-                            <img src="{{ entry.content }}" class="entry-image" alt="{{ entry.title }}" onerror="this.style.display='none'">
+                        {% if entry.content|slice:':5' == 'data:' or entry.content|slice:':4' == 'http' or entry.image %}
+                            <picture>
+                                {% if entry.image %}
+                                <img src="{{ entry.image }}" class="entry-image">
+                                {% else %}
+                                <img src="data:{{ entry.contentType|cut:';base64' }};base64,{{ entry.content }}" class="entry-image">
+                                {% endif %}
+                            </picture>
                         {% else %}
                             <img src="data:{{ entry.contentType|cut:';base64' }};base64,{{ entry.content }}"
                                 class="entry-image"
@@ -32,12 +38,12 @@
                                 onerror="this.style.display='none'">
                         {% endif %}
                     {% else %}
-                        <img src="{% url 'api:ApiEntryImage' author_id=entry.author.id entry_id=entry.id %}"
+                        <img src="data:{{ entry.contentType|cut:';base64' }};base64,{{ entry.content }}"
                             class="entry-image"
                             alt="{{ entry.title }}">
                     {% endif %}
                 {% elif entry.contentType == "text/markdown" %}
-                    <div class="entry-markdown">{{ entry.content|safe }}</div>
+                    <div class="entry-markdown">{% if entry.is_remote %}{{ entry.markdown|safe }}{% else %}{{ entry.content|safe }}{% endif %}</div>
                 {% else %}
                     <div class="entry-plain-text">{{ entry.content|linebreaks }}</div>
                 {% endif %}
