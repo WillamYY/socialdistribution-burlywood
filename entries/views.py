@@ -450,7 +450,14 @@ def stream_view(request):
     # Add interaction data for local entries
     for entry in entries:
         if getattr(entry, "is_remote", False):
-            # Keep adapter flow for remote entries
+            # Extra checks
+            # Or just keep adapter flow for remote entries
+            if "author_id" in request.session:
+                partial_fqid = f"{request.get_host()}/api/authors/{request.session['author_id']}"
+                entry.liked_by_user = Like.objects.filter(object__endswith= re.search("/entries/([^/]+)",entry.id).group(1), author__endswith = partial_fqid).exists()
+            # Handles turning content into markdown
+            if "markdown" in entry.contentType:
+                entry.markdown = render_safe_markdown(entry.content)
             continue
 
         # If local, check local interactoins
@@ -815,6 +822,9 @@ def get_remote_entry(request,fqid):
     image_api_url = None
     if ";base64" in entry.get("contentType") and "image" in entry.get("contentType"):
         image_api_url = fqid[:index] + "/api/entries/" + fqid + "/image"
+    # Handles Markdown
+    if "markdown" in entry.get("contentType"):
+        entry["markdown"] = render_safe_markdown(entry.get("content"))
     # HARCODED SOLUTION FOR fuschia
     if fuschia:
         entry["like_count"] = entry.get("count",0)

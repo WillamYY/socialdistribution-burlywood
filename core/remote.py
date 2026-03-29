@@ -205,6 +205,7 @@ def fetch_remote_public_entries(following_remote_fqids=None, friends_remote_fqid
                             content=item.get("content", ""),
                             contentType=item.get("contentType", "text/plain"),
                             visibility=vis,
+                            image = item.get("image",None),
                             published=item.get("published", ""),
                             author=SimpleNamespace(
                                 id=author_data.get("id", ""),
