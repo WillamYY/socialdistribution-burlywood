@@ -1,50 +1,59 @@
 {% extends 'entries/base.html' %}
 {% load static %}
 
-{% block title %}My Profile{% endblock %}
+{% block body_extra_class %}shell-wide{% endblock %}
+
+{% block title %}My profile{% endblock %}
 
 {% block content %}
 <div class="page">
-    <div class="card profile-layout profile-card">
-        {% if author.picture_url %}
-          <img src="{{ author.picture_url }}" class="profile-pic" alt="">
-        {% elif author.picture and author.picture.url %}
-          <img src="{{ author.picture.url }}" class="profile-pic" alt="">
-        {% else %}
-          <img src="{% static 'images/default_profile.jpg' %}" class="profile-pic" alt="Profile picture">
-        {% endif %}
-
-        <h2 class="profile-name">{{ author.name|default:author.username }}</h2>
-
-        <div class="profile-meta">
-          <p><strong>Username</strong> — {{ author.username }}</p>
-          <p><strong>About</strong> — {{ author.description|default:"No description yet." }}</p>
-          <p><strong>GitHub</strong> —
+    <div class="ig-profile">
+        <div class="ig-profile__row">
+            {% if author.picture_url %}
+              <img src="{{ author.picture_url }}" class="ig-profile__avatar" alt="">
+            {% elif author.picture and author.picture.url %}
+              <img src="{{ author.picture.url }}" class="ig-profile__avatar" alt="">
+            {% else %}
+              <img src="{% static 'images/default_profile.jpg' %}" class="ig-profile__avatar" alt="">
+            {% endif %}
+            <div class="ig-profile__side">
+              <h1>{{ author.username }}</h1>
+              <div class="ig-profile__stats">
+                <div><strong>{{ followers_count }}</strong><span>Followers</span></div>
+                <div><strong>{{ following_count }}</strong><span>Following</span></div>
+                <div><strong>{{ friends_count }}</strong><span>Friends</span></div>
+              </div>
+              <div class="ig-profile__actions">
+                <a href="/app/edit-profile" class="button">Edit profile</a>
+                <a href="{% url 'stream' %}" class="button secondary">Feed</a>
+                <a href="{% url 'create_entry' %}" class="button success">New post</a>
+                <a href="{% url 'NodeDisplay' %}" class="button-ghost">Authors</a>
+                <a href="/app/logout" class="button-ghost">Log out</a>
+              </div>
+            </div>
+        </div>
+        <div class="ig-profile__bio">
+          <p><strong>{{ author.name|default:author.username }}</strong></p>
+          <p>{{ author.description|default:"No bio yet — tell the network who you are." }}</p>
+          <p class="muted" style="margin-bottom:0;">
+            GitHub:
             {% if author.github %}
               <a href="{{ author.github }}" target="_blank" rel="noopener">{{ author.github }}</a>
             {% else %}
-              Not provided
+              not linked
             {% endif %}
           </p>
         </div>
 
-        <ul class="profile-stats">
-          <li><a href="{% url 'connections' %}#followers">Followers <strong>{{ followers_count }}</strong></a></li>
-          <li><a href="{% url 'connections' %}#following">Following <strong>{{ following_count }}</strong></a></li>
-          <li><a href="{% url 'connections' %}#friends">Friends <strong>{{ friends_count }}</strong></a></li>
+        <ul class="profile-stats" style="justify-content:flex-start;margin-top:16px;">
+          <li><a href="{% url 'connections' %}#followers">Open followers</a></li>
+          <li><a href="{% url 'connections' %}#following">Open following</a></li>
+          <li><a href="{% url 'connections' %}#friends">Open friends</a></li>
         </ul>
-
-        <div class="action-row">
-          <a href="/app/edit-profile" class="button">Edit Profile</a>
-          <a href="/app/logout" class="button secondary">Logout</a>
-          <a href="{% url 'stream' %}" class="button">Stream</a>
-          <a href="{% url 'create_entry' %}" class="button success">Create Entry</a>
-          <a href="/app/" class="button-ghost">All authors</a>
-        </div>
 
         {% if request.session.author_id == author.id %}
           <a href="{% url 'view_follow_requests' %}" class="follow-requests-btn" title="Follow requests" aria-label="Follow requests">
-            👤+
+            ✉
             {% if pending_requests_count > 0 %}
               <span class="notification-count">{{ pending_requests_count }}</span>
             {% endif %}

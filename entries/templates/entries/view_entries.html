@@ -1,24 +1,28 @@
 {% extends 'entries/base.html' %}
 {% load entry_extras %}
 
-{% block title %}{{ author.username }}'s Entries{% endblock %}
+{% block title %}{{ author.username }}’s posts{% endblock %}
 
 {% block content %}
 <div class="page-container">
     <header class="page-hero">
-        <h1 class="page-hero__title">{{ author.username }}’s entries</h1>
-        <p class="page-hero__sub">Posts shared with you on this node.</p>
+        <h1 class="page-hero__title">@{{ author.username }}</h1>
+        <p class="page-hero__sub">Posts you can see on this node.</p>
     </header>
 
     {% for entry in entries %}
-    <div class="entry-card clickable" data-url="{% url 'get_entry' entry.id %}">
-        
-        <div class="entry-header">
-            <h2 class="entry-title">{{ entry.title }}</h2>
-            <span class="badge-visibility">{{ entry.visibility }}</span>
+    <article class="entry-card social-post clickable" data-url="{% url 'get_entry' entry.id %}">
+        <div class="social-post__head">
+            <span class="social-avatar" aria-hidden="true">{{ author.username|slice:":1"|upper }}</span>
+            <div class="social-post__meta">
+                <span class="social-post__user">{{ author.username }}</span>
+                <div class="social-post__sub">
+                    <span class="badge-visibility">{{ entry.visibility }}</span>
+                    <span class="entry-date" style="font-size:0.75rem;color:#8a8b8f;">{{ entry.published|date:"M j, Y" }}</span>
+                </div>
+            </div>
         </div>
-        
-        <p class="entry-by">Published: {{ entry.published|date:"M d, Y" }}</p>
+        <h2 class="social-post__title">{{ entry.title }}</h2>
 
         {% if entry.description %}
             <p class="entry-description">{{ entry.description }}</p>
@@ -26,14 +30,14 @@
 
         <div class="entry-content">
             {% if "image" in entry.contentType %}
-                <img src="{% url 'api:ApiEntryImage' author_id=entry.author.id entry_id=entry.id %}" class="entry-image">
+                <img src="{% url 'api:ApiEntryImage' author_id=entry.author.id entry_id=entry.id %}" class="entry-image" alt="">
             {% elif entry.contentType == "text/markdown" %}
                 <div class="entry-markdown">{{ entry.content|safe }}</div>
             {% else %}
                 <div class="entry-plain-text">{{ entry.content|linebreaks }}</div>
             {% endif %}
         </div>
-        
+
         <div class="interaction-row" onclick="event.stopPropagation();">
             {% if request.session.author_id %}
             <form method="POST" action="{% url 'interactions:add_like' entry.id %}">
@@ -57,7 +61,7 @@
                 </span>
             </div>
         </div>
-    </div>
+    </article>
     {% empty %}
         <div class="empty-state">No entries found for this author.</div>
     {% endfor %}

@@ -2,55 +2,59 @@
 {% load static %}
 {% load entry_extras %}
 
-{% block title %}{{ author.displayName }} — Profile{% endblock %}
+{% block body_extra_class %}shell-wide{% endblock %}
+
+{% block title %}@{{ author.displayName }}{% endblock %}
 
 {% block content %}
 <div class="page">
-    <div class="card profile-card--public">
-        <img src="{% if author.profileImage %}{{ author.profileImage }}{% else %}{% static 'images/default_profile.jpg' %}{% endif %}"
-             alt=""
-             class="profile-picture">
-
-        <h1 style="margin:0 0 8px;font-size:1.5rem;">{{ author.displayName }}</h1>
-
-        <div class="profile-info">
-            {% if author.name %}
-                <p><strong>Name</strong> — {{ author.name }}</p>
-            {% endif %}
-            {% if author.description %}
-                <p><strong>About</strong> — {{ author.description }}</p>
-            {% endif %}
-            {% if author.github %}
-                <p><strong>GitHub</strong> — <a href="{{ author.github }}" target="_blank" rel="noopener">{{ author.github }}</a></p>
-            {% endif %}
+    <div class="ig-profile">
+        <div class="ig-profile__row">
+            <img src="{% if author.profileImage %}{{ author.profileImage }}{% else %}{% static 'images/default_profile.jpg' %}{% endif %}"
+                 alt=""
+                 class="ig-profile__avatar">
+            <div class="ig-profile__side">
+                <h1>{{ author.displayName }}</h1>
+                <div class="ig-profile__stats">
+                    <div><strong>{{ followers_count }}</strong><span>Followers</span></div>
+                    <div><strong>{{ following_count }}</strong><span>Following</span></div>
+                </div>
+                <div class="ig-profile__actions">
+                    {% if logged_in_id and author_fqid %}
+                        {% if is_following %}
+                            <a href="{% url 'UnfollowRemoteAuthor' author_fqid %}" class="follow-btn unfollow">Unfollow</a>
+                        {% elif request_sent %}
+                            <button type="button" class="follow-btn request-sent" disabled>Requested</button>
+                        {% else %}
+                            <a href="{% url 'FollowRemoteAuthor' author_fqid %}" class="follow-btn follow">Follow</a>
+                        {% endif %}
+                        <a href="{% url 'RemoteProfileDisplay' author_fqid %}#entries" class="follow-btn view-entries">Posts</a>
+                    {% endif %}
+                </div>
+            </div>
         </div>
-
-        <div class="stats">
-            <p><strong>Followers</strong> {{ followers_count }} · <strong>Following</strong> {{ following_count }}</p>
+        <div class="ig-profile__bio">
+            {% if author.name %}<p><strong>{{ author.name }}</strong></p>{% endif %}
+            {% if author.description %}<p>{{ author.description }}</p>{% endif %}
+            {% if author.github %}<p><a href="{{ author.github }}" target="_blank" rel="noopener">{{ author.github }}</a></p>{% endif %}
         </div>
-
-        {% if logged_in_id and author_fqid %}
-            {% if is_following %}
-                <a href="{% url 'UnfollowRemoteAuthor' author_fqid %}" class="follow-btn unfollow">Unfollow</a>
-            {% elif request_sent %}
-                <button type="button" class="follow-btn request-sent" disabled>Request sent</button>
-            {% else %}
-                <a href="{% url 'FollowRemoteAuthor' author_fqid %}" class="follow-btn follow">Follow</a>
-            {% endif %}
-            <a href="{% url 'RemoteProfileDisplay' author_fqid %}#entries" class="follow-btn view-entries">View entries</a>
-        {% endif %}
     </div>
 
     <div class="entry-feed-panel" id="entries">
-        <h2 class="entry-feed-panel__head">Public entries</h2>
+        <h2 class="entry-feed-panel__head">Public posts</h2>
         <div class="entry-feed-panel__body">
             {% for entry in public_entries %}
-                <div class="entry-card">
-                    <div class="entry-header">
-                        <h2 class="entry-title">{{ entry.title }}</h2>
+                <article class="entry-card social-post">
+                    <div class="social-post__head">
+                        <span class="social-avatar" aria-hidden="true">{{ author.displayName|default:"?"|slice:":1"|upper }}</span>
+                        <div class="social-post__meta">
+                            <span class="social-post__user">{{ author.displayName }}</span>
+                            <div class="social-post__sub">
+                                <span class="entry-date" style="font-size:0.75rem;color:#8a8b8f;">{{ entry.published|date:"M j, Y" }}</span>
+                            </div>
+                        </div>
                     </div>
-
-                    <p class="entry-by">Published {{ entry.published|date:"M d, Y" }}</p>
+                    <h2 class="social-post__title">{{ entry.title }}</h2>
 
                     {% if entry.description %}
                         <p class="entry-description">{{ entry.description }}</p>
@@ -99,7 +103,7 @@
                             <input
                                 type="text"
                                 name="comment"
-                                placeholder="Write a comment…"
+                                placeholder="Add a comment…"
                                 required
                                 aria-label="Comment"
                             >
@@ -124,9 +128,9 @@
                         {% endfor %}
                     </div>
                     {% endif %}
-                </div>
+                </article>
             {% empty %}
-                <p class="muted text-center" style="padding:24px;">No public entries yet.</p>
+                <p class="muted text-center" style="padding:24px;">No public posts yet.</p>
             {% endfor %}
         </div>
     </div>

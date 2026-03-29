@@ -1,29 +1,38 @@
 {% extends 'entries/base.html' %}
 
-{% block title %}Following feed{% endblock %}
+{% block title %}Following{% endblock %}
 
 {% block content %}
 <div class="page-container">
     <header class="page-hero">
-        <h1 class="page-hero__title">Following feed</h1>
-        <p class="page-hero__sub">Updates from authors you follow.</p>
+        <h1 class="page-hero__title">Following</h1>
+        <p class="page-hero__sub">Posts from people you follow.</p>
     </header>
     {% for entry in entries %}
-        <div class="entry-card">
-            <div class="entry-header">
-                <h2 class="entry-title">{{ entry.title }}</h2>
+        <article class="entry-card social-post">
+            <div class="social-post__head">
+                <span class="social-avatar" aria-hidden="true">{{ entry.author.username|slice:":1"|upper }}</span>
+                <div class="social-post__meta">
+                    <span class="social-post__user">{{ entry.author.username }}</span>
+                    <div class="social-post__sub">
+                        <span class="entry-date" style="font-size:0.75rem;color:#8a8b8f;">{{ entry.published }}</span>
+                    </div>
+                </div>
             </div>
-            <p class="entry-by">by <strong>{{ entry.author.username }}</strong></p>
+            <h2 class="social-post__title">{{ entry.title }}</h2>
             {% if entry.description %}
                 <p class="entry-description">{{ entry.description }}</p>
             {% endif %}
-            <p class="entry-date">Published {{ entry.published }}</p>
             {% if entry.contentType == "text/plain" or entry.contentType == "text/markdown" %}
-                <div class="entry-plain-text">{{ entry.content }}</div>
+                <div class="entry-content">
+                    <div class="entry-plain-text">{{ entry.content }}</div>
+                </div>
             {% elif "image" in entry.contentType %}
-                <img src="data:{{ entry.contentType }},{{ entry.content }}" class="entry-image" alt="">
+                <div class="entry-content">
+                    <img src="data:{{ entry.contentType }},{{ entry.content }}" class="entry-image" alt="">
+                </div>
             {% endif %}
-        </div>
+        </article>
     {% empty %}
         <div class="empty-state">No entries from authors you follow yet.</div>
     {% endfor %}
