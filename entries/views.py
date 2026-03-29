@@ -450,11 +450,12 @@ def stream_view(request):
     # Add interaction data for local entries
     for entry in entries:
         if getattr(entry, "is_remote", False):
-            # Extra checks
-            # Or just keep adapter flow for remote entries
+            # Keep adapter flow for remote entries
+            """
             if "author_id" in request.session:
                 partial_fqid = f"{request.get_host()}/api/authors/{request.session['author_id']}"
                 entry.liked_by_user = Like.objects.filter(object__endswith= re.search("/entries/([^/]+)",entry.id).group(1), author__endswith = partial_fqid).exists()
+            """
             # Handles turning content into markdown
             if "markdown" in entry.contentType:
                 entry.markdown = render_safe_markdown(entry.content)
@@ -516,7 +517,7 @@ def stream_api(request, author_id):
     payload = []
     base = request.build_absolute_uri("/")[:-1]
     for entry in entries:
-        entry_url = f"{base}/app/entry/{entry.id}/"
+        entry_url = f"{base}/api/authors/{entry.author.id}/entries/{entry.id}"
         like_count = Like.objects.filter(object=entry_url).count()
         # optionally we could provide commentCount or the comments
         # themselves; the frontend currently doesn't need them.
@@ -645,7 +646,7 @@ def view_entries(request, author_id):
     for entry in entries_list:
         entry_url = f"{base}/api/authors/{entry.author.id}/entries/{entry.id}"
         entry.like_count = Like.objects.filter(object=entry_url).count()
-        entry.fetched_comments = Comment.objects.filter(entry=entry_url).order_by('published')
+        entry.fetched_comments = Comment.objects.filter(entry__endswith=entry.id).order_by("-published")
         
         # Only check for "Unlike" state
         if user_fqid:
@@ -761,6 +762,9 @@ def get_remote_entry(request,fqid):
     fuschia = False
     if re.match("https?://socialdist-fuchsia-oabbasi-feef8b354ae5.herokuapp.com",fqid):
         fuschia = True
+    fqid = fqid.rstrip("/").replace("http://", "https://")
+    if "/api/" not in fqid:
+        return HttpResponse(status=404)
     # Gets where the host ends
     index = fqid.index("/api/")
     logged_in_id = request.session.get("author_id")
@@ -822,6 +826,7 @@ def get_remote_entry(request,fqid):
     image_api_url = None
     if ";base64" in entry.get("contentType") and "image" in entry.get("contentType"):
         image_api_url = fqid[:index] + "/api/entries/" + fqid + "/image"
+        image_api_url = reverse("api:ApiEntryImageGlobal", kwargs={"entry_fqid": fqid})
     # Handles Markdown
     if "markdown" in entry.get("contentType"):
         entry["markdown"] = render_safe_markdown(entry.get("content"))
