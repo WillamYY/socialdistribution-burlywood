@@ -1,0 +1,15 @@
+{% load static %}
+<li>
+  <a href="{% url 'RemoteProfileDisplay' user.id %}" class="author-tile">
+    {% if user.profileImage %}
+      <img src="{{ user.profileImage }}" class="author-tile__pic" alt="" width="56" height="56">
+    {% else %}
+      <img src="{% if user.picture %}{{ user.picture.url }}{% else %}{% static 'images/default_profile.jpg' %}{% endif %}" class="author-tile__pic" alt="" width="56" height="56">
+    {% endif %}
+    <span class="author-tile__name">{{ user.displayName }}</span>
+    {% if user.name %}
+      <span class="author-tile__sub">{{ user.name }}</span>
+    {% endif %}
+    <span class="author-tile__cta">View profile</span>
+  </a>
+</li>
