@@ -598,8 +598,9 @@ def follow_remote_author(request, fqid):
                     credentials = get_object_or_404(IncomingNode, url = loc[:loc.index("/api")] + "/")
                     resp = requests.post(loc, json=payload, headers=headers, timeout=15, auth=(credentials.username, credentials.password))
                 """
-            print("AAAAAAAAAAAAAAAAAAAAAAAAA STATUS CODE:", resp.status_code)
-            if resp.status_code in (200, 202, 204):
+            if not RemoteFollow.objects.filter(follower=me, followed_fqid=normalized).exists():
+                RemoteFollow.objects.create(follower=me, followed_fqid=normalized)
+            """ if resp.status_code in (200, 202, 204):
                 RemoteFollow.objects.create(follower=me, followed_fqid=normalized)
                 messages.success(request, "Follow request sent!", extra_tags="follow")
             else:
@@ -616,7 +617,7 @@ def follow_remote_author(request, fqid):
                     request,
                     f"Inbox rejected ({resp.status_code}): {err_detail} — armdb may not have received the request.",
                 )
-                logger.warning("Follow inbox rejected status=%s body=%s", resp.status_code, resp.text[:300])
+                logger.warning("Follow inbox rejected status=%s body=%s", resp.status_code, resp.text[:300]) """
         except requests.exceptions.RequestException as e:
             messages.error(request, f"Could not reach remote inbox: {str(e)[:100]}")
             logger.warning("Follow POST failed: %s", e)
@@ -806,7 +807,7 @@ def RemoteProfileDisplay(request, fqid):
         is_following = RemoteFollow.objects.filter(
             follower_id=logged_in_id, followed_fqid=normalized_fqid
         ).exists()
-        if not is_following:
+        if is_following:
             print(f"{base_host}/api/authors/{author_id}/followers/{quote(user_fqid, safe="")}")
             base_host = remote_author_url.split("/api/authors/")[0]
             credentials = get_object_or_404(IncomingNode, url = base_host + "/")
