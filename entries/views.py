@@ -599,6 +599,15 @@ def stream_view(request):
     stored_remote_entries_qs = (
         RemoteEntry.objects.filter(recipient=viewer).exclude(visibility="DELETED")
     )
+
+    # Getting rid of remote entries if unfollow
+    stored_remote_entries_qs2 = []
+    for entry in stored_remote_entries_qs:
+        if entry.visibility in {"UNLISTED", "FRIENDS"} and RemoteFollow.objects.filter(followed_fqid=entry.author_fqid, follower=viewer).exists():
+            stored_remote_entries_qs2.append(entry) 
+        else:
+            stored_remote_entries_qs2.append(entry)
+    stored_remote_entries_qs = stored_remote_entries_qs2
     
     stored_remote_entries = [
         _stored_remote_entry_to_stream_obj(remote_entry, viewer_fqid=viewer_fqid) for remote_entry in stored_remote_entries_qs
