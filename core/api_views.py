@@ -158,13 +158,12 @@ def _extract_local_author_id_from_fqid(fqid, request):
     try:
         print("FQIDDDDDDDDDDDDDD", fqid)
         decoded = unquote(fqid)
-        decoded = decoded[:decoded.index("/api")]
         print("===================DECODED============================")
         # Check if FQID points to our node
         our_base = request.build_absolute_uri('/api/').rstrip('/')
         print("===================BASE============================", decoded, our_base)
-        if our_base not in decoded:
-            return decoded, True
+        if our_base[:our_base.index("/api")] not in decoded[:decoded.index("/api")]:
+            return decoded, False
         if our_base in decoded or '127.0.0.1' in decoded or 'localhost' in decoded:
             # Extract id: .../authors/123 or .../authors/123/
             parts = decoded.rstrip('/').split('/')
