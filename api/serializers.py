@@ -70,49 +70,45 @@ class LikeSerializer(serializers.ModelSerializer):
 
     # Turns ID into URL
     def get_id(self, obj):
-        author = self.get_author(obj)
-        like_uuid = getattr(obj, "uuid", None)
+        object_url = (obj.object or "").rstrip("/")
 
+        like_uuid = getattr(obj, "uuid", None)
         if like_uuid:
             like_uuid = str(like_uuid)
         else:
             like_uuid = str(obj.id).rstrip("/").split("/")[-1]
 
-        author_id = str(author["id"]).rstrip("/")
-        return f"{author_id}/liked/{like_uuid}"
+        return f"{object_url}/likes/{like_uuid}"
 
     # Serializes the author
     def get_author(self, obj):
-        author_url = (obj.author or "").rstrip("/")
+        author_url = (obj.author or "").rstrip("/").replace("http://", "https://")
 
-        # Try to parse a local integer author id safely
-        author_url = author_url.replace("://", "§§TEMP§§").replace("//", "/").replace("§§TEMP§§", "://")
+        request = self.context.get("request")
+        local_base = ""
+        if request:
+            local_base = request.build_absolute_uri('/').rstrip('/').replace("http://", "https://")
 
-        author_id_part = author_url.split("/")[-1]
         author_obj = None
-
-        if author_id_part.isdigit():
-            author_obj = Author.objects.filter(id=int(author_id_part)).first()
+        if local_base and author_url.startswith(f"{local_base}/api/authors/"):
+            author_id_part = author_url.split("/")[-1]
+            if author_id_part.isdigit():
+                author_obj = Author.objects.filter(id=int(author_id_part)).first()
 
         if not author_obj:
             return {
                 "type": "author",
-                "id": obj.author,
-                "host": "",
-                "displayName": author_id_part if author_id_part else "Unknown",
+                "id": author_url,
+                "host": author_url.split("/api/authors/")[0] if "/api/authors/" in author_url else "",
+                "displayName": author_url.split("/")[-1] if author_url else "Unknown",
                 "github": "",
                 "profileImage": "",
                 "web": ""
             }
 
         data = AuthorSerializer(author_obj).data
-
         if not data.get("displayName"):
             data["displayName"] = author_obj.username
-
-        if not data.get("host"):
-            data["host"] = "http://127.0.0.1:8000/"
-
         return data
 
 """
@@ -146,6 +142,7 @@ class CommentSerializer(serializers.ModelSerializer):
     type = serializers.CharField(default="comment", read_only=True)
     author = serializers.SerializerMethodField()
     id = serializers.SerializerMethodField()
+    likes = serializers.SerializerMethodField()
 
     class Meta:
         model = Comment
@@ -156,19 +153,14 @@ class CommentSerializer(serializers.ModelSerializer):
             "comment",
             "contentType",
             "published",
+            "likes",
         ]
 
     def get_id(self, obj):
-        # If your Comment model already stores a URL id, use that
-        if isinstance(obj.id, str) and obj.id.startswith("http"):
-            return obj.id
-
-        # Fallback: try to construct from object field if it exists
-        object_url = getattr(obj, "object", None)
-        if object_url:
-            return f"{str(object_url).rstrip('/')}/comments/{obj.id}"
-
-        return str(obj.id)
+        """
+        Always return the canonical stored comment FQID.
+        """
+        return str(obj.id).rstrip("/")
 
     def get_author(self, obj):
         author_value = getattr(obj, "author", None)
@@ -183,7 +175,12 @@ class CommentSerializer(serializers.ModelSerializer):
             author_url = author_url.replace("://", "§§TEMP§§").replace("//", "/").replace("§§TEMP§§", "://")
             author_id_part = author_url.split("/")[-1]
 
-            if author_id_part.isdigit():
+            request = self.context.get("request")
+            local_base = ""
+            if request:
+                local_base = request.build_absolute_uri("/").rstrip("/").replace("http://", "https://")
+
+            if author_url.startswith(f"{local_base}/api/authors/") and author_id_part.isdigit():
                 author_obj = Author.objects.filter(id=int(author_id_part)).first()
                 if author_obj:
                     return AuthorSerializer(author_obj).data
@@ -199,6 +196,21 @@ class CommentSerializer(serializers.ModelSerializer):
             }
 
         return None
+    
+    # Gets the likes of an object
+    def get_likes(self, obj):
+        likes = Like.objects.filter(object__endswith = obj.id) | Like.objects.filter(object__endswith = str(obj.id) + "/")
+                # Package the data for LikesSerializer
+        likes_data = {
+            "page_number": 1,
+            "size": 50,
+            "count": likes.count(),
+            "src": likes
+        }
+        likes_url = self.get_id(obj).rstrip("/") + "/likes" 
+        # Instantiate LikesSerializer
+        serializer = LikesSerializer(likes_data, context={"link": likes_url})
+        return serializer.data
     
 class EntrySerializer(serializers.ModelSerializer):
     """
@@ -224,12 +236,15 @@ class EntrySerializer(serializers.ModelSerializer):
         """
         Getter for the id (api-facing url).
         """
+        if hasattr(obj, "fqid") and obj.fqid:
+            return obj.fqid
         request = self.context.get('request')
         if request:
-            # Must be the original URL on the node the entry came from
-            return request.build_absolute_uri(f"/api/authors/{obj.author.id}/entries/{obj.id}")
-        # Fallback if no request context
-        return f"/api/authors/{obj.author.id}/entries/{obj.id}/" 
+            return request.build_absolute_uri(
+                f"/api/authors/{obj.author.id}/entries/{obj.id}"
+            )
+
+        return f"/api/authors/{obj.author.id}/entries/{obj.id}"
 
     def get_web(self, obj):
         """
@@ -276,7 +291,7 @@ class EntrySerializer(serializers.ModelSerializer):
         # Construct the base URL for the likes endpoint
         base_url = self.get_id(obj)
         
-        likes_url = f"{base_url}likes" 
+        likes_url = f"{base_url.rstrip('/')}/likes"
         # Handles both http and http requests
         search = re.search("entr(?:y|ies)/([^/]+)",base_url)
         # Prevents crashes

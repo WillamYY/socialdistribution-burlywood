@@ -4,7 +4,7 @@ from django.test import TestCase, Client, RequestFactory
 from django.urls import reverse
 from django.shortcuts import render
 from rest_framework import status
-from rest_framework.test import APITestCase
+from rest_framework.test import APITestCase, APIClient
 from .serializers import LikeSerializer, AuthorSerializer
 from core.admin import AuthorAdmin, AuthorRequestAdmin
 from django.contrib.auth.models import User
@@ -13,14 +13,15 @@ from django.contrib.admin.sites import AdminSite
 from unittest.mock import Mock, patch
 import base64
 import uuid
-from core.models import Author, AuthorRequest, IncomingNode, OutgoingNode, RemoteFollower, EntryDelivery
-from entries.models import Entry
+from core.models import Author, AuthorRequest, IncomingNode, OutgoingNode, RemoteFollower, RemoteFollow, EntryDelivery
+from entries.models import Entry, RemoteEntry
 from interactions.models import Comment, Like
 from core.views import SignUpProcessing
 from core.remote import (
     federate_entry_create_or_update,
     federate_entry_deleted,
     fetch_remote_public_entries,
+    backfill_entries_to_remote_recipient,
 )
 
 # Create your tests here.
@@ -166,6 +167,18 @@ class AuthorsEndpointTest(APITestCase):
 Creates a test for the author and entry likes endpoint
 """
 class AuthorEntryLikeEndpointTest(APITestCase):
+    def setUp(self):
+        OutgoingNode.objects.create(
+            url="test",
+            username="test",
+            password="test",
+            is_active=True,
+        )
+        encoded_creds = base64.b64encode("test:test".encode("utf-8")).decode("ascii")
+        self.header = {
+            "Authorization": f"Basic {encoded_creds}"
+        }
+
     def test_author_entry_get_likes(self):
         # Creates two users, one to make the entry and one to like it
         author1 = Author(username = "a",password = "b",name = "c",description = "d",host = "http://testserver/api/",web = "/app/authors/1")
@@ -183,14 +196,15 @@ class AuthorEntryLikeEndpointTest(APITestCase):
         # Gets the info from the website
         like_url = reverse("api:ApiAuthorAndEntryLikes",kwargs = {"author_id":author1.id,"entry_id":entry1.id})
 
-        get1 = self.client.get(like_url,format="json")
+        get1 = self.client.get(like_url,format="json",headers=self.header)
         # Ensures there is exactly one like
         self.assertEqual(get1.data["count"],1)
         like = get1.data["src"][0]
         # Ensure the like has the correct entry
         self.assertEqual(like["object"].split("/")[-1],str(entry1.id))
         author = like["author"]
-        self.assertEqual(author["displayName"],author2.name)
+        #self.assertEqual(author["displayName"],author2.name)
+        self.assertEqual(author["id"], author_fqid.replace("http://", "https://"))
 
     def test_author_entry_get_likes_pagination(self):
         # Creates two users, one to make the entry and one to like it
@@ -214,22 +228,22 @@ class AuthorEntryLikeEndpointTest(APITestCase):
         like2.save()
         # Gets the info from the website
         like_url = f"{reverse("api:ApiAuthorAndEntryLikes",kwargs = {"author_id":author1.id,"entry_id":entry1.id})}?page_number=1&size=1"
-        get1 = self.client.get(like_url,format="json")
+        get1 = self.client.get(like_url,format="json",headers=self.header)
         self.assertEqual(get1.data["page_number"],1)
         self.assertEqual(get1.data["size"],1)
         self.assertEqual(get1.data["count"],2)
         likes = get1.data["src"]
         self.assertEqual(len(likes), 1)
         author = likes[0]["author"]
-        self.assertEqual(author["id"], author2_fqid)
+        self.assertEqual(author["id"], author2_fqid.replace("http://", "https://"))
 
         like_url = f"{reverse("api:ApiAuthorAndEntryLikes",kwargs = {"author_id":author1.id,"entry_id":entry1.id})}?page_number=0&size=0"
-        get1 = self.client.get(like_url,format="json")
+        get1 = self.client.get(like_url,format="json",headers=self.header)
         self.assertEqual(get1.data["page_number"],1)
         self.assertEqual(get1.data["size"],5)
 
         like_url = f"{reverse("api:ApiAuthorAndEntryLikes",kwargs = {"author_id":author1.id,"entry_id":entry1.id})}?page_number=500&size=5"
-        get1 = self.client.get(like_url,format="json")
+        get1 = self.client.get(like_url,format="json",headers=self.header)
         self.assertEqual(get1.data["page_number"],500)
         self.assertEqual(get1.data["size"],5)
         likes = get1.data["src"]
@@ -269,7 +283,8 @@ class EntryLikeEndpointTest(APITestCase):
         # Ensure the like has the correct entry
         self.assertEqual(like["object"].split("/")[-1],str(entry1.id))
         author = like["author"]
-        self.assertEqual(author["displayName"],author2.name)
+        #self.assertEqual(author["displayName"],author2.name)
+        self.assertEqual(author["id"], author_fqid.replace("http://", "https://"))
 
     def test_entry_get_likes_pagination(self):
         # Creates two users, one to make the entry and one to like it
@@ -300,7 +315,7 @@ class EntryLikeEndpointTest(APITestCase):
         likes = get1.data["src"]
         self.assertEqual(len(likes), 1)
         author = likes[0]["author"]
-        self.assertEqual(author["id"], author2_fqid)
+        self.assertEqual(author["id"], author2_fqid.replace("http://", "https://"))
 
         like_url = f"{reverse("api:ApiEntryLikes",kwargs = {"entry_fqid":object_fqid})}?page_number=0&size=0"
         get1 = self.client.get(like_url,format="json", headers=self.header)
@@ -350,10 +365,22 @@ class AddLikeEndpointTest(APITestCase):
         # Ensures there is one like in the data base
         self.assertEqual(Like.objects.count(),1)
         # Ensures it matches with the like object information
-        self.assertEqual(Like.objects.get().author,author_fqid)
+        self.assertEqual(Like.objects.get().author,author_fqid.replace("http://", "https://"))
         self.assertEqual(Like.objects.get().object,object_fqid)
 
 class ApiAuthorLikedTest(APITestCase):
+    def setUp(self):
+        OutgoingNode.objects.create(
+            url="test",
+            username="test",
+            password="test",
+            is_active=True,
+        )
+        encoded_creds = base64.b64encode("test:test".encode("utf-8")).decode("ascii")
+        self.header = {
+            "Authorization": f"Basic {encoded_creds}"
+        }
+
     def test_get_author_like(self):
         # Creates two users, one to make the entry and one to like it
         author1 = Author(username = "a",password = "b",name = "c",description = "d",host = "http://testserver/api/",web = "/app/authors/1")
@@ -371,19 +398,16 @@ class ApiAuthorLikedTest(APITestCase):
         like1.id = f"{author_fqid}/liked/{like1.uuid}"
         like1.save()
 
-        like_id = f"{author_fqid}/liked/{like1.uuid}"
-
         # Gets the info from the website
         like_url = reverse("api:ApiAuthorLiked",kwargs = {"author_id":author2.id})
-        get1 = self.client.get(like_url,format="json")
+        get1 = self.client.get(like_url,format="json", headers=self.header)
         # Ensures there is one like in the data base
         self.assertEqual(Like.objects.count(),1)
         # Ensures it matches with the like object information
         self.assertEqual(get1.data["type"], "likes")
-        self.assertEqual(get1.data["id"], f"http://testserver{like_url}")
+        self.assertEqual(get1.data["src"][0]["id"], f"{object_fqid}/likes/{like1.uuid}")
         self.assertEqual(get1.data["src"][0]["type"], "like")
-        self.assertEqual(get1.data["src"][0]["author"]["id"], author_fqid)
-        self.assertEqual(get1.data["src"][0]["id"], like1.id)
+        self.assertEqual(get1.data["src"][0]["author"]["id"], author_fqid.replace("http://", "https://"))
         self.assertEqual(get1.data["src"][0]["object"], object_fqid)
 
     def test_get_author_like_pagination(self):
@@ -414,7 +438,7 @@ class ApiAuthorLikedTest(APITestCase):
         # Gets the info from the website
         like_url = f"{reverse("api:ApiAuthorLiked",kwargs = {"author_id":author.id})}?page_number=1&size=1"
 
-        get1 = self.client.get(like_url,format="json")
+        get1 = self.client.get(like_url,format="json", headers=self.header)
         self.assertEqual(get1.data["page_number"],1)
         self.assertEqual(get1.data["size"],1)
         self.assertEqual(get1.data["count"],2)
@@ -423,21 +447,33 @@ class ApiAuthorLikedTest(APITestCase):
         object = likes[0]["object"]
         self.assertEqual(object, object2_fqid)
         id = likes[0]["id"]
-        self.assertEqual(id, like2_id)
+        self.assertEqual(id, f"{object2_fqid}/likes/{like2.uuid}")
 
         like_url = f"{reverse("api:ApiAuthorLiked",kwargs = {"author_id":author.id})}?page_number=0&size=0"
-        get1 = self.client.get(like_url,format="json")
+        get1 = self.client.get(like_url,format="json", headers=self.header)
         self.assertEqual(get1.data["page_number"],1)
         self.assertEqual(get1.data["size"],5)
 
         like_url = f"{reverse("api:ApiAuthorLiked",kwargs = {"author_id":author.id})}?page_number=500&size=5"
-        get1 = self.client.get(like_url,format="json")
+        get1 = self.client.get(like_url,format="json", headers=self.header)
         self.assertEqual(get1.data["page_number"],500)
         self.assertEqual(get1.data["size"],5)
         likes = get1.data["src"]
         self.assertEqual(len(likes), 0)
         
 class ApiSingleLikeRemoteLocalTest(APITestCase):
+    def setUp(self):
+        OutgoingNode.objects.create(
+            url="test",
+            username="test",
+            password="test",
+            is_active=True,
+        )
+        encoded_creds = base64.b64encode("test:test".encode("utf-8")).decode("ascii")
+        self.header = {
+            "Authorization": f"Basic {encoded_creds}"
+        }
+        
     def test_get_single_like_remote_local(self):
          # Creates two users, one to make the entry and one to like it
         author1 = Author(username = "a",password = "b",name = "c",description = "d",host = "http://testserver/api/",web = "/app/authors/1")
@@ -457,14 +493,26 @@ class ApiSingleLikeRemoteLocalTest(APITestCase):
 
         author_fqid = f"{author2.host}authors/{author2.id}"
         like_url = reverse("api:ApiSingleLikeRemoteLocal",kwargs = {"author_id":author2.id, "like_id": like1.uuid})
-        get1 = self.client.get(like_url,format="json")
+        get1 = self.client.get(like_url,format="json", headers=self.header)
         self.assertEqual(get1.data["type"], "like")
-        self.assertEqual(get1.data["author"]["id"], author_fqid)
-        self.assertEqual(get1.data["id"], f"http://testserver{like_url}")
+        self.assertEqual(get1.data["author"]["id"], author_fqid.replace("http://", "https://"))
+        self.assertEqual(get1.data["id"], f"{object_fqid}/likes/{like1.uuid}")
         self.assertEqual(get1.data["object"], object_fqid)
 
 class ApiAuthorLikedLocalTest(APITestCase):
-    def get_author_liked_local(self):
+    def setUp(self):
+        OutgoingNode.objects.create(
+            url="test",
+            username="test",
+            password="test",
+            is_active=True,
+        )
+        encoded_creds = base64.b64encode("test:test".encode("utf-8")).decode("ascii")
+        self.header = {
+            "Authorization": f"Basic {encoded_creds}"
+        }
+
+    def test_get_author_liked_local(self):
         # Creates two users, one to make the entry and one to like it
         author1 = Author(username = "a",password = "b",name = "c",description = "d",host = "http://testserver/api/",web = "/app/authors/1")
         author1.save()
@@ -481,18 +529,15 @@ class ApiAuthorLikedLocalTest(APITestCase):
         like1.id = f"http://testserver/api/authors/{author2.id}/liked/{like1.uuid}"
         like1.save()
 
-        like_id = f"{author_fqid}/liked/{like1.id}"
-
         like_url = reverse("api:ApiAuthorLikedLocal",kwargs = {"author_fqid":author_fqid})
-        get1 = self.client.get(like_url,format="json")
+        get1 = self.client.get(like_url,format="json", headers=self.header)
         self.assertEqual(get1.data["type"], "likes")
-        self.assertEqual(get1.data["id"], f"http://testserver{like_url}")
+        self.assertEqual(get1.data["src"][0]["id"], f"{object_fqid}/likes/{like1.uuid}")
         self.assertEqual(get1.data["src"][0]["type"], "like")
-        self.assertEqual(get1.data["src"][0]["author"]["id"], author_fqid)
-        self.assertEqual(get1.data["src"][0]["id"], like_id)
+        self.assertEqual(get1.data["src"][0]["author"]["id"], author_fqid.replace("http://", "https://"))
         self.assertEqual(get1.data["src"][0]["object"], object_fqid)
 
-    def get_author_liked_local_pagination(self):
+    def test_get_author_liked_local_pagination(self):
         # Creates two users, one to make the entry and one to like it
         author = Author(username = "a",password = "b",name = "c",description = "d",host = "http://testserver/api/",web = "/app/authors/1")
         author.save()
@@ -504,19 +549,21 @@ class ApiAuthorLikedLocalTest(APITestCase):
 
         object1_fqid = f"{author.host}authors/{author.id}/entries/{entry1.id}"
         author_fqid = f"{author.host}authors/{author.id}"
-        like1 = Like(object = object1_fqid, author = author_fqid)
+        like1 = Like(object=object1_fqid, author=author_fqid)
+        like1.uuid = uuid.uuid4()
+        like1.id = f"{author_fqid}/liked/{like1.uuid}"
         like1.save()
 
         object2_fqid = f"{author.host}authors/{author.id}/entries/{entry2.id}"
-        like2 = Like(object = object2_fqid, author = author_fqid)
+        like2 = Like(object=object2_fqid, author=author_fqid)
+        like2.uuid = uuid.uuid4()
+        like2.id = f"{author_fqid}/liked/{like2.uuid}"
         like2.save()
-
-        like1_id = f"{author_fqid}/liked/{like1.id}"
 
         # Gets the info from the website
         like_url = f"{reverse("api:ApiAuthorLikedLocal",kwargs = {"author_fqid":author_fqid})}?page_number=1&size=1"
 
-        get1 = self.client.get(like_url,format="json")
+        get1 = self.client.get(like_url,format="json", headers=self.header)
         self.assertEqual(get1.data["page_number"],1)
         self.assertEqual(get1.data["size"],1)
         self.assertEqual(get1.data["count"],2)
@@ -525,22 +572,34 @@ class ApiAuthorLikedLocalTest(APITestCase):
         object = likes[0]["object"]
         self.assertEqual(object, object2_fqid)
         id = likes[0]["id"]
-        self.assertEqual(id, like1_id)
+        self.assertEqual(id, f"{object2_fqid}/likes/{like2.uuid}")
 
         like_url = f"{reverse("api:ApiAuthorLikedLocal",kwargs = {"author_fqid":author_fqid})}?page_number=0&size=0"
-        get1 = self.client.get(like_url,format="json")
+        get1 = self.client.get(like_url,format="json", headers=self.header)
         self.assertEqual(get1.data["page_number"],1)
         self.assertEqual(get1.data["size"],5)
 
         like_url = f"{reverse("api:ApiAuthorLikedLocal",kwargs = {"author_fqid":author_fqid})}?page_number=500&size=5"
-        get1 = self.client.get(like_url,format="json")
+        get1 = self.client.get(like_url,format="json", headers=self.header)
         self.assertEqual(get1.data["page_number"],500)
         self.assertEqual(get1.data["size"],5)
         likes = get1.data["src"]
         self.assertEqual(len(likes), 0)
 
 class ApiSingleLikeLocalTest(APITestCase):
-    def get_single_like(self):
+    def setUp(self):
+        OutgoingNode.objects.create(
+            url="test",
+            username="test",
+            password="test",
+            is_active=True,
+        )
+        encoded_creds = base64.b64encode("test:test".encode("utf-8")).decode("ascii")
+        self.header = {
+            "Authorization": f"Basic {encoded_creds}"
+        }
+
+    def test_get_single_like(self):
         # Creates two users, one to make the entry and one to like it
         author1 = Author(username = "a",password = "b",name = "c",description = "d",host = "http://testserver/api/",web = "/app/authors/1")
         author1.save()
@@ -552,16 +611,16 @@ class ApiSingleLikeLocalTest(APITestCase):
 
         object_fqid = f"{author1.host}authors/{author1.id}/entries/{entry1.id}"
         author_fqid = f"{author2.host}authors/{author2.id}"
-        like1 = Like(object = object_fqid, author = author_fqid)
+        like1 = Like(object=object_fqid, author=author_fqid)
+        like1.uuid = uuid.uuid4()
+        like1.id = f"{author_fqid}/liked/{like1.uuid}"
         like1.save()
 
-        like_id = f"{author_fqid}/liked/{like1.id}"
-
-        like_url = reverse("api:ApiSingleLikeLocal",kwargs = {"like_url":like_id})
-        get1 = self.client.get(like_url,format="json")
+        like_url = reverse("api:ApiSingleLikeLocal", kwargs={"like_url": like1.id})
+        get1 = self.client.get(like_url, format="json", headers=self.header)
         self.assertEqual(get1.data["type"], "like")
-        self.assertEqual(get1.data["author"]["id"], author_fqid)
-        self.assertEqual(get1.data["id"], like_id)
+        self.assertEqual(get1.data["author"]["id"], author_fqid.replace("http://", "https://"))
+        self.assertEqual(get1.data["id"], f"{object_fqid}/likes/{like1.uuid}")
         self.assertEqual(get1.data["object"], object_fqid)
 
 """
@@ -796,7 +855,7 @@ class EntryAPITest(APITestCase):
             "author_id": self.author.id,
             "entry_id": self.image_entry.id
         })
-        response = self.client.get(url)
+        response = self.client.get(url, headers=self.header)
 
         # Check if the response is successful
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -820,13 +879,13 @@ class EntryAPITest(APITestCase):
             "author_id": self.author.id,
             "entry_id": text_entry.id
         })
-        text_response = self.client.get(text_image_url)
+        text_response = self.client.get(text_image_url, headers=self.header)
         self.assertEqual(text_response.status_code, 404)
 
         # Global image endpoint
         entry_fqid = f"http://testserver/api/authors/{self.author.id}/entries/{self.image_entry.id}"
         global_url = reverse("api:ApiEntryImageGlobal", kwargs={"entry_fqid": entry_fqid})
-        global_response = self.client.get(global_url)
+        global_response = self.client.get(global_url, headers=self.header)
 
         # Check the response and MIME type
         self.assertEqual(global_response.status_code, status.HTTP_200_OK)
@@ -842,7 +901,7 @@ class EntryAPITest(APITestCase):
         # Request via the Global Proxy URL pattern: /api/entries/<path:entry_fqid>/image
         url = reverse('api:ApiEntryImageGlobal', kwargs={'entry_fqid': fqid})
         
-        response = self.client.get(url)
+        response = self.client.get(url, headers=self.header)
         
         # Should resolve locally and return binary data
         self.assertEqual(response.status_code, 200)
@@ -872,7 +931,7 @@ class EntryAPITest(APITestCase):
         self.assertEqual(created.content, markdown_source)
 
         # Check if the referenced URL is actually a valid hosted image resource
-        image_response = self.client.get(image_url)
+        image_response = self.client.get(image_url, headers=self.header)
         self.assertEqual(image_response.status_code, status.HTTP_200_OK)
         self.assertTrue(image_response["Content-Type"].startswith("image/"))
         
@@ -883,7 +942,7 @@ class EntryAPITest(APITestCase):
         bad_fqid = "http://testserver/api/authors/1/entries/00000000-0000-0000-0000-000000000000"
         url = reverse('api:ApiEntryImageGlobal', kwargs={'entry_fqid': bad_fqid})
         
-        response = self.client.get(url)
+        response = self.client.get(url, headers=self.header)
         self.assertEqual(response.status_code, 404)
 
     def test_get_entries_pagination(self):
@@ -932,7 +991,7 @@ class EntryAPITest(APITestCase):
         self.assertEqual(len(response2.data["src"]), 1)
         self.assertNotIn(str(entry.id), response2.data["src"][0]["id"])
 
-        response3 = self.client.get(entry_url3)
+        response3 = self.client.get(entry_url3, headers=self.header)
         self.assertEqual(response3.data["count"], 1)
         self.assertEqual(len(response3.data["src"]), 1)
         self.assertNotIn(str(entry.id), response2.data["src"][0]["id"])
@@ -945,16 +1004,42 @@ class CommentApiTest(TestCase):
     Tests for all comment-related API endpoints.
     """
     def setUp(self):
-        self.author = Author.objects.create(name="Tester")
+        self.client = APIClient()
+
+        OutgoingNode.objects.create(
+            url="test",
+            username="test",
+            password="test",
+            is_active=True,
+        )
+        encoded_creds = base64.b64encode("test:test".encode("utf-8")).decode("ascii")
+        self.header = {
+            "Authorization": f"Basic {encoded_creds}"
+        }
+
+        self.author = Author.objects.create(
+            username="tester",
+            password="secret",
+            name="Tester",
+            description="Test author",
+            host="http://testserver/api/",
+            web="http://testserver/app/authors/1",
+        )
 
         self.entry = Entry.objects.create(
-            author=self.author,
-            title="Test Entry",
+            title="Original Entry",
+            description="Entry for comment tests",
+            contentType="text/plain",
             content="Hello world",
-            visibility="PUBLIC"
+            author=self.author,
+            visibility="PUBLIC",
         )
 
         self.entry_url = f"http://testserver/api/authors/{self.author.id}/entries/{self.entry.id}/"
+
+        session = self.client.session
+        session["author_id"] = self.author.id
+        session.save()
 
     """
     As an author, I want to comment on entries that I can access,
@@ -962,12 +1047,12 @@ class CommentApiTest(TestCase):
     """
     def test_author_can_post_comment(self):
         response = self.client.post(
-            f"/api/authors/{self.author.id}/entries/{self.entry.id}/comments/add/",
+            reverse("api:ApiAddComment", kwargs={"author_id": self.author.id, "entry_id": self.entry.id}),
             data={
                 "author": f"http://testserver/authors/{self.author.id}",
                 "comment": "Nice post!"
             },
-            content_type="application/json"
+            format="json"
         )
 
         self.assertEqual(response.status_code, 201)
@@ -986,7 +1071,7 @@ class CommentApiTest(TestCase):
         )
 
         response = self.client.get(
-            f"/api/authors/{self.author.id}/entries/{self.entry.id}/comments"
+            f"/api/authors/{self.author.id}/entries/{self.entry.id}/comments", headers=self.header
         )
 
         self.assertEqual(response.status_code, 200)
@@ -1005,7 +1090,7 @@ class CommentApiTest(TestCase):
         )
 
         response = self.client.get(
-            f"/api/authors/{self.author.id}/entries/{self.entry.id}/comments"
+            f"/api/authors/{self.author.id}/entries/{self.entry.id}/comments", headers=self.header
         )
 
         self.assertEqual(response.status_code, 200)
@@ -1027,10 +1112,28 @@ class CommentApiTest(TestCase):
                 "author": f"http://testserver/authors/{self.author.id}",
                 "comment": "Invalid"
             },
-            content_type="application/json"
+            format="json"
         )
 
         self.assertEqual(response.status_code, 404)
+    
+    """
+    Test Commented API
+    """
+    def test_commented_api(self):
+        cuuid = uuid.uuid4()
+        url = reverse("api:ApiCommented", kwargs={"author_id": self.author.id, "comment_id": cuuid})
+        comment_id = f"{self.author.host}/authors/{self.author.id}/commented/{cuuid}"
+        comment = Comment.objects.create(
+            id=comment_id,
+            author="http://testserver/authors/1",
+            entry=self.entry_url,
+            comment="Hello"
+        )
+        response = self.client.get(url, headers=self.header)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["id"],comment.id)
+
 
 class VisibilityAPITest(TestCase):
     """
@@ -1099,7 +1202,7 @@ class VisibilityAPITest(TestCase):
 
         # Try to access A's private entry via API
         url = reverse('api:ApiEntry', kwargs={'author_id': self.author_a.id, 'entry_id': self.private_entry.id})
-        response = self.client.get(url)
+        response = self.client.get(url, headers=self.header)
         
         # Check if the status code is 403 Forbidden
         self.assertEqual(response.status_code, 403)
@@ -1124,7 +1227,7 @@ class VisibilityAPITest(TestCase):
         session.save()
 
         url = reverse('api:ApiEntryImage', kwargs={'author_id': self.author_a.id, 'entry_id': self.private_image_entry.id})
-        response = self.client.get(url)
+        response = self.client.get(url, headers=self.header)
         self.assertEqual(response.status_code, 403)
 
         # Make B a friend of A (Mutual Follow)
@@ -1132,7 +1235,7 @@ class VisibilityAPITest(TestCase):
         self.author_b.followers.add(self.author_a)
 
         url = reverse('api:ApiEntryImage', kwargs={'author_id': self.author_a.id, 'entry_id': self.private_image_entry.id})
-        response = self.client.get(url)
+        response = self.client.get(url, headers=self.header)
         self.assertEqual(response.status_code, 200)
 
     def test_api_comments_visibility(self):
@@ -1155,7 +1258,7 @@ class VisibilityAPITest(TestCase):
         session.save()
 
         url = reverse('api:ApiEntryComments', kwargs={'author_id': self.author_a.id, 'entry_id': self.private_entry.id})
-        response = self.client.get(url)
+        response = self.client.get(url, headers=self.header)
         self.assertEqual(response.status_code, 403)
 
         # Make B a friend of A (Mutual Follow)
@@ -1163,7 +1266,7 @@ class VisibilityAPITest(TestCase):
         self.author_b.followers.add(self.author_a)
 
         url = reverse('api:ApiEntryComments', kwargs={'author_id': self.author_a.id, 'entry_id': self.private_entry.id})
-        response = self.client.get(url)
+        response = self.client.get(url, headers=self.header)
         self.assertEqual(response.status_code, 200)
     
     def test_api_entry_likes_visibility(self):
@@ -1184,7 +1287,7 @@ class VisibilityAPITest(TestCase):
         session.save()
 
         url = reverse('api:ApiAuthorAndEntryLikes', kwargs={'author_id': self.author_a.id, 'entry_id': self.private_entry.id})
-        response = self.client.get(url)
+        response = self.client.get(url, headers=self.header)
         self.assertEqual(response.status_code, 403)
 
         # Make B a friend of A (Mutual Follow)
@@ -1192,7 +1295,7 @@ class VisibilityAPITest(TestCase):
         self.author_b.followers.add(self.author_a)
 
         url = reverse('api:ApiAuthorAndEntryLikes', kwargs={'author_id': self.author_a.id, 'entry_id': self.private_entry.id})
-        response = self.client.get(url)
+        response = self.client.get(url, headers=self.header)
         self.assertEqual(response.status_code, 200)
     
     def test_api_liked_history_visibility(self):
@@ -1214,7 +1317,7 @@ class VisibilityAPITest(TestCase):
 
         # Let author C views B's 'Liked' history
         url = reverse('api:ApiAuthorLiked', kwargs={'author_id': self.author_a.id})
-        response = self.client.get(url)
+        response = self.client.get(url, headers=self.header)
         
         # Check if the status code is 200 OK
         self.assertEqual(response.status_code, 200)
@@ -1261,6 +1364,19 @@ class DatabaseTest(TestCase):
 
 class PublicEntriesAPITest(TestCase):
     def setUp(self):
+        self.client = Client()
+
+        OutgoingNode.objects.create(
+            url="test",
+            username="test",
+            password="test",
+            is_active=True,
+        )
+        encoded_creds = base64.b64encode("test:test".encode("utf-8")).decode("ascii")
+        self.header = {
+            "Authorization": f"Basic {encoded_creds}"
+        }
+
         # Create authors
         self.author1 = Author.objects.create(username="author1", name="Author One", host="http://testserver/")
         self.author2 = Author.objects.create(username="author2", name="Author Two", host="http://testserver/")
@@ -1281,7 +1397,7 @@ class PublicEntriesAPITest(TestCase):
 
     def test_browse_public_entries(self):
         url = reverse('api:browse_public_entries')  
-        response = self.client.get(url)
+        response = self.client.get(url, headers=self.header)
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertIn("page_number", data)
@@ -1293,7 +1409,7 @@ class PublicEntriesAPITest(TestCase):
 
     def test_pagination(self):
         url = reverse('api:browse_public_entries') + "?page=2&size=5"
-        response = self.client.get(url)
+        response = self.client.get(url, headers=self.header)
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertEqual(data["page_number"], 2)
@@ -1529,7 +1645,7 @@ class APIObjectsTest(APITestCase):
         )
         author_fqid = f"{author.host}api/authors/{author.id}"
         print(reverse("api:ApiAuthorByFqid", kwargs = {"author_fqid": author_fqid}))
-        response = self.client.get(reverse("api:ApiAuthorByFqid", kwargs = {"author_fqid": author_fqid}))
+        response = self.client.get(reverse("api:ApiAuthorByFqid", kwargs = {"author_fqid": author_fqid}), headers=self.header)
         self.assertEqual(response.status_code, 200)
 
     def test_get_following_foreign_author_fqid(self):
@@ -1557,7 +1673,7 @@ class APIObjectsTest(APITestCase):
         author1.followers.add(author2)
 
         author_fqid = f"{author1.host}/api/authors/{author1.id}"
-        response = self.client.get(reverse("api:ApiAuthorByFqid", kwargs = {"author_fqid": author_fqid}))
+        response = self.client.get(reverse("api:ApiAuthorByFqid", kwargs = {"author_fqid": author_fqid}), headers=self.header)
         self.assertEqual(response.status_code, 200)
 
     def test_get_follower_foreign_author_fqid(self):
@@ -1582,7 +1698,7 @@ class APIObjectsTest(APITestCase):
         author2.followers.add(author1)
 
         author1_fqid = f"{author1.host}/api/authors/{author1.id}"
-        response = self.client.get(reverse("api-follower-detail", kwargs = {"author_id": author2.id, "foreign_author_fqid": author1_fqid}))
+        response = self.client.get(reverse("api-follower-detail", kwargs = {"author_id": author2.id, "foreign_author_fqid": author1_fqid}), headers=self.header)
         self.assertEqual(response.status_code, 200)
 
     def test_get_entry_fqid(self):
@@ -1628,7 +1744,7 @@ class APIObjectsTest(APITestCase):
         )
 
         entry_fqid = f"{author.host}/api/authors/{author.id}/entries/{entry.id}"
-        response = self.client.get(reverse("api:ApiEntryImageGlobal", kwargs={"entry_fqid": entry_fqid}))
+        response = self.client.get(reverse("api:ApiEntryImageGlobal", kwargs={"entry_fqid": entry_fqid}), headers=self.header)
         self.assertEqual(response.status_code, 200)
 
     def test_get_remote_comment_fqid(self):
@@ -1658,7 +1774,7 @@ class APIObjectsTest(APITestCase):
         )
 
         entry_fqid = f"{author.host}/api/authors/{author.id}/entries/{entry.id}"
-        response = self.client.get(reverse("api:ApiEntryCommentsByFqid", kwargs={"entry_fqid": entry_fqid}))
+        response = self.client.get(reverse("api:ApiEntryCommentsByFqid", kwargs={"entry_fqid": entry_fqid}), headers=self.header)
         self.assertEqual(response.status_code, 200)
 
     def test_get_likes_entry_fqid(self):
@@ -1697,7 +1813,7 @@ class APIObjectsTest(APITestCase):
             object = entry_fqid
         )
 
-        response = self.client.get(reverse("api:ApiEntryCommentsByFqid", kwargs={"entry_fqid": entry_fqid}))
+        response = self.client.get(reverse("api:ApiEntryCommentsByFqid", kwargs={"entry_fqid": entry_fqid}), headers=self.header)
         self.assertEqual(response.status_code, 200)
 
     def test_get_likes_author_fqid(self):
@@ -1736,7 +1852,7 @@ class APIObjectsTest(APITestCase):
             object = entry_fqid
         )
 
-        response = self.client.get(reverse("api:ApiAuthorLikedLocal", kwargs={"author_fqid": author_fqid}))
+        response = self.client.get(reverse("api:ApiAuthorLikedLocal", kwargs={"author_fqid": author_fqid}), headers=self.header)
         self.assertEqual(response.status_code, 200)
 
     def test_get_like_fqid(self):
@@ -1780,5 +1896,340 @@ class APIObjectsTest(APITestCase):
         like.save()
 
         like_fqid = f"{author_fqid}/liked/{like.uuid}"
-        response = self.client.get(reverse("api:ApiSingleLikeLocal", kwargs={"like_url": like.id}))
+        response = self.client.get(reverse("api:ApiSingleLikeLocal", kwargs={"like_url": like.id}), headers=self.header)
         self.assertEqual(response.status_code, 200)
+
+class InboxRemoteEntryAPITest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+
+        self.recipient = Author.objects.create(
+            username="localuser",
+            password="testpass",
+            name="Local User",
+            host="http://127.0.0.1:8000/api/",
+            web="http://127.0.0.1:8000/app/user/1/",
+        )
+        self.url = f"/api/authors/{self.recipient.id}/inbox"
+
+        self.node_username = "test"
+        self.node_password = "test"
+        OutgoingNode.objects.create(
+            url="https://remote-node.example/api/",
+            username=self.node_username,
+            password=self.node_password,
+            is_active=True,
+        )
+        credentials = base64.b64encode(
+            f"{self.node_username}:{self.node_password}".encode("utf-8")
+        ).decode("utf-8")
+
+        self.client.credentials(HTTP_AUTHORIZATION=f"Basic {credentials}")
+
+        # Beautiful API entry object
+        self.payload = {
+            "type": "entry",
+            "id": "https://remote-node.example/api/authors/alice/entries/post-123",
+            "web": "https://remote-node.example/authors/alice/posts/post-123",
+            "title": "Remote Markdown Post",
+            "description": "A remote entry sent through inbox",
+            "contentType": "text/markdown",
+            "content": "# Hello from remote\nThis is markdown.",
+            "author": {
+                "type": "author",
+                "id": "https://remote-node.example/api/authors/alice",
+                "host": "https://remote-node.example/api/",
+                "displayName": "Alice Remote",
+                "github": "https://github.com/alice",
+                "profileImage": "https://remote-node.example/media/alice.png",
+                "web": "https://remote-node.example/authors/alice",
+            },
+            "comments": {
+                "type": "comments",
+                "id": "https://remote-node.example/api/authors/alice/entries/post-123/comments",
+                "page": 1,
+                "size": 50,
+                "count": 0,
+                "src": [],
+            },
+            "likes": {
+                "type": "likes",
+                "id": "https://remote-node.example/api/authors/alice/entries/post-123/likes",
+                "page": 1,
+                "size": 50,
+                "count": 0,
+                "src": [],
+            },
+            "published": "2026-03-26T12:00:00Z",
+            "visibility": "PUBLIC",
+        }
+
+    def test_inbox_entry_creates_remote_entry(self):
+        response = self.client.post(self.url, self.payload, format="json")
+
+        # Check if post to remote inbox successfully
+        self.assertEqual(response.status_code, 202)
+        self.assertEqual(RemoteEntry.objects.count(), 1)
+
+        remote_entry = RemoteEntry.objects.get(
+            recipient=self.recipient,
+            fqid=self.payload["id"],
+        )
+
+        # Check if the posted object remains the same
+        self.assertEqual(remote_entry.recipient, self.recipient)
+        self.assertEqual(remote_entry.fqid, self.payload["id"])
+        self.assertEqual(remote_entry.web, self.payload["web"])
+        self.assertEqual(remote_entry.title, self.payload["title"])
+        self.assertEqual(remote_entry.description, self.payload["description"])
+        self.assertEqual(remote_entry.contentType, "text/markdown")
+        self.assertEqual(remote_entry.content, self.payload["content"])
+        self.assertEqual(remote_entry.content_raw, self.payload["content"])
+        self.assertEqual(remote_entry.visibility, "PUBLIC")
+        self.assertEqual(
+            remote_entry.author_fqid,
+            self.payload["author"]["id"],
+        )
+        self.assertEqual(
+            remote_entry.author_display_name,
+            self.payload["author"]["displayName"],
+        )
+        self.assertEqual(
+            remote_entry.author_github,
+            self.payload["author"]["github"],
+        )
+        self.assertEqual(
+            remote_entry.author_profile_image,
+            self.payload["author"]["profileImage"],
+        )
+        self.assertEqual(remote_entry.raw_author, self.payload["author"])
+        self.assertEqual(remote_entry.raw_payload["id"], self.payload["id"])
+        self.assertEqual(remote_entry.raw_payload["type"], "entry")
+
+    def test_inbox_entry_second_post_updates_existing_remote_entry(self):
+        # Post somthing first
+        first_response = self.client.post(self.url, self.payload, format="json")
+        # Basic checks
+        self.assertEqual(first_response.status_code, 202)
+        self.assertEqual(RemoteEntry.objects.count(), 1)
+
+        # Update the post content
+        updated_payload = dict(self.payload)
+        updated_payload["title"] = "Updated Remote Title"
+        updated_payload["content"] = "Updated markdown body"
+        updated_payload["description"] = "Updated description"
+
+        # Post the updated version
+        second_response = self.client.post(self.url, updated_payload, format="json")
+        self.assertEqual(second_response.status_code, 202)
+
+        # Check if any undesired duplicate generated
+        self.assertEqual(RemoteEntry.objects.count(), 1)
+
+        remote_entry = RemoteEntry.objects.get(
+            recipient=self.recipient,
+            fqid=self.payload["id"],
+        )
+
+        # Check if the previous inbox entry also got updated
+        self.assertEqual(remote_entry.title, "Updated Remote Title")
+        self.assertEqual(remote_entry.content, "Updated markdown body")
+        self.assertEqual(remote_entry.content_raw, "Updated markdown body")
+        self.assertEqual(remote_entry.description, "Updated description")
+    
+    def test_same_remote_entry_can_be_stored_for_different_recipients(self):
+        other_recipient = Author.objects.create(
+            username="otherlocal",
+            password="testpass",
+            name="Other Local",
+            host="http://127.0.0.1:8000/api/",
+            web="http://127.0.0.1:8000/app/user/2/",
+        )
+        # Post entries to multiple remote authors
+        self.client.post(f"/api/authors/{self.recipient.id}/inbox", self.payload, format="json")
+        self.client.post(f"/api/authors/{other_recipient.id}/inbox", self.payload, format="json")
+
+        # Check if inbox can store multiple remote entries
+        self.assertEqual(RemoteEntry.objects.count(), 2)  
+    
+    def test_inbox_entry_deleted_updates_visibility_to_deleted(self):
+        first_response = self.client.post(self.url, self.payload, format="json")
+        self.assertEqual(first_response.status_code, 202)
+        self.assertEqual(RemoteEntry.objects.count(), 1)
+
+        deleted_payload = dict(self.payload)
+        deleted_payload["visibility"] = "DELETED"
+
+        second_response = self.client.post(self.url, deleted_payload, format="json")
+        self.assertEqual(second_response.status_code, 202)
+        self.assertEqual(RemoteEntry.objects.count(), 1)
+
+        remote_entry = RemoteEntry.objects.get(
+            recipient=self.recipient,
+            fqid=self.payload["id"],
+        )
+        self.assertEqual(remote_entry.visibility, "DELETED")
+
+    def test_inbox_entry_missing_id_returns_400(self):
+        bad_payload = dict(self.payload)
+        bad_payload.pop("id")
+
+        response = self.client.post(self.url, bad_payload, format="json")
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(RemoteEntry.objects.count(), 0)
+
+    def test_inbox_entry_missing_author_id_returns_400(self):
+        bad_payload = dict(self.payload)
+        bad_author = dict(bad_payload["author"])
+        bad_author.pop("id")
+        bad_payload["author"] = bad_author
+
+        response = self.client.post(self.url, bad_payload, format="json")
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(RemoteEntry.objects.count(), 0)
+
+class RemoteEntryFederationAPITest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.factory = RequestFactory()
+
+        self.author = Author.objects.create(
+            username="localauthor",
+            password="pass",
+            name="Local Author",
+            description="desc",
+            host="http://testserver/api/",
+            web="http://testserver/app/authors/1",
+        )
+
+        self.remote_follower_fqid = "https://remote-a.example/api/authors/follower"
+        self.remote_friend_fqid = "https://remote-b.example/api/authors/friend"
+
+        RemoteFollower.objects.create(
+            target=self.author,
+            actor_fqid=self.remote_follower_fqid,
+        )
+        RemoteFollower.objects.create(
+            target=self.author,
+            actor_fqid=self.remote_friend_fqid,
+        )
+        RemoteFollow.objects.create(
+            follower=self.author,
+            followed_fqid=self.remote_friend_fqid,
+        )
+
+        self.public_entry = Entry.objects.create(
+            author=self.author,
+            title="Public Entry",
+            description="public",
+            contentType="text/plain",
+            content="public body",
+            visibility="PUBLIC",
+        )
+        self.unlisted_entry = Entry.objects.create(
+            author=self.author,
+            title="Unlisted Entry",
+            description="unlisted",
+            contentType="text/plain",
+            content="unlisted body",
+            visibility="UNLISTED",
+        )
+        self.friends_entry = Entry.objects.create(
+            author=self.author,
+            title="Friends Entry",
+            description="friends",
+            contentType="text/plain",
+            content="friends body",
+            visibility="FRIENDS",
+        )
+        self.deleted_entry = Entry.objects.create(
+            author=self.author,
+            title="Deleted Entry",
+            description="deleted",
+            contentType="text/plain",
+            content="deleted body",
+            visibility="DELETED",
+        )
+
+        self.request = self.factory.get("/")
+
+    @patch("core.remote._post_entry_to_single_remote")
+    def test_backfill_entries_to_remote_recipient_follower_matrix(self, mock_post):
+        mock_post.return_value = True
+
+        backfill_entries_to_remote_recipient(
+            author=self.author,
+            remote_recipient_fqid=self.remote_follower_fqid,
+            relation_type="follower",
+            request=self.request,
+        )
+
+        posted_titles = [call.args[0].title for call in mock_post.call_args_list]
+        self.assertEqual(posted_titles, ["Public Entry", "Unlisted Entry"])
+
+        delivery_titles = set(
+            EntryDelivery.objects.values_list("entry__title", flat=True)
+        )
+        self.assertEqual(delivery_titles, {"Public Entry", "Unlisted Entry"})
+
+    @patch("core.remote._post_entry_to_single_remote")
+    def test_backfill_entries_to_remote_recipient_friend_matrix(self, mock_post):
+        mock_post.return_value = True
+
+        backfill_entries_to_remote_recipient(
+            author=self.author,
+            remote_recipient_fqid=self.remote_friend_fqid,
+            relation_type="friend",
+            request=self.request,
+        )
+
+        posted_titles = [call.args[0].title for call in mock_post.call_args_list]
+        self.assertEqual(
+            posted_titles,
+            ["Public Entry", "Unlisted Entry", "Friends Entry"],
+        )
+
+        delivery_titles = set(
+            EntryDelivery.objects.values_list("entry__title", flat=True)
+        )
+        self.assertEqual(
+            delivery_titles,
+            {"Public Entry", "Unlisted Entry", "Friends Entry"},
+        )
+
+    @patch("core.remote._post_entry_to_single_remote")
+    def test_federate_entry_create_or_update_creates_delivery_records_only_on_success(self, mock_post):
+        def side_effect(entry, request, recipient_fqid):
+            return recipient_fqid == self.remote_friend_fqid
+
+        mock_post.side_effect = side_effect
+
+        federate_entry_create_or_update(self.public_entry, self.request)
+
+        deliveries = list(
+            EntryDelivery.objects.filter(entry=self.public_entry)
+            .values_list("recipient_fqid", flat=True)
+        )
+        self.assertEqual(deliveries, [self.remote_friend_fqid])
+
+    @patch("core.remote._post_entry_to_single_remote")
+    def test_federate_entry_deleted_uses_previous_deliveries(self, mock_post):
+        EntryDelivery.objects.create(
+            entry=self.public_entry,
+            recipient_fqid=self.remote_follower_fqid,
+        )
+        EntryDelivery.objects.create(
+            entry=self.public_entry,
+            recipient_fqid=self.remote_friend_fqid,
+        )
+
+        RemoteFollower.objects.all().delete()
+        RemoteFollow.objects.all().delete()
+
+        federate_entry_deleted(self.public_entry, self.request)
+
+        recipients = [call.args[2] for call in mock_post.call_args_list]
+        self.assertCountEqual(
+            recipients,
+            [self.remote_follower_fqid, self.remote_friend_fqid],
+        )

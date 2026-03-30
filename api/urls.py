@@ -29,6 +29,7 @@ urlpatterns = [
     path("authors/<int:author_id>/entries/<uuid:entry_id>/comments/", views.HandleApiEntryComments, name="ApiEntryComments"),
     path("authors/<int:author_id>/entries/<uuid:entry_id>/comments/<path:comment_fqid>/likes/", views.ApiCommentLikes, name="ApiCommentLikes"),
     path("authors/<int:author_id>/entries/<uuid:entry_id>/comments/add/", views.ApiAddComment, name="ApiAddComment"),
+    path("authors/<int:author_id>/commented/<uuid:comment_id>", views.ApiCommented, name="ApiCommented"),
     path('entries/public/', views.ApiBrowsePublicEntries, name='browse_public_entries'),
     path("entries/<path:entry_fqid>/", views.ApiEntryByFqid, name="ApiEntryByFqid"),
     # GET author by FQID - last; only matches FQID-style paths (e.g. http%3A%2F%2F...)

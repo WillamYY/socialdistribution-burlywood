@@ -9,6 +9,8 @@ from types import SimpleNamespace
 import logging
 from api.serializers import EntrySerializer
 from core.models import RemoteFollow, RemoteFollower, EntryDelivery, IncomingNode
+from entries.models import Entry
+from interactions.models import Like
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +73,7 @@ def fetch_remote_public_entries(following_remote_fqids=None, friends_remote_fqid
     friends_remote_fqids = friends_remote_fqids or []
     following_normalized = {_normalize_fqid(f) for f in following_remote_fqids}
     friends_normalized = {_normalize_fqid(f) for f in friends_remote_fqids}
+    requested_by_fqid_norm = _normalize_fqid(requested_by_fqid) if requested_by_fqid else ""
 
     all_entries = []
     seen_ids = set()
@@ -184,6 +187,17 @@ def fetch_remote_public_entries(following_remote_fqids=None, friends_remote_fqid
                         web_raw = item.get("web") or eid_raw or eid
                         remote_web = _absolute_remote_url(node_base, str(web_raw))
 
+                        # If we're logged in, reflect local like state in `liked_by_user`.
+                        # This allows the Stream UI to turn the heart "red/filled" for remote entries.
+                        # Normalize for comparisons (treat http/https as equivalent).
+                        object_url_norm = _normalize_fqid(eid)
+                        liked_by_user = False
+                        if requested_by_fqid_norm:
+                            liked_by_user = Like.objects.filter(
+                                author=requested_by_fqid_norm,
+                                object=object_url_norm,
+                            ).exists()
+
                         entry = SimpleNamespace(
                             id=eid,
                             title=item.get("title", ""),
@@ -191,6 +205,7 @@ def fetch_remote_public_entries(following_remote_fqids=None, friends_remote_fqid
                             content=item.get("content", ""),
                             contentType=item.get("contentType", "text/plain"),
                             visibility=vis,
+                            image = item.get("image",None),
                             published=item.get("published", ""),
                             author=SimpleNamespace(
                                 id=author_data.get("id", ""),
@@ -200,7 +215,7 @@ def fetch_remote_public_entries(following_remote_fqids=None, friends_remote_fqid
                             remote_web=remote_web,
                             like_count=like_count,
                             comment_count=comment_count,
-                            liked_by_user=False,
+                            liked_by_user=liked_by_user,
                         )
                         all_entries.append(entry)
                         added_for_author += 1
@@ -274,8 +289,17 @@ def get_remote_entry_recipients(author, visibility: str):
     # If none of the above visibilities, no recipients (DELETED)
     return []
 
+def _build_entry_payload(entry, request, visibility_override=None):
+    """
+    Helper function to create a clean JSON representation of an entry
+    """
+    payload = EntrySerializer(entry, context={"request": request}).data
+    payload["type"] = "entry"
+    if visibility_override is not None:
+        payload["visibility"] = visibility_override
+    return payload
 
-def _post_entry_to_single_remote(entry, request, recipient_fqid: str) -> bool:
+def _post_payload_to_single_remote(payload, recipient_fqid: str) -> bool:
     """
     Perform the action of POST request to an outgoing node.
     Check success/failuree by response.
@@ -283,10 +307,6 @@ def _post_entry_to_single_remote(entry, request, recipient_fqid: str) -> bool:
     # Normalize the recipient's FQID and inbox/
     recipient_fqid = _normalize_fqid(recipient_fqid)
     inbox_url = _inbox_url_for_author_fqid(recipient_fqid)
-
-    # Serialize the local entry as unified API Entry Object
-    payload = EntrySerializer(entry, context={"request": request}).data
-    payload["type"] = "entry"
 
     # Find credentials for the corresponding outgoing node
     auth = _credentials_for_remote_author(recipient_fqid)
@@ -308,8 +328,7 @@ def _post_entry_to_single_remote(entry, request, recipient_fqid: str) -> bool:
 
         # Else Failure and log the failure info
         logger.warning(
-            "Entry federation failed entry=%s recipient=%s status=%s body=%s",
-            entry.id,
+            "Entry federation failed recipient=%s status=%s body=%s",
             recipient_fqid,
             response.status_code,
             response.text[:300],
@@ -319,12 +338,16 @@ def _post_entry_to_single_remote(entry, request, recipient_fqid: str) -> bool:
     except requests.RequestException as exc:
         # Else Failure and log the failure info
         logger.warning(
-            "Entry federation request error entry=%s recipient=%s error=%s",
-            entry.id,
+            "Entry federation request error recipient=%s error=%s",
             recipient_fqid,
             exc,
         )
         return False
+
+def _post_entry_to_single_remote(entry, request, recipient_fqid: str, visibility_override=None) -> bool:
+    # Serialize the local entry as unified API Entry Object
+    payload = _build_entry_payload(entry, request, visibility_override=visibility_override)
+    return _post_payload_to_single_remote(payload, recipient_fqid)
 
 # THINKING: any retry model needed? Currently only log failures
 def federate_entry_create_or_update(entry, request):
@@ -332,16 +355,34 @@ def federate_entry_create_or_update(entry, request):
     Send the current entry to all currently eligible remote recipients.
     Also record successful deliveries.
     """
-    recipients = get_remote_entry_recipients(entry.author, entry.visibility)
+    # Filter current recipients by current following/follwer list.
+    current_recipients = {
+        _normalize_fqid(x) for x in get_remote_entry_recipients(entry.author, entry.visibility)
+    }
+    # Track all recipients from EntryDelivery table in DB
+    previous_recipients = {
+        _normalize_fqid(x) for x in entry.deliveries.values_list("recipient_fqid", flat=True)
+    }
+    
+    current_payload = _build_entry_payload(entry, request)
 
-    for recipient_fqid in recipients:
-        is_success = _post_entry_to_single_remote(entry, request, recipient_fqid)
-        if is_success:
-            # Record the corresponding delivery relation
+    # Send/update to everyone who should currently have it
+    for recipient_fqid in current_recipients:
+        if _post_payload_to_single_remote(current_payload, recipient_fqid):
             EntryDelivery.objects.get_or_create(
                 entry=entry,
                 recipient_fqid=recipient_fqid,
             )
+    
+    # Retract from nodes that had it before but should not have it now
+    removed_recipients = previous_recipients - current_recipients
+    if removed_recipients:
+        deleted_payload = dict(current_payload)
+        # Let "DELETED" as a hide flag
+        deleted_payload["visibility"] = "DELETED"
+
+        for recipient_fqid in removed_recipients:
+            _post_payload_to_single_remote(deleted_payload, recipient_fqid)
 
 def federate_entry_deleted(entry, request):
     """
@@ -354,3 +395,30 @@ def federate_entry_deleted(entry, request):
 
     for recipient_fqid in previous_recipients:
         _post_entry_to_single_remote(entry, request, recipient_fqid)
+
+def backfill_entries_to_remote_recipient(author, remote_recipient_fqid, relation_type, request):
+    """
+    Send previous visible entries to new recipient's inbox.
+    """
+    entries = Entry.objects.filter(author=author).exclude(visibility="DELETED").order_by("published")
+
+    for entry in entries:
+        visibility = entry.visibility
+
+        if visibility == "PUBLIC":
+            allowed = True
+        elif visibility == "UNLISTED":
+            allowed = relation_type in {"follower", "friend"}
+        elif visibility == "FRIENDS":
+            allowed = relation_type == "friend"
+        else:
+            allowed = False
+
+        if not allowed:
+            continue
+
+        if _post_entry_to_single_remote(entry, request, remote_recipient_fqid):
+            EntryDelivery.objects.get_or_create(
+                entry=entry,
+                recipient_fqid=_normalize_fqid(remote_recipient_fqid),
+            )

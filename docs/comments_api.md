@@ -229,6 +229,48 @@ The response structure is the same as the **Comments Object**.
 
 ---
 
+## Commented API
+
+### Endpoint
+
+```
+GET /api/authors/{AUTHOR_SERIAL}/commented/{COMMENT_SERIAL}
+```
+
+### Description
+
+Returns a specific comment by a specific author
+
+### Response Example
+
+```json
+{
+    "type": "comment",
+    "id": "https://burlywood-53ed993f1b16.herokuapp.com/api/authors/1/commented/373fbe91-9242-4506-b3f4-8adceb8a630d",
+    "author": {
+        "type": "author",
+        "id": "https://burlywood-53ed993f1b16.herokuapp.com/api/authors/1",
+        "host": "https://burlywood-53ed993f1b16.herokuapp.com/api",
+        "displayName": "dalton",
+        "github": "",
+        "profileImage": "",
+        "web": "https://burlywood-53ed993f1b16.herokuapp.com/app/user/1"
+    },
+    "comment": "Unlisted",
+    "contentType": "text/plain",
+    "published": "2026-03-26T12:11:48.900431-06:00",
+    "likes": {
+        "type": "likes",
+        "web": "https://burlywood-53ed993f1b16.herokuapp.com/app/author/1/commented/373fbe91-9242-4506-b3f4-8adceb8a630d",
+        "id": "https://burlywood-53ed993f1b16.herokuapp.com/api/authors/1/commented/373fbe91-9242-4506-b3f4-8adceb8a630d/likes",
+        "page_number": 1,
+        "size": 50,
+        "count": 0,
+        "src": []
+    }
+}
+```
+
 # Pagination
 
 Comment lists support pagination.
@@ -265,6 +307,57 @@ Comments reference entries using **Fully Qualified IDs (FQIDs)** to ensure compa
 
 Comment IDs are also stored as FQIDs to guarantee global uniqueness across different nodes.
 
+---
+
+## Comment Federation (Outgoing Node)
+
+### Purpose
+To ensure that comments created on a local node can be delivered to remote authors when the target entry belongs to another node.
+
+### How it works
+Whenever a local author comments on a **remote entry**, the local node serializes the comment into the standard JSON Comment Object and sends it to the remote author's **Inbox**.
+
+1. **Target Resolution:** The system identifies the remote entry's FQID and the remote author who owns that entry.
+2. **Serialization:** The comment is converted into a JSON Comment Object containing:
+   - `type: "comment"`
+   - `author` as a full Author object
+   - `comment`
+   - `contentType`
+   - `published`
+   - `id`
+   - `entry` (or `object`, depending on remote compatibility)
+3. **Delivery:** The node performs a `POST` request to the remote author's Inbox endpoint.
+4. **Authentication:** The request is authenticated using stored node credentials.
+
+```md
+### Expected Federation Behavior
+
+| Action | Triggering Operation | Federation Method | Payload |
+| :--- | :--- | :--- | :--- |
+| **Create Remote Comment** | Local author comments on remote entry | `POST` to Inbox | Full Comment Object |
+
+### Example Outgoing Payload
+
+```json
+{
+  "type": "comment",
+  "author": {
+    "type": "author",
+    "id": "http://nodeaaaa/api/authors/111",
+    "host": "http://nodeaaaa/api/",
+    "displayName": "Greg Johnson",
+    "github": "http://github.com/gjohnson",
+    "profileImage": "https://i.imgur.com/k7XVwpB.jpeg",
+    "web": "http://nodeaaaa/authors/greg"
+  },
+  "comment": "Sick Olde English",
+  "contentType": "text/markdown",
+  "published": "2015-03-09T13:07:04+00:00",
+  "id": "http://nodeaaaa/api/authors/111/commented/130",
+  "entry": "http://nodebbbb/api/authors/222/entries/249"
+}
+
+```md
 ---
 
 # Citation

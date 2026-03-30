@@ -1,145 +1,60 @@
+{% extends 'entries/base.html' %}
 {% load static %}
 {% load entry_extras %}
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>{{ author.displayName }}'s Profile</title>
-    <link rel="stylesheet" href="{% static 'core/styles.css' %}">
-    <link rel="stylesheet" href="{% static 'entries/styles.css' %}">
-    <style>
-        .profile-card {
-            text-align: center;
-        }
-        .profile-picture {
-            width: 120px;
-            height: 120px;
-            border-radius: 50%;
-            object-fit: cover;
-            margin-bottom: 15px;
-        }
-        .profile-info p {
-            margin: 5px 0;
-            font-size: 16px;
-            color: #4b5563;
-        }
-        .follow-btn {
-            display: inline-block;
-            margin-top: 15px;
-            padding: 8px 16px;
-            border-radius: 8px;
-            font-size: 15px;
-            cursor: pointer;
-            text-decoration: none;
-            color: white;
-        }
-        .follow { background-color: var(--primary); }
-        .unfollow { background-color: var(--danger); }
-        .request-sent { background-color: #9ca3af; cursor: default; }
-        .view-entries { background-color: var(--success); }
-        .stats {
-            margin-top: 15px;
-            font-size: 14px;
-            color: #6b7280;
-        }
-        .entry__container {
-            margin-top: 1em;
-            border: none;
-            box-shadow: 0.1rem 0.1rem 1rem rgba(0, 0, 0, 0.5);
-            border-radius: 1em;
-            overflow-y: auto;
-            height: 30em;
-            display: flex;
-            flex-flow: column nowrap;
-            align-items: center;
-        }
 
-        .h2__container {
-            position: sticky;
-            top: 0;
-            width: 100%;
-            margin-top: 0;
-            padding: 1em;
-            background-color: var(--primary);
-            color: white;
-            z-index: 3;
-        }
+{% block body_extra_class %}shell-wide{% endblock %}
 
-        .entry__section {
-            border: none;
-            margin: 2em;
-            padding: 1em;
-            border-radius: 1em;
-            background-color: green;
-        }
+{% block title %}@{{ author.displayName }}{% endblock %}
 
-        .entry-card {
-            margin: 1em;
-            width: 90%;
-        }
-
-        .liked .icon { color: #ed4956; }
-    </style>
-</head>
-<body>
-    <nav class="top-nav">
-        <a href="/">Home</a>
-        <a href="/app/stream/">Stream</a>
-        <a href="/app/my-entries/">My Entries</a>
-        <a href="/app/create-entry/">Create Entry</a>
-        {% if request.session.author_id %}
-            <a href="/app/profile/">My Profile</a>
-            <a href="/app/follow-requests/">Follow Requests</a>
-            <a href="/app/logout/">Logout</a>
-        {% else %}
-            <a href="/app/login/">Login</a>
-            <a href="/app/signup/">Sign Up</a>
-        {% endif %}
-    </nav>
-    <div class="page">
-        <div class="card profile-card">
-            <img src="{% if author.profileImage %}{{ author.profileImage }}{% else %}{% static 'images/default_profile.jpg' %}{% endif %}" 
-                 alt="Profile Picture" 
-                 class="profile-picture">
-
-            <h1>{{ author.displayName }}</h1>
-
-            <div class="profile-info">
-                {% if author.name %}
-                    <p><strong>Name:</strong> {{ author.name }}</p>
-                {% endif %}
-                {% if author.description %}
-                    <p><strong>Description:</strong> {{ author.description }}</p>
-                {% endif %}
-                {% if author.github %}
-                    <p><strong>GitHub:</strong> <a href="{{ author.github }}" target="_blank">{{ author.github }}</a></p>
-                {% endif %}
+{% block content %}
+<div class="page">
+    <div class="ig-profile">
+        <div class="ig-profile__row">
+            <img src="{% if author.profileImage %}{{ author.profileImage }}{% else %}{% static 'images/default_profile.jpg' %}{% endif %}"
+                 alt=""
+                 class="ig-profile__avatar">
+            <div class="ig-profile__side">
+                <h1>{{ author.displayName }}</h1>
+                <div class="ig-profile__stats">
+                    <div><strong>{{ followers_count }}</strong><span>Followers</span></div>
+                    <div><strong>{{ following_count }}</strong><span>Following</span></div>
+                </div>
+                <div class="ig-profile__actions">
+                    {% if logged_in_id and author_fqid %}
+                        {% if is_following %}
+                            <a href="{% url 'UnfollowRemoteAuthor' author_fqid %}" class="follow-btn unfollow">Unfollow</a>
+                        {% elif request_sent %}
+                            <button type="button" class="follow-btn request-sent" disabled>Requested</button>
+                        {% else %}
+                            <a href="{% url 'FollowRemoteAuthor' author_fqid %}" class="follow-btn follow">Follow</a>
+                        {% endif %}
+                        <a href="{% url 'RemoteProfileDisplay' author_fqid %}#entries" class="follow-btn view-entries">Posts</a>
+                    {% endif %}
+                </div>
             </div>
-
-            <div class="stats">
-                <p><strong>Followers:</strong> {{ followers_count }} | <strong>Following:</strong> {{ following_count }}</p>
-            </div>
-
-            {% if logged_in_id and author_fqid %}
-                {% if is_following %}
-                    <a href="{% url 'UnfollowRemoteAuthor' author_fqid %}" class="follow-btn unfollow">Unfollow</a>
-                {% elif request_sent %}
-                    <button class="follow-btn request-sent" disabled>Request Sent</button>
-                {% else %}
-                    <a href="{% url 'FollowRemoteAuthor' author_fqid %}" class="follow-btn follow">Follow</a>
-                {% endif %}
-                <a href="{% url 'RemoteProfileDisplay' author_fqid %}#entries" class="follow-btn view-entries">View Entries</a>
-            {% endif %}
         </div>
-        <section class="entry__container" id="entries">
-            <h2 class="h2__container">Public entries</h2>
+        <div class="ig-profile__bio">
+            {% if author.name %}<p><strong>{{ author.name }}</strong></p>{% endif %}
+            {% if author.description %}<p>{{ author.description }}</p>{% endif %}
+            {% if author.github %}<p><a href="{{ author.github }}" target="_blank" rel="noopener">{{ author.github }}</a></p>{% endif %}
+        </div>
+    </div>
+
+    <div class="entry-feed-panel" id="entries">
+        <h2 class="entry-feed-panel__head">Public posts</h2>
+        <div class="entry-feed-panel__body">
             {% for entry in public_entries %}
-                <div class="entry-card">
-                    <div class="entry-header">
-                        <h2 class="entry-title">{{ entry.title }}</h2>
+                <article class="entry-card social-post">
+                    <div class="social-post__head">
+                        <span class="social-avatar" aria-hidden="true">{{ author.displayName|default:"?"|slice:":1"|upper }}</span>
+                        <div class="social-post__meta">
+                            <span class="social-post__user">{{ author.displayName }}</span>
+                            <div class="social-post__sub">
+                                <span class="entry-date" style="font-size:0.75rem;color:#8a8b8f;">{{ entry.published|date:"M j, Y" }}</span>
+                            </div>
+                        </div>
                     </div>
-                    
-                    <p class="entry-by">Published: {{ entry.published|date:"M d, Y" }}</p>
+                    <h2 class="social-post__title">{{ entry.title }}</h2>
 
                     {% if entry.description %}
                         <p class="entry-description">{{ entry.description }}</p>
@@ -147,14 +62,14 @@
 
                     <div class="entry-content">
                         {% if "image" in entry.contentType %}
-                            <img src="data:{{ entry.contentType|cut:';base64' }};base64,{{ entry.content }}" class="entry-image">
+                            <img src="data:{{ entry.contentType|cut:';base64' }};base64,{{ entry.content }}" class="entry-image" alt="">
                         {% elif entry.contentType == "text/markdown" %}
-                            <div class="entry-markdown">{{ entry.content|safe }}</div>
+                            <div class="entry-markdown">{{ entry.markdown|safe }}</div>
                         {% else %}
                             <div class="entry-plain-text">{{ entry.content|linebreaks }}</div>
                         {% endif %}
                     </div>
-                    
+
                     <div class="interaction-row" onclick="event.stopPropagation();">
                         {% if request.session.author_id and entry.clean_id %}
                         <form method="POST" action="{% url 'interactions:add_remote_like' entry.clean_id %}">
@@ -183,24 +98,24 @@
                         </div>
 
                         {% if request.session.author_id and entry.clean_id %}
-                        <form method="POST" action="{% url 'interactions:add_remote_comment' entry.clean_id %}" style="display:flex; gap:8px; align-items:center; margin-left:12px;">
+                        <form method="POST" action="{% url 'interactions:add_remote_comment' entry.clean_id %}" class="inline-comment-form">
                             {% csrf_token %}
                             <input
                                 type="text"
                                 name="comment"
-                                placeholder="Write a comment..."
+                                placeholder="Add a comment…"
                                 required
-                                style="padding:6px 10px; border:1px solid #d1d5db; border-radius:8px; min-width:220px;"
+                                aria-label="Comment"
                             >
-                            <button type="submit" class="button">Comment</button>
+                            <button type="submit" class="button" style="padding:8px 14px;font-size:0.85rem;">Post</button>
                         </form>
                         {% endif %}
                     </div>
 
                     {% if entry.fetched_comments %}
-                    <div class="comments-list" style="margin:12px 0 0 0;">
+                    <div class="comments-list-remote">
                         {% for comment in entry.fetched_comments %}
-                        <div style="padding:8px 12px; margin-bottom:8px; background:#f3f4f6; border-radius:8px;">
+                        <div class="comment-bubble-remote">
                             <strong>
                                 {% if comment.author.displayName %}
                                     {{ comment.author.displayName }}
@@ -213,10 +128,11 @@
                         {% endfor %}
                     </div>
                     {% endif %}
-                </div>
+                </article>
+            {% empty %}
+                <p class="muted text-center" style="padding:24px;">No public posts yet.</p>
             {% endfor %}
-        </section>
+        </div>
     </div>
-    <script src="{% static 'entries/js/main.js' %}"></script>
-</body>
-</html>
+</div>
+{% endblock %}

@@ -1,125 +1,74 @@
+{% extends 'entries/base.html' %}
 {% load static %}
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Authors Directory</title>
-  <link rel="stylesheet" href="{% static 'core/styles.css' %}">
-  <style>
-    .author-card {
-      display: flex;
-      align-items: center;
-      gap: 15px;
-      border-bottom: 1px solid #eee;
-      padding: 12px 0;
-    }
-    .profile-pic {
-      width: 60px;
-      height: 60px;
-      border-radius: 50%;
-      object-fit: cover;
-      flex-shrink: 0;
-    }
-    .author-info {
-      flex: 1;
-    }
-    .author-info h3 {
-      margin: 0;
-      font-size: 18px;
-      color: #111827;
-    }
-    .author-info p {
-      margin: 2px 0;
-      font-size: 14px;
-      color: #6b7280;
-    }
-  </style>
-</head>
-<body>
-  <nav class="top-nav">
-    <a href="/">Home</a>
-    <a href="/app/stream/">Stream</a>
-    <a href="/app/my-entries/">My Entries</a>
-    <a href="/app/create-entry/">Create Entry</a>
-    {% if request.session.author_id %}
-      <a href="/app/profile/">My Profile</a>
-      <a href="/app/follow-requests/">Follow Requests</a>
-      <a href="/app/logout/">Logout</a>
-    {% else %}
-      <a href="/app/login/">Login</a>
-      <a href="/app/signup/">Sign Up</a>
-    {% endif %}
-  </nav>
 
-  <div class="page">
-    <div class="card">
-      <h1>All Authors on This Node</h1>
-      {% if request.session.author_id %}
-        <p class="muted">Browse authors or jump to your stream.</p>
-        <p>
-          <a href="{% url 'stream' %}" class="button success">Go to Stream</a>
-        </p>
-      {% endif %}
-      <ul style="list-style:none; padding:0;">
-        {% for user in users %}
-          <li>
-            <div class="author-card">
-              {% if user.picture and user.picture.name %}
-                <img src="{{ user.picture.url }}" class="profile-pic" alt="{{ user.username }}">
-                {% elif user.picture_url %}
-                <img src="{{ user.picture_url}}" class="profile-pic" alt="{{ user.username }}">
-              {% else %}
-                <img src="{% if user.picture %}{{ user.picture.url }}{% else %}{% static 'images/default_profile.jpg' %}{% endif %}" class="profile-pic" alt="Profile Picture">
-              {% endif %}
-              
-              <div class="author-info">
-                <h3>{{ user.username }}</h3>
-                {% if user.name %}
-                  <p>{{ user.name }}</p>
-                {% endif %}
-              </div>
+{% block body_extra_class %}shell-wide{% endblock %}
 
-              <a href="{% url 'ProfileDisplay' user.id %}" class="button">View Profile</a>
-            </div>
-          </li>
-        {% empty %}
-          <li class="muted">No authors found.</li>
-        {% endfor %}
-      </ul>
-    </div>
-    <div class="card">
-      <h1>All Authors on other Nodes</h1>
-      {% if request.session.author_id %}
-        <p class="muted">Browse authors or jump to your stream.</p>
-        <p>
-          <a href="{% url 'stream' %}" class="button success">Go to Stream</a>
-        </p>
-      {% endif %}
-      <ul style="list-style:none; padding:0;">
-        {% for user in other_users %}
-          <li>
-            <div class="author-card">
-              {% if user.profileImage %}
-                <img src="{{ user.profileImage}}" class="profile-pic" alt="{{ user.displayName }}">
-              {% else %}
-                <img src="{% if user.picture %}{{ user.picture.url }}{% else %}{% static 'images/default_profile.jpg' %}{% endif %}" class="profile-pic" alt="Profile Picture">
-              {% endif %}
-              
-              <div class="author-info">
-                <h3>{{ user.displayName }}</h3>
-                {% if user.name %}
-                  <p>{{ user.name }}</p>
-                {% endif %}
-              </div>
+{% block title %}Authors{% endblock %}
 
-              <a href="{% url 'RemoteProfileDisplay' user.id %}" class="button">View Profile</a>
-            </div>
-          </li>
-        {% empty %}
-          <li class="muted">No authors found.</li>
-        {% endfor %}
-      </ul>
+{% block content %}
+<div class="page authors-directory-page">
+  <div class="card authors-home-card">
+    <header class="authors-home-header">
+      <h1 class="authors-home-title">Authors</h1>
+      <p class="muted authors-home-lead">People on this node and across the network.</p>
+    </header>
+
+    <div class="authors-seg">
+      <input type="radio" name="authors-view" id="authors-v-local" class="authors-seg__radio" checked>
+      <input type="radio" name="authors-view" id="authors-v-remote" class="authors-seg__radio">
+      <input type="radio" name="authors-view" id="authors-v-all" class="authors-seg__radio">
+
+      <div class="authors-seg__tabs" role="group" aria-label="Show authors from">
+        <label class="authors-seg__tab" for="authors-v-local">This node</label>
+        <label class="authors-seg__tab" for="authors-v-remote">Remote</label>
+        <label class="authors-seg__tab" for="authors-v-all">All authors</label>
+      </div>
+
+      <section id="authors-panel-local" class="authors-panel authors-panel--local" aria-label="Authors on this node">
+        <ul class="author-grid">
+          {% for user in users %}
+            {% include "partials/author_tile_local.html" %}
+          {% empty %}
+            <li class="author-grid__empty muted">No authors on this node yet.</li>
+          {% endfor %}
+        </ul>
+      </section>
+
+      <section id="authors-panel-remote" class="authors-panel authors-panel--remote" aria-label="Authors on remote nodes">
+        <ul class="author-grid">
+          {% for user in other_users %}
+            {% include "partials/author_tile_remote.html" %}
+          {% empty %}
+            <li class="author-grid__empty muted">No remote authors discovered yet.</li>
+          {% endfor %}
+        </ul>
+      </section>
+
+      <section id="authors-panel-all" class="authors-panel authors-panel--all" aria-label="All authors">
+        {% if users or other_users %}
+          {% if users %}
+            <h2 class="authors-panel__subsection-title">This node</h2>
+            <ul class="author-grid author-grid--tight-top">
+              {% for user in users %}
+                {% include "partials/author_tile_local.html" %}
+              {% endfor %}
+            </ul>
+          {% endif %}
+          {% if other_users %}
+            <h2 class="authors-panel__subsection-title{% if not users %} authors-panel__subsection-title--first{% endif %}">Remote nodes</h2>
+            <ul class="author-grid author-grid--tight-top">
+              {% for user in other_users %}
+                {% include "partials/author_tile_remote.html" %}
+              {% endfor %}
+            </ul>
+          {% endif %}
+        {% else %}
+          <ul class="author-grid">
+            <li class="author-grid__empty muted">No authors to show.</li>
+          </ul>
+        {% endif %}
+      </section>
     </div>
   </div>
-</body>
-</html>
+</div>
+{% endblock %}

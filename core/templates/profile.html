@@ -1,116 +1,55 @@
+{% extends 'entries/base.html' %}
 {% load static %}
-<html></html>
-  <head>
-    <title>My Profile</title>
-    <link rel="stylesheet" href="{% static 'core/styles.css' %}">
-    <style>
-      .profile-pic {
-        display: block;
-        margin: 10px auto;
-        width: 120px;
-        height: 120px;
-        border-radius: 50%;
-        object-fit: cover;
-      }
-      .follow-requests-btn {
-        font-size: 20px;
-        background-color: var(--primary);
-        width: 40px;
-        height: 40px;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: white;
-        text-decoration: none;
-        position: absolute;
-        top: 15px;
-        right: 15px;
-        cursor: pointer;
-      }
-      .follow-requests-btn:hover {
-        background-color: var(--primary-hover);
-      }
-      .notification-count {
-        position: absolute;
-        top: -5px;
-        right: -5px;
-        background: var(--danger);
-        color: white;
-        font-size: 12px;
-        font-weight: bold;
-        border-radius: 50%;
-        width: 18px;
-        height: 18px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
-      .profile-card {
-        position: relative;
-      }
-      .action-row {
-        display: flex;
-        justify-content: center;
-        gap: 10px;
-        flex-wrap: wrap;
-      }
-    </style>
-  </head>
-  <body>
-    <nav class="top-nav">
-      <a href="/">Home</a>
-      <a href="/app/stream/">Stream</a>
-      <a href="/app/my-entries/">My Entries</a>
-      <a href="/app/create-entry/">Create Entry</a>
-      <a href="/app/profile/">My Profile</a>
-      <a href="/app/follow-requests/">Follow Requests</a>
-      <a href="/app/logout/">Logout</a>
-    </nav>
-    <div class="page">
-      <div class="card profile-card">
-        <h2>{{ author.name|default:author.username }}</h2>
-        {% if author.picture_url %}
-          <img src="{{ author.picture_url }}" class="profile-pic">
-        {% elif author.picture and author.picture.url %}
-          <img src="{{ author.picture.url }}" class="profile-pic">
-        {% else %}
-          <img src="{% static 'images/default_profile.jpg' %}" class="profile-pic" alt="Profile Picture"> 
-      {% endif %}
 
-        <p><strong>Username:</strong> {{ author.username }}</p>
-        <p><strong>Description:</strong> {{ author.description|default:"No description yet." }}</p>
-        <p><strong>GitHub:</strong> 
-          {% if author.github %}
-            <a href="{{ author.github }}" target="_blank">{{ author.github }}</a>
-          {% else %}
-            Not provided
-          {% endif %}
-        </p>
+{% block body_extra_class %}shell-wide{% endblock %}
 
-        <ul>
-          <li><a href="{% url 'connections' %}#followers"><strong>Followers:</strong> {{ followers_count }}</a></li>
-          <li><a href="{% url 'connections' %}#following"><strong>Following:</strong> {{ following_count }}</a></li>
-          <li><a href="{% url 'connections' %}#friends"><strong>Friends:</strong> {{ friends_count }}</a></li>
-        </ul>
+{% block title %}My profile{% endblock %}
 
-        <div class="action-row">
-          <a href="/app/edit-profile" class="button">Edit Profile</a>
-          <a href="/app/logout" class="button secondary">Logout</a>
-          <a href="{% url 'stream' %}" class="button">Stream</a>
-          <a href="{% url 'create_entry' %}" class="button success">Create Entry</a>
-          <a href="/app/" class="button secondary">View All Authors</a>
-        </div>
-
-        {% if request.session.author_id == author.id %}
-          <a href="{% url 'view_follow_requests' %}" class="follow-requests-btn" title="Follow Requests">
-            👤+
-            {% if pending_requests_count > 0 %}
-              <span class="notification-count">{{ pending_requests_count }}</span>
+{% block content %}
+<div class="page">
+    <div class="ig-profile">
+        <div class="ig-profile__row">
+            {% if author.picture_url %}
+              <img src="{{ author.picture_url }}" class="ig-profile__avatar" alt="">
+            {% elif author.picture and author.picture.url %}
+              <img src="{{ author.picture.url }}" class="ig-profile__avatar" alt="">
+            {% else %}
+              <img src="{% static 'images/default_profile.jpg' %}" class="ig-profile__avatar" alt="">
             {% endif %}
-          </a>
-        {% endif %}
-      </div>
+            <div class="ig-profile__side">
+              <h1>{{ author.username }}</h1>
+              <div class="ig-profile__stats">
+                <a href="{% url 'connections' %}#followers" class="ig-profile__statlink">
+                  <strong>{{ followers_count }}</strong><span>Followers</span>
+                </a>
+                <a href="{% url 'connections' %}#following" class="ig-profile__statlink">
+                  <strong>{{ following_count }}</strong><span>Following</span>
+                </a>
+                <a href="{% url 'connections' %}#friends" class="ig-profile__statlink">
+                  <strong>{{ friends_count }}</strong><span>Friends</span>
+                </a>
+              </div>
+              <div class="ig-profile__actions">
+                <a href="{% url 'EditProfileView' %}" class="button">Edit profile</a>
+                <a href="{% url 'stream' %}" class="button secondary">Feed</a>
+                <a href="{% url 'create_entry' %}" class="button success">New post</a>
+                <a href="{% url 'NodeDisplay' %}" class="button-ghost">Authors</a>
+                <a href="{% url 'Logout' %}" class="button-ghost">Log out</a>
+              </div>
+            </div>
+        </div>
+        <div class="ig-profile__bio">
+          <p><strong>{{ author.name|default:author.username }}</strong></p>
+          <p>{{ author.description|default:"No bio yet — tell the network who you are." }}</p>
+          <p class="muted" style="margin-bottom:0;">
+            GitHub:
+            {% if author.github %}
+              <a href="{{ author.github }}" target="_blank" rel="noopener">{{ author.github }}</a>
+            {% else %}
+              not linked
+            {% endif %}
+          </p>
+        </div>
     </div>
-  </body>
-</html>
+</div>
+{% endblock %}
