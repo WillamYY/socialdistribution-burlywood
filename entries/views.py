@@ -322,7 +322,7 @@ def stream_view(request):
     following_remote_fqids = []
     for following in following_remote:
         remote_host = following.followed_fqid[:following.followed_fqid.index("/api")] + "/"
-        credentials = IncomingNode.objects.filter(url = remote_host)
+        credentials = IncomingNode.objects.get(url = remote_host)
         code = requests.get(
             f"{following.followed_fqid}/followers/{viewer.id}",
             headers={"Accept": "application/json"},
@@ -690,7 +690,7 @@ def RemoteEntry(request,fqid):
     if RemoteFollow.objects.filter(follower = logged_in_id,followed_fqid__endswith = entry.get("author").get("id").rstrip("/").split("/")[-1]).exists():
         is_following = RemoteFollow.objects.filter(follower = logged_in_id,followed_fqid__endswith = entry.get("author").get("id").rstrip("/").split("/")[-1])
         remote_host = is_following.followed_fqid[:is_following.followed_fqid.index("/api")] + "/"
-        credentials = IncomingNode.objects.filter(url = remote_host)
+        credentials = IncomingNode.objects.get(url = remote_host)
         code = requests.get(
             f"{is_following.followed_fqid}/followers/{logged_in_id}",
             headers={"Accept": "application/json"},
