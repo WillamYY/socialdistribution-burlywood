@@ -612,7 +612,7 @@ def stream_view(request):
                 entry.markdown = render_safe_markdown(entry.content)
             if "hhh" in entry.title:
                 print(entry)
-            entries_local.append(entry)
+            entries_remote.append(entry)
             continue
         else:
             entry_url = f"{base_url}/api/authors/{entry.author.id}/entries/{entry.id}"
@@ -624,7 +624,7 @@ def stream_view(request):
             if "author_id" in request.session:
                 user_fqid = f"{base_url}/api/authors/{request.session['author_id']}"
                 entry.liked_by_user = Like.objects.filter(object=entry_url, author=user_fqid).exists()
-            entries_remote.append(entry)
+            entries_local.append(entry)
         
     return render(
         request,
