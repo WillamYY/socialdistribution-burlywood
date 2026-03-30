@@ -1,60 +1,38 @@
+{% extends 'entries/base.html' %}
 {% load static %}
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Follow Requests</title>
-    <link rel="stylesheet" href="{% static 'core/styles.css' %}">
-    <style>
-        .request {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin: 10px 0;
-            padding: 10px;
-            border-bottom: 1px solid #e5e7eb;
-        }
-        .request p { margin: 0; }
-    </style>
-</head>
-<body>
-    <nav class="top-nav">
-        <a href="/">Home</a>
-        <a href="/app/stream/">Stream</a>
-        <a href="/app/my-entries/">My Entries</a>
-        <a href="/app/create-entry/">Create Entry</a>
-        <a href="/app/profile/">My Profile</a>
-        <a href="/app/logout/">Logout</a>
-    </nav>
-    <div class="page">
-        <div class="card" style="max-width: 520px; margin: 0 auto;">
-            <h1>Follow Requests</h1>
-            {% if requests %}
-                {% for req in requests %}
-                    <div class="request">
-                        <p>{{ req.requester.username }}</p>
-                        <div>
-                            <a href="{% url 'ApproveFollow' req.id %}" class="button">Approve</a>
-                            <a href="{% url 'DenyFollow' req.id %}" class="button danger">Deny</a>
-                        </div>
+
+{% block title %}Follow requests{% endblock %}
+
+{% block content %}
+<div class="page page--narrow">
+    <div class="card">
+        <h1 style="margin-top:0;font-size:1.35rem;">Follow requests</h1>
+        <p class="muted" style="margin-bottom:16px;">Approve or deny people who want to follow you.</p>
+        {% if requests %}
+            {% for req in requests %}
+                <div class="request">
+                    <p>{{ req.requester.username }}</p>
+                    <div style="display:flex;gap:8px;flex-shrink:0;">
+                        <a href="{% url 'ApproveFollow' req.id %}" class="button">Approve</a>
+                        <a href="{% url 'DenyFollow' req.id %}" class="button danger">Deny</a>
                     </div>
-                {% endfor %}
-            {% endif %}
-            {% if remote_requests %}
-                {% for req in remote_requests %}
-                    <div class="request">
-                        <p>{{ req.actor_display_name }} <span class="muted">(remote)</span></p>
-                        <div>
-                            <a href="{% url 'ApproveRemoteFollow' req.id %}" class="button">Approve</a>
-                            <a href="{% url 'DenyRemoteFollow' req.id %}" class="button danger">Deny</a>
-                        </div>
+                </div>
+            {% endfor %}
+        {% endif %}
+        {% if remote_requests %}
+            {% for req in remote_requests %}
+                <div class="request">
+                    <p>{{ req.actor_display_name }} <span class="muted">(remote)</span></p>
+                    <div style="display:flex;gap:8px;flex-shrink:0;">
+                        <a href="{% url 'ApproveRemoteFollow' req.id %}" class="button">Approve</a>
+                        <a href="{% url 'DenyRemoteFollow' req.id %}" class="button danger">Deny</a>
                     </div>
-                {% endfor %}
-            {% endif %}
-            {% if not requests and not remote_requests %}
-                <p class="muted" style="text-align:center;">No follow requests at the moment.</p>
-            {% endif %}
-        </div>
+                </div>
+            {% endfor %}
+        {% endif %}
+        {% if not requests and not remote_requests %}
+            <p class="muted text-center" style="padding:24px 0;">No follow requests right now.</p>
+        {% endif %}
     </div>
-</body>
-</html>
+</div>
+{% endblock %}

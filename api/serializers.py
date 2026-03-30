@@ -157,16 +157,10 @@ class CommentSerializer(serializers.ModelSerializer):
         ]
 
     def get_id(self, obj):
-        # If your Comment model already stores a URL id, use that
-        if isinstance(obj.id, str) and obj.id.startswith("http"):
-            return obj.id
-
-        # Fallback: try to construct from object field if it exists
-        object_url = getattr(obj, "object", None)
-        if object_url:
-            return f"{str(object_url).rstrip('/')}/commented/{obj.id}"
-
-        return str(obj.id)
+        """
+        Always return the canonical stored comment FQID.
+        """
+        return str(obj.id).rstrip("/")
 
     def get_author(self, obj):
         author_value = getattr(obj, "author", None)
@@ -181,7 +175,12 @@ class CommentSerializer(serializers.ModelSerializer):
             author_url = author_url.replace("://", "§§TEMP§§").replace("//", "/").replace("§§TEMP§§", "://")
             author_id_part = author_url.split("/")[-1]
 
-            if author_id_part.isdigit():
+            request = self.context.get("request")
+            local_base = ""
+            if request:
+                local_base = request.build_absolute_uri("/").rstrip("/").replace("http://", "https://")
+
+            if author_url.startswith(f"{local_base}/api/authors/") and author_id_part.isdigit():
                 author_obj = Author.objects.filter(id=int(author_id_part)).first()
                 if author_obj:
                     return AuthorSerializer(author_obj).data
@@ -292,7 +291,7 @@ class EntrySerializer(serializers.ModelSerializer):
         # Construct the base URL for the likes endpoint
         base_url = self.get_id(obj)
         
-        likes_url = f"{base_url}likes" 
+        likes_url = f"{base_url.rstrip('/')}/likes"
         # Handles both http and http requests
         search = re.search("entr(?:y|ies)/([^/]+)",base_url)
         # Prevents crashes

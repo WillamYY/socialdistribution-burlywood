@@ -5,29 +5,35 @@
 
 {% block content %}
 <div class="page-container">
-    <div style="width: 100%; max-width: var(--max-width); margin-bottom: 15px;">
-        <a href="{{ return_url }}" class="edit-link">← Back</a>
+    <div class="entry-back-row">
+        <a href="{{ return_url }}" class="edit-link">← Back to feed</a>
     </div>
 
     {% if allowed %}
-    <div class="entry-card">
-        <div class="entry-header">
-            <h1 class="entry-title">{{ entry.title }}</h1>
-            <span class="badge-visibility">{{ entry.visibility }}</span>
+    <article class="entry-card social-post entry-detail-open">
+        <div class="social-post__head">
+            <span class="social-avatar" aria-hidden="true">{{ entry.author.displayName|default:"?"|slice:":1"|upper }}</span>
+            <div class="social-post__meta">
+                <span class="social-post__user">{{ entry.author.displayName }}</span>
+                <div class="social-post__sub">
+                    <span class="badge-visibility">{{ entry.visibility }}</span>
+                    <span class="entry-date" style="font-size:0.75rem;color:#8a8b8f;">{{ entry.published }}</span>
+                </div>
+            </div>
         </div>
-        <p class="entry-by">by <strong>{{ entry.author.displayName }}</strong> on {{ entry.published }}</p>
-        
+        <h1 class="social-post__title" style="font-size:1.35rem;">{{ entry.title }}</h1>
+
         {% if entry.description %}
             <p class="entry-description">{{ entry.description }}</p>
         {% endif %}
 
-        <div class="entry-content" style="margin-top: 20px; border-top: 1px solid var(--border-light); padding-top: 20px;">
+        <div class="entry-content entry-content--open">
             {% if "image" in entry.contentType %}
                 <picture>
                     {% if entry.image %}
-                    <img src="{{ entry.image }}" class="entry-image">
+                    <img src="{{ entry.image }}" class="entry-image" alt="">
                     {% else %}
-                    <img src="data:image/png;base64,{{ entry.content }}" class="entry-image">
+                    <img src="data:{{ entry.contentType|cut:';base64' }};base64,{{ entry.content }}" class="entry-image" alt="">
                     {% endif %}
                 </picture>
                 {% if image_api_url %}
@@ -35,7 +41,6 @@
                     <label for="imageApiUrlField" class="image-embed-label">Hosted image URL</label>
                     <div class="image-embed-row">
                         <input id="imageApiUrlField" type="text" class="form-control image-embed-input" value="{{ image_api_url }}" readonly>
-                        <!-- <button type="button" class="btn-secondary copy-embed-btn" data-copy-target="imageApiUrlField">Copy URL</button> -->
                     </div>
                 </div>
                 {% endif %}
@@ -62,55 +67,53 @@
                 </div>
             {% endif %}
         </div>
-    </div>
+    </article>
 
-    <div class="card" style="margin-top: -10px;">
-        <h3>Comments ({{ entry.fetched_comments|length }})</h3>
+    <div class="card entry-comments-panel">
+        <h3 class="entry-comments-panel__title">Comments · {{ entry.fetched_comments|length }}</h3>
         <div class="comments-section">
             {% for comment in entry.fetched_comments %}
-                <div class="comment" style="padding: 15px 0; border-bottom: 1px solid var(--border-light);">
-                    <strong>{{ comment.author_name }}</strong> 
+                <div class="comment comment-tile">
+                    <strong>{{ comment.author_name }}</strong>
                     <small class="entry-date">{{ comment.published|date:"M d, Y" }}</small>
-                    <p style="margin: 8px 0;">{{ comment.comment }}</p>
+                    <p class="comment-tile__body">{{ comment.comment }}</p>
 
-                    <div class="interaction-row" style="padding: 5px 0; border: none;" onclick="event.stopPropagation();">
+                    <div class="interaction-row comment-tile__actions" onclick="event.stopPropagation();">
                         {% if request.session.author_id %}
                         <form method="POST" action="{% if comment.local %}{% url 'interactions:add_comment_like' comment.id|extract_uuid %}{% else %}{% url 'interactions:add_remote_comment_like' comment.id %}{% endif %}">
                             {% csrf_token %}
                             <button type="submit" class="stat-item {% if comment.liked_by_user %}liked{% endif %}">
-                                <span class="icon" style="font-size: 1rem;">
-                                    {% if comment.liked_by_user %}❤️{% else %}🤍{% endif %}
-                                </span>
+                                <span class="icon">{% if comment.liked_by_user %}❤️{% else %}🤍{% endif %}</span>
                                 <span class="count">{{ comment.like_count|default:0 }}</span>
                             </button>
                         </form>
                         {% else %}
                             <div class="stat-item">
-                                <span class="icon" style="font-size: 1rem;">🤍</span>
+                                <span class="icon">🤍</span>
                                 <span class="count">{{ comment.like_count|default:0 }}</span>
                             </div>
                         {% endif %}
                     </div>
                 </div>
             {% empty %}
-                <p class="text-muted">No comments yet. Start the conversation!</p>
+                <p class="muted">No comments yet. Start the thread.</p>
             {% endfor %}
-            
+
             {% if request.session.author_id %}
-            <form method="POST" action="{% url 'interactions:add_remote_comment' entry.id %}" style="margin-top: 25px;">
+            <form method="POST" action="{% url 'interactions:add_remote_comment' entry.id %}" class="entry-add-comment-form">
                 {% csrf_token %}
                 <div class="form-group">
-                    <textarea name="comment" rows="3" class="form-control" placeholder="Write a comment..." required></textarea>
+                    <textarea name="comment" rows="3" class="form-control" placeholder="Say something nice…" required></textarea>
                 </div>
-                <button type="submit" class="btn-save" style="margin-top: 10px;">Post Comment</button>
+                <button type="submit" class="btn-save">Post comment</button>
             </form>
             {% endif %}
         </div>
     </div>
     {% else %}
     <div class="card">
-        <h1>Entry Unavailable</h1>
-        <p>This content is restricted to friends only. Please send a follow request to the author to view this post.</p>
+        <h1>Entry unavailable</h1>
+        <p>This content is restricted. Follow the author to request access.</p>
     </div>
     {% endif %}
 </div>

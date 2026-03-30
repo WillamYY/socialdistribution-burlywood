@@ -44,6 +44,43 @@ def _normalize_remote_url(url):
         url = "https" + url[4:]
     return url
 
+def _normalize_url_for_match(url):
+    """
+    Normalize stored URLs for comparison:
+    - string
+    - strip spaces
+    - remove trailing slash
+    - normalize scheme to https
+    """
+    if not url:
+        return ""
+    url = str(url).strip().rstrip("/")
+    if url.startswith("http://"):
+        url = "https://" + url[len("http://"):]
+    return url
+
+
+def _comment_matches_entry(comment_entry_url, canonical_entry_fqid):
+    """
+    Return True if a stored comment.entry points to the same entry as canonical_entry_fqid.
+    Handles:
+    - trailing slash differences
+    - http/https differences
+    - raw UUID-only fallback
+    """
+    left = _normalize_url_for_match(comment_entry_url)
+    right = _normalize_url_for_match(canonical_entry_fqid)
+
+    if not left or not right:
+        return False
+
+    if left == right:
+        return True
+
+    left_tail = left.split("/")[-1]
+    right_tail = right.split("/")[-1]
+    return left_tail == right_tail
+
 def _extract_remote_author_info(author_data):
     """
     Helper function to extract key attributes of remote author from json object.
@@ -186,7 +223,19 @@ def fetch_remote_image(remote_url):
     Helper function to safely fetch binary image data from a remote node.
     """
     try:
-        response = requests.get(remote_url, timeout=5)    
+        auth = None
+        if "/api/" in remote_url:
+            base = remote_url.split("/api/")[0].rstrip("/") + "/"
+            node = IncomingNode.objects.filter(url=base).first()
+            if node:
+                auth = (node.username, node.password)
+
+        response = requests.get(
+            remote_url,
+            timeout=5,
+            auth=auth,
+            headers={"Accept": "image/*,*/*"},
+        )  
         if response.status_code == 200:
             # Fetch the type of file
             content_type = response.headers.get('Content-Type', '').lower()
@@ -515,33 +564,61 @@ def _inbox_handle_accept(request, author_id, data=None):
 def _inbox_handle_comment(request, author_id, data=None):
     """Handle comment: add comment to an entry."""
     data = data or request.data or {}
+
     target_author = get_object_or_404(Author, id=author_id)
-    entry_url = data.get("entry") or (data.get("object") if isinstance(data.get("object"), str) else None)
+
+    entry_url = data.get("entry") or (
+        data.get("object") if isinstance(data.get("object"), str) else None
+    )
     if not entry_url:
         return Response({"detail": "Missing entry"}, status=400)
-    entry_uuid = entry_url.rstrip("/").split("/")[-1]
+
+    entry_url = str(entry_url).strip().rstrip("/")
+    if entry_url.startswith("http://"):
+        entry_url = "https://" + entry_url[len("http://"):]
+
+    entry_uuid = entry_url.split("/")[-1]
+
     try:
         entry = Entry.objects.get(id=entry_uuid, author=target_author)
     except Entry.DoesNotExist:
         return Response({"detail": "Entry not found"}, status=404)
+
     if entry.visibility == "DELETED":
         return Response({"detail": "Entry not found"}, status=404)
+
     author_data = data.get("author") or {}
-    author_url = author_data.get("id") or ""
-    comment_text = data.get("comment") or ""
+    author_url = (author_data.get("id") or "").strip().rstrip("/")
+    if author_url.startswith("http://"):
+        author_url = "https://" + author_url[len("http://"):]
+
+    comment_text = (data.get("comment") or "").strip()
     if not comment_text or not author_url:
         return Response({"detail": "Missing author or comment"}, status=400)
-    base = request.build_absolute_uri("/")[:-1]
-    entry_fqid = f"{base}/api/authors/{author_id}/entries/{entry.id}"
-    Comment.objects.create(
-        id= data.get("id") or f"{base}/api/authors/{author_id}/commented/{uuid.uuid4()}",
-        author=author_url,
-        entry=entry_fqid,
-        comment=comment_text,
-        contentType=data.get("contentType", "text/plain"),
-    )
-    return Response({"detail": "Comment received"}, status=202)
 
+    base = request.build_absolute_uri("/").rstrip("/")
+    if base.startswith("http://"):
+        base = "https://" + base[len("http://"):]
+
+    entry_fqid = f"{base}/api/authors/{author_id}/entries/{entry.id}"
+    comment_id = (data.get("id") or "").strip().rstrip("/")
+    if comment_id.startswith("http://"):
+        comment_id = "https://" + comment_id[len("http://"):]
+
+    if not comment_id:
+        comment_id = f"{author_url}/commented/{uuid.uuid4()}"
+
+    Comment.objects.get_or_create(
+        id=comment_id,
+        defaults={
+            "author": author_url,
+            "entry": entry_fqid,
+            "comment": comment_text,
+            "contentType": data.get("contentType", "text/plain"),
+        },
+    )
+
+    return Response({"detail": "Comment received"}, status=202)
 
 def _inbox_handle_entry(request, author_id, data=None):
     """Handle incoming entry: store for stream (basic support)."""
@@ -796,7 +873,7 @@ def ApiEntries(request, author_id):
         # Query the entries by checking visibility (logged-in user or remote friend)
         visible_entries = [
             e for e in all_entries
-            if check_visibility(e, logged_in_id, requested_by_fqid=requested_by_fqid)
+            if check_visibility(e, logged_in_id, is_list=True, requested_by_fqid=requested_by_fqid)
         ]
         
         # Paginate the queryset
@@ -864,7 +941,11 @@ def ApiEntry(request, author_id, entry_id):
             return Response({"detail": "Not found."}, status=404)
 
         # Check the visibility for the logged-in user
-        
+        logged_in_id = request.session.get("author_id")
+        requested_by_fqid = (request.META.get("HTTP_X_REQUESTED_BY") or "").strip() or None
+        if not check_visibility(entry, logged_in_id, is_list=False, requested_by_fqid=requested_by_fqid):
+            return Response({"detail": "Forbidden"}, status=403)
+            
         # Serialize and return
         serializer = EntrySerializer(entry, context={'request': request})
         return Response(serializer.data)
@@ -1042,7 +1123,8 @@ def ApiEntryImage(request, author_id=None, entry_id=None, entry_fqid=None):
     
     # Check the visibility for the logged-in user
     logged_in_id = request.session.get("author_id")
-    if not check_visibility(entry, logged_in_id):
+    requested_by_fqid = (request.META.get("HTTP_X_REQUESTED_BY") or "").strip() or None
+    if not check_visibility(entry, logged_in_id, is_list=False, requested_by_fqid=requested_by_fqid):
         return HttpResponseForbidden("You do not have permission to view this image.")
     
     # Decode and Serve
@@ -1077,29 +1159,32 @@ def ApiEntryComments(request, author_id, entry_id):
     entry = get_object_or_404(Entry, id=entry_id, author_id=author_id)
 
     logged_in_id = request.session.get("author_id")
-    if not check_visibility(entry, logged_in_id):
-        return Response(status=403)
+    requested_by_fqid = (request.META.get("HTTP_X_REQUESTED_BY") or "").strip() or None
 
-    api_entry_fqid = request.build_absolute_uri(
-        f"/api/authors/{author_id}/entries/{entry_id}/"
-    )
-    app_entry_fqid = request.build_absolute_uri(
-        f"/app/entry/{entry_id}/"
-    )
+    if not check_visibility(entry, logged_in_id, is_list=False, requested_by_fqid=requested_by_fqid):
+        return Response({"detail": "Forbidden"}, status=403)
 
-    comments = Comment.objects.filter(entry__in=[api_entry_fqid, app_entry_fqid]).order_by("-published", "-id")
+    canonical_entry_fqid = request.build_absolute_uri(
+        f"/api/authors/{author_id}/entries/{entry_id}"
+    ).rstrip("/")
 
-    serializer = CommentSerializer(comments, many=True)
+    all_comments = Comment.objects.all().order_by("-published", "-id")
+    matched_comments = [
+        comment
+        for comment in all_comments
+        if _comment_matches_entry(comment.entry, canonical_entry_fqid)
+    ]
+
+    serializer = CommentSerializer(matched_comments, many=True, context={"request": request})
 
     return Response({
         "type": "comments",
-        "id": request.build_absolute_uri(),
+        "id": request.build_absolute_uri().rstrip("/"),
         "page_number": 1,
-        "size": comments.count(),
-        "count": comments.count(),
-        "src": serializer.data
+        "size": len(matched_comments),
+        "count": len(matched_comments),
+        "src": serializer.data,
     })
-
 
 @api_view(['GET'])
 def ApiEntryCommentsByFqid(request, entry_fqid):
@@ -1139,33 +1224,44 @@ def ApiAddComment(request, author_id, entry_id):
     Create a comment on an entry
     POST /api/authors/{author_id}/entries/{entry_id}/comments/
     """
-
     entry = get_object_or_404(Entry, id=entry_id, author_id=author_id)
 
-    # Check the visibility for the logged-in user
+    # Require login
     logged_in_id = request.session.get("author_id")
+    if not logged_in_id:
+        return Response({"detail": "Authentication required."}, status=401)
+
+    # Visibility check
     if not check_visibility(entry, logged_in_id):
-        return Response({"detail": "Forbidden from commenting on this entry."}, status=403)
+        return Response(
+            {"detail": "Forbidden from commenting on this entry."},
+            status=403,
+        )
 
-    author_url = request.build_absolute_uri(f"/api/authors/{logged_in_id}/")
-    comment_text = request.data.get("comment")
+    comment_text = (request.data.get("comment") or "").strip()
+    if not comment_text:
+        return Response({"detail": "Comment cannot be empty."}, status=400)
 
-    entry_fqid = request.build_absolute_uri(
-        f"/api/authors/{author_id}/entries/{entry_id}/"
-    )
+    content_type = request.data.get("contentType", "text/plain")
 
-    base = request.build_absolute_uri('/')[:-1]
+    base = request.build_absolute_uri("/").rstrip("/")
+    if base.startswith("http://"):
+        base = "https://" + base[len("http://"):]
+
+    author_fqid = f"{base}/api/authors/{logged_in_id}"
+    entry_fqid = f"{base}/api/authors/{author_id}/entries/{entry_id}/"
+    comment_uuid = uuid.uuid4()
+    comment_fqid = f"{author_fqid}/commented/{comment_uuid}"
 
     new_comment = Comment.objects.create(
-        id=f"{base}/comments/{uuid.uuid4()}",
-        author=author_url,
+        id=comment_fqid,
+        author=author_fqid,
         entry=entry_fqid,
         comment=comment_text,
-        contentType=request.data.get("contentType", "text/plain"),
+        contentType=content_type,
     )
 
     serializer = CommentSerializer(new_comment)
-
     return Response(serializer.data, status=201)
 
 @api_view(['GET'])

@@ -1,131 +1,82 @@
+{% extends 'entries/base.html' %}
 {% load static %}
-<html>
-<head>
-    <title>Edit Your Profile</title>
-    <link rel="stylesheet" href="{% static 'core/styles.css' %}">
-    <style>
-        form {
-            display: flex;
-            flex-direction: column;
-        }
-        label {
-            margin: 10px 0 5px;
-            font-weight: 600;
-        }
-        input[type="text"], input[type="url"], textarea, input[type="file"] {
-            padding: 10px;
-            border-radius: 8px;
-            border: 1px solid #d1d5db;
-        }
-        textarea {
-            resize: vertical;
-            min-height: 70px;
-        }
-        input[type="submit"] {
-            margin-top: 20px;
-            padding: 10px;
-            background-color: var(--primary);
-            color: white;
-            font-weight: 600;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-        }
-        input[type="submit"]:hover {
-            background-color: var(--primary-hover);
-        }
-        .message {
-            text-align: center;
-            margin: 10px 0;
-            color: var(--success);
-        }
-        .error {
-            text-align: center;
-            margin: 10px 0;
-            color: var(--danger);
-        }
-    </style>
-</head>
-<body>
-    <nav class="top-nav">
-        <a href="/">Home</a>
-        <a href="/app/stream/">Stream</a>
-        <a href="/app/my-entries/">My Entries</a>
-        <a href="/app/create-entry/">Create Entry</a>
-        <a href="/app/profile/">My Profile</a>
-        <a href="/app/logout/">Logout</a>
-    </nav>
-    <div class="page">
-        <div class="card" style="max-width: 640px; margin: 0 auto;">
-            <h2>Edit Your Profile</h2>
 
-            {% if success %}
-                <div class="message">{{ success }}</div>
-            {% endif %}
-            {% if error %}
-                <div class="error">{{ error }}</div>
-            {% endif %}
+{% block title %}Edit profile{% endblock %}
 
-            <form method="POST" enctype="multipart/form-data">
-                {% csrf_token %}
-                <label>Username</label>
-                <input name="username" value="{{ author.username }}" placeholder="Enter username">
+{% block content %}
+<div class="page">
+    <div class="card auth-card" style="max-width:640px;">
+        <h2 style="margin-top:0;">Edit your profile</h2>
 
-                <label>Name</label>
-                <input name="name" value="{{ author.name }}" placeholder="Enter your full name">
+        {% if success %}
+            <div class="message" style="text-align:center;margin:12px 0;color:var(--success);">{{ success }}</div>
+        {% endif %}
+        {% if error %}
+            <div class="error" style="text-align:center;margin:12px 0;">{{ error }}</div>
+        {% endif %}
 
-                <label>Description</label>
-                <textarea name="description" placeholder="Write something about yourself">{{ author.description }}</textarea>
+        <form method="POST" enctype="multipart/form-data" class="form-stack">
+            {% csrf_token %}
+            <label for="ep_username">Username</label>
+            <input id="ep_username" name="username" value="{{ author.username }}" placeholder="Username">
 
-                <label>Profile Picture</label>
-                <input type="url" name="picture_url" value="{{ author.picture_url }}" placeholder="https://example.com/myphoto.jpg">
+            <label for="ep_name">Name</label>
+            <input id="ep_name" name="name" value="{{ author.name }}" placeholder="Your display name">
 
-                <label>GitHub URL</label>
-                <input name="github" id="github-input" value="{{ author.github }}" type="url"
-                       placeholder="https://github.com/username">
-                <span id="github-error" class="field-error" style="display:none; color: var(--danger); font-size: 0.9em;"></span>
+            <label for="ep_desc">Description</label>
+            <textarea id="ep_desc" name="description" placeholder="Tell others about you" rows="4">{{ author.description }}</textarea>
 
-                <input type="submit" value="Save Changes">
-            </form>
+            <label for="ep_pic">Profile picture URL</label>
+            <input id="ep_pic" type="url" name="picture_url" value="{{ author.picture_url }}" placeholder="https://…">
 
-            <p style="text-align:center;">
-                <a href="/app/profile">View My Profile</a>
-            </p>
-        </div>
+            <label for="github-input">GitHub URL</label>
+            <input name="github" id="github-input" value="{{ author.github }}" type="url"
+                   placeholder="https://github.com/username">
+            <span id="github-error" class="field-error" style="display:none;color:var(--danger);font-size:0.9em;"></span>
+
+            <input type="submit" value="Save changes">
+        </form>
+
+        <p class="text-center" style="margin-top:16px;">
+            <a href="/app/profile">View my profile</a>
+        </p>
     </div>
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            var input = document.getElementById('github-input');
-            var errEl = document.getElementById('github-error');
-            var githubRe = /^https?:\/\/(www\.)?github\.com\/[a-zA-Z0-9_-]+\/?$/i;
+</div>
+{% endblock %}
 
-            function validate() {
-                var val = (input.value || '').trim();
-                if (!val) {
-                    errEl.style.display = 'none';
-                    input.style.borderColor = '';
-                    return true;
-                }
-                if (githubRe.test(val)) {
-                    errEl.style.display = 'none';
-                    errEl.textContent = '';
-                    input.style.borderColor = '';
-                    return true;
-                }
-                errEl.textContent = 'Please enter a valid GitHub profile URL (e.g. https://github.com/username)';
-                errEl.style.display = 'block';
-                input.style.borderColor = 'var(--danger)';
-                return false;
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        var input = document.getElementById('github-input');
+        var errEl = document.getElementById('github-error');
+        var githubRe = /^https?:\/\/(www\.)?github\.com\/[a-zA-Z0-9_-]+\/?$/i;
+
+        function validate() {
+            var val = (input.value || '').trim();
+            if (!val) {
+                errEl.style.display = 'none';
+                input.style.borderColor = '';
+                return true;
             }
+            if (githubRe.test(val)) {
+                errEl.style.display = 'none';
+                errEl.textContent = '';
+                input.style.borderColor = '';
+                return true;
+            }
+            errEl.textContent = 'Please enter a valid GitHub profile URL (e.g. https://github.com/username)';
+            errEl.style.display = 'block';
+            input.style.borderColor = 'var(--danger)';
+            return false;
+        }
 
-            input.addEventListener('blur', validate);
-            input.addEventListener('input', function() {
-                if (errEl.style.display === 'block') validate();
-            });
-            document.querySelector('form').addEventListener('submit', function(e) {
-                if (!validate()) e.preventDefault();
-            });
+        input.addEventListener('blur', validate);
+        input.addEventListener('input', function() {
+            if (errEl.style.display === 'block') validate();
         });
-    </script>
-</body>
-</html>
+        document.querySelector('form').addEventListener('submit', function(e) {
+            if (!validate()) e.preventDefault();
+        });
+    });
+</script>
+{% endblock %}

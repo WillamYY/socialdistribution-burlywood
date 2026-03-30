@@ -1,78 +1,57 @@
 {% extends 'entries/base.html' %}
 {% load entry_extras %}
 
-{% block title %}Stream{% endblock %}
+{% block body_extra_class %}feed-wide{% endblock %}
+
+{% block title %}For you{% endblock %}
 
 {% block content %}
-<div class="page-container">
-    <h1>Your Stream</h1>
-    <hr>
-    {% for entry in entries %}
-        <div class="entry-card clickable" data-url="{% if entry.is_remote %}{% url 'remote_entry' entry.id %}{% else %}{% url 'get_entry' entry.id %}{% endif %}"{% if entry.is_remote %} data-remote="true"{% endif %}>
-            
-            <div class="entry-header">
-                <h2 class="entry-title">{{ entry.title }}</h2>
-                <span class="badge-visibility">{{ entry.visibility }}{% if entry.is_remote %} (remote){% endif %}</span>
-            </div>
-            <p class="entry-by">by <strong>{{ entry.author.username }}</strong></p>
-            
-            {% if entry.description %}
-                <p class="entry-description">{{ entry.description }}</p>
-            {% endif %}
+<div class="page-container feed-page">
+    <header class="page-hero">
+        <h1 class="page-hero__title">For you</h1>
+        <p class="page-hero__sub">Scroll the latest from people you follow.</p>
+    </header>
 
-            <div class="entry-content">
-                {% if "image" in entry.contentType %}
-                    {% if entry.is_remote %}
-                        {% if entry.content|slice:':5' == 'data:' or entry.content|slice:':4' == 'http' or entry.image %}
-                            <picture>
-                                {% if entry.image %}
-                                <img src="{{ entry.image }}" class="entry-image">
-                                {% else %}
-                                <img src="data:image/png;base64,{{ entry.content }}" class="entry-image">
-                                {% endif %}
-                            </picture>
-                        {% else %}
-                            <img src="data:{{ entry.contentType|cut:';base64' }};base64,{{ entry.content }}"
-                                class="entry-image"
-                                alt="{{ entry.title }}"
-                                onerror="this.style.display='none'">
-                        {% endif %}
-                    {% else %}
-                        <img src="data:image/png;base64,{{ entry.content }}"
-                            class="entry-image"
-                            alt="{{ entry.title }}">
-                    {% endif %}
-                {% elif entry.contentType == "text/markdown" %}
-                    <div class="entry-markdown">{% if entry.is_remote %}{{ entry.markdown|safe }}{% else %}{{ entry.content|safe }}{% endif %}</div>
-                {% else %}
-                    <div class="entry-plain-text">{{ entry.content|linebreaks }}</div>
-                {% endif %}
-            </div>
+    <div class="authors-seg stream-feed-seg">
+      <input type="radio" name="feed-scope" id="feed-v-local" class="authors-seg__radio" checked>
+      <input type="radio" name="feed-scope" id="feed-v-remote" class="authors-seg__radio">
+      <input type="radio" name="feed-scope" id="feed-v-all" class="authors-seg__radio">
 
-            <div class="interaction-row" onclick="event.stopPropagation();">
-                {% if request.session.author_id %}
-                <form method="POST" action="{% if entry.is_remote %}{% url 'interactions:add_remote_like' entry.id %}{% else %}{% url 'interactions:add_like' entry.id %}{% endif %}">
-                    {% csrf_token %}
-                    <button type="submit" class="stat-item {% if entry.liked_by_user %}liked{% endif %}">
-                        <span class="icon">{% if entry.liked_by_user %}❤️{% else %}🤍{% endif %}</span>
-                        <span class="count">{{ entry.like_count|default:0 }}</span>
-                    </button>
-                </form>
-                {% else %}
-                <div class="stat-item">
-                    <span class="icon">🤍</span>
-                    <span class="count">{{ entry.like_count|default:0 }}</span>
-                </div>
-                {% endif %}
+      <div class="authors-seg__tabs" role="group" aria-label="Filter posts by source">
+        <label class="authors-seg__tab" for="feed-v-local">This node</label>
+        <label class="authors-seg__tab" for="feed-v-remote">Remote</label>
+        <label class="authors-seg__tab" for="feed-v-all">All posts</label>
+      </div>
 
-                <div class="stat-item clickable" data-url="{% if entry.is_remote %}{% url 'remote_entry' entry.id %}{% else %}{% url 'get_entry' entry.id %}{% endif %}">
-                    <span class="icon">💬</span>
-                    <span class="count">
-                        {% if entry.comment_count != None %}{{ entry.comment_count }}{% else %}{{ entry.fetched_comments|length|default:0 }}{% endif %}
-                    </span>
-                </div>
-            </div>
+      <section id="stream-panel-local" class="feed-panel feed-panel--local" aria-label="Posts on this node">
+        <div class="feed-grid">
+          {% for entry in entries_local %}
+            {% include "partials/stream_entry_card.html" %}
+          {% empty %}
+            <div class="empty-state feed-grid__empty">Nothing from this node in your feed yet. Follow local authors from Home.</div>
+          {% endfor %}
         </div>
-    {% endfor %}
+      </section>
+
+      <section id="stream-panel-remote" class="feed-panel feed-panel--remote" aria-label="Posts from remote nodes">
+        <div class="feed-grid">
+          {% for entry in entries_remote %}
+            {% include "partials/stream_entry_card.html" %}
+          {% empty %}
+            <div class="empty-state feed-grid__empty">Nothing from remote nodes yet. Follow people on other servers.</div>
+          {% endfor %}
+        </div>
+      </section>
+
+      <section id="stream-panel-all" class="feed-panel feed-panel--all" aria-label="All posts">
+        <div class="feed-grid">
+          {% for entry in entries %}
+            {% include "partials/stream_entry_card.html" %}
+          {% empty %}
+            <div class="empty-state feed-grid__empty">Nothing here yet. Follow authors from Home, then come back.</div>
+          {% endfor %}
+        </div>
+      </section>
+    </div>
 </div>
 {% endblock %}
