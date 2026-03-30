@@ -238,7 +238,7 @@ def profile_view(request):
     remote_followings_raw2 = []
     for following in remote_followings_raw:
         remote_host = following.followed_fqid[:following.followed_fqid.index("/api")] + "/"
-        credentials = IncomingNode.objects.filter(url = remote_host)
+        credentials = IncomingNode.objects.get(url = remote_host)
         code = requests.get(
             f"{following.followed_fqid}/followers/{author.id}",
             headers={"Accept": "application/json"},
