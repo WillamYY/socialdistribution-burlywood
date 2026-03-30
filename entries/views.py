@@ -605,7 +605,7 @@ def stream_view(request):
     for entry in stored_remote_entries_qs:
         if entry.visibility in {"UNLISTED", "FRIENDS"} and RemoteFollow.objects.filter(followed_fqid=entry.author_fqid, follower=viewer).exists():
             stored_remote_entries_qs2.append(entry) 
-        else:
+        elif entry.visibility == "PUBLIC":
             stored_remote_entries_qs2.append(entry)
     stored_remote_entries_qs = stored_remote_entries_qs2
     print("========================stored_remote_entries_qs", stored_remote_entries_qs)
