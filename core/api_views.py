@@ -3,7 +3,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.shortcuts import get_object_or_404
 from urllib.parse import unquote
-from core.models import Author, FollowRequest
+from core.models import Author, FollowRequest, RemoteFollower
 
 
 def _author_to_json(author, request=None):
@@ -156,9 +156,14 @@ def _extract_local_author_id_from_fqid(fqid, request):
     Returns (id, True) if local, else (None, False).
     """
     try:
+        print("FQIDDDDDDDDDDDDDD", fqid)
         decoded = unquote(fqid)
+        print("===================DECODED============================")
         # Check if FQID points to our node
         our_base = request.build_absolute_uri('/api/').rstrip('/')
+        print("===================BASE============================", decoded, our_base)
+        if our_base[:our_base.index("/api")] not in decoded[:decoded.index("/api")]:
+            return decoded, False
         if our_base in decoded or '127.0.0.1' in decoded or 'localhost' in decoded:
             # Extract id: .../authors/123 or .../authors/123/
             parts = decoded.rstrip('/').split('/')
@@ -167,6 +172,7 @@ def _extract_local_author_id_from_fqid(fqid, request):
                 if idx + 1 < len(parts):
                     return int(parts[idx + 1]), True
     except (ValueError, IndexError):
+        print("===================SOMETHING WENT WRONG UNQOTING============================")
         pass
     return None, False
 
@@ -183,8 +189,10 @@ def api_follower_detail(request, author_id, foreign_author_fqid):
     foreign_id, is_local = _extract_local_author_id_from_fqid(foreign_author_fqid, request)
 
     if not is_local or foreign_id is None:
+        if request.method == 'GET' and RemoteFollower.objects.filter(actor_fqid=foreign_id, target = author_id).exists():
+            return Response(status=200)
         return Response({"detail": "Foreign author not found on this node"}, status=404)
-
+    
     try:
         foreign_author = Author.objects.get(id=foreign_id)
     except Author.DoesNotExist:
