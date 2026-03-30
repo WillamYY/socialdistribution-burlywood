@@ -629,7 +629,7 @@ def stream_view(request):
     return render(
         request,
         "entries/stream.html",
-        {"entries": entries, "viewer": viewer},
+        {"entries": entries, "entries_local": entries_local,"entries_remote":entries_remote, "viewer": viewer},
     )
 
 
