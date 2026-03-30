@@ -156,6 +156,7 @@ def _extract_local_author_id_from_fqid(fqid, request):
     Returns (id, True) if local, else (None, False).
     """
     try:
+        print("FQIDDDDDDDDDDDDDD", fqid)
         decoded = unquote(fqid)
         decoded = decoded[:decoded.index("/api")]
         print("===================DECODED============================")
