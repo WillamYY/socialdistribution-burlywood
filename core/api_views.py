@@ -3,7 +3,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.shortcuts import get_object_or_404
 from urllib.parse import unquote
-from core.models import Author, FollowRequest
+from core.models import Author, FollowRequest, RemoteFollower
 
 
 def _author_to_json(author, request=None):
@@ -189,8 +189,10 @@ def api_follower_detail(request, author_id, foreign_author_fqid):
     foreign_id, is_local = _extract_local_author_id_from_fqid(foreign_author_fqid, request)
 
     if not is_local or foreign_id is None:
+        if request.method == 'GET' and RemoteFollower.objects.filter(actor_fqid=foreign_id, target = author_id).exists():
+            return Response(status=200)
         return Response({"detail": "Foreign author not found on this node"}, status=404)
-
+    
     try:
         foreign_author = Author.objects.get(id=foreign_id)
     except Author.DoesNotExist:
