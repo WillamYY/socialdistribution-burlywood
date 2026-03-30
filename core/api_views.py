@@ -157,6 +157,7 @@ def _extract_local_author_id_from_fqid(fqid, request):
     """
     try:
         decoded = unquote(fqid)
+        decoded = decoded[:decoded.index("/api")]
         print("===================DECODED============================")
         # Check if FQID points to our node
         our_base = request.build_absolute_uri('/api/').rstrip('/')
@@ -184,7 +185,6 @@ def api_follower_detail(request, author_id, foreign_author_fqid):
     DELETE [local]: Deny/remove follower.
     URL: /api/authors/{AUTHOR_SERIAL}/followers/{FOREIGN_AUTHOR_FQID}/
     """
-    return Response(status=200)
     author = get_object_or_404(Author, id=author_id)
     foreign_id, is_local = _extract_local_author_id_from_fqid(foreign_author_fqid, request)
 
