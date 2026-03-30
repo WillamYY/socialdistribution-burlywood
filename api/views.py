@@ -143,7 +143,7 @@ def check_visibility(entry, viewer_id, is_list=False, requested_by_fqid=None):
                 # Remote friend = they follow us AND we follow them
                 they_follow_us = RemoteFollower.objects.filter(actor_fqid=norm, target=entry.author).exists()
                 we_follow_them = RemoteFollow.objects.filter(follower=entry.author, followed_fqid=norm).exists()
-                credentials = IncomingNode.objects.filter(url = norm[:norm.index("/api")] + "/")
+                credentials = IncomingNode.objects.get(url = norm[:norm.index("/api")] + "/")
                 we_follow_them = requests.get(
                     f"{norm}/followers/{entry.author.id}",
                     headers={"Accept": "application/json"},

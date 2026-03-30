@@ -280,14 +280,14 @@ def get_remote_entry_recipients(author, visibility: str):
     true_remote_following = set()
     for following in remote_following:
         remote_host = following.followed_fqid[:following.followed_fqid.index("/api")] + "/"
-        credentials = IncomingNode.objects.filter(url = remote_host)
-        code = requests.get(
+        credentials = IncomingNode.objects.get(url = remote_host)
+        response = requests.get(
             f"{following.followed_fqid}/followers/{author.id}",
             headers={"Accept": "application/json"},
             auth=(credentials.username, credentials.password),
             timeout=10
         )
-        if code < 400:
+        if response.status_code < 400:
             true_remote_following.add(following)
 
     # Intersect two sets to find friends (mutual following)
