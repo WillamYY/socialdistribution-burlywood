@@ -213,7 +213,6 @@ def _serialize_local_comment_for_page(comment, request=None):
 
         match = re.search(r"/authors/(\d+)/?$", author_url)
 
-        # Only resolve to a local Author if the author URL belongs to THIS node
         if match and local_base and author_url.startswith(f"{local_base}/api/authors/"):
             author_obj = Author.objects.filter(id=int(match.group(1))).first()
             if author_obj:
@@ -221,7 +220,6 @@ def _serialize_local_comment_for_page(comment, request=None):
             else:
                 author_name = author_url.split("/")[-1]
         else:
-            # Remote author: try to fetch displayName from remote profile
             author_name = author_url.split("/")[-1]
 
             try:
@@ -249,9 +247,18 @@ def _serialize_local_comment_for_page(comment, request=None):
     except Exception:
         author_name = author_url.split("/")[-1]
 
+    comment_id = str(comment.id).rstrip("/")
+    comment_tail = comment_id.split("/")[-1]
+
+    like_qs = (
+        Like.objects.filter(object=comment_id)
+        | Like.objects.filter(object=comment_id + "/")
+        | Like.objects.filter(object__endswith="/" + comment_tail)
+    ).distinct()
+
     return {
         "type": "comment",
-        "id": str(comment.id).rstrip("/"),
+        "id": comment_id,
         "author": {
             "id": author_url,
             "displayName": author_name,
@@ -261,8 +268,7 @@ def _serialize_local_comment_for_page(comment, request=None):
         "contentType": comment.contentType,
         "published": comment.published,
         "local": True,
-        "like_count": Like.objects.filter(object__endswith=str(comment.id).rstrip("/").split("/")[-1]).count()
-                     + Like.objects.filter(object=str(comment.id).rstrip("/")).count(),
+        "like_count": like_qs.count(),
         "liked_by_user": False,
     }
 
