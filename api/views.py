@@ -17,7 +17,7 @@ from rest_framework.decorators import api_view, authentication_classes, permissi
 from rest_framework.response import Response
 from core.authentication import NodeBasicAuthentication
 from core.remote import federate_entry_create_or_update, federate_entry_deleted
-from core.models import Author, AuthorRequest, FollowRequest, RemoteFollower, RemoteFollow
+from core.models import Author, AuthorRequest, FollowRequest, RemoteFollower, RemoteFollow, IncomingNode
 from entries.models import Entry, RemoteEntry
 from interactions.models import Like, Comment
 from .serializers import AuthorSerializer, LikesSerializer, LikeSerializer, EntrySerializer, EntriesSerializer, CommentSerializer
@@ -143,6 +143,14 @@ def check_visibility(entry, viewer_id, is_list=False, requested_by_fqid=None):
                 # Remote friend = they follow us AND we follow them
                 they_follow_us = RemoteFollower.objects.filter(actor_fqid=norm, target=entry.author).exists()
                 we_follow_them = RemoteFollow.objects.filter(follower=entry.author, followed_fqid=norm).exists()
+                credentials = IncomingNode.objects.filter(url = norm[:norm.index("/api")] + "/")
+                we_follow_them = requests.get(
+                    f"{norm}/followers/{entry.author.id}",
+                    headers={"Accept": "application/json"},
+                    auth=(credentials.username, credentials.password),
+                    timeout=10
+                )
+                we_follow_them = we_follow_them.status_code < 400
                 return they_follow_us and we_follow_them
             return False
 

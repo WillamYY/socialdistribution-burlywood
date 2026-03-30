@@ -277,8 +277,22 @@ def get_remote_entry_recipients(author, visibility: str):
         _normalize_fqid(x) for x in RemoteFollow.objects.filter(follower=author).values_list("followed_fqid", flat=True)
     }
 
+    true_remote_following = set()
+    for following in remote_following:
+        remote_host = following.followed_fqid[:following.followed_fqid.index("/api")] + "/"
+        credentials = IncomingNode.objects.filter(url = remote_host)
+        code = requests.get(
+            f"{following.followed_fqid}/followers/{author.id}",
+            headers={"Accept": "application/json"},
+            auth=(credentials.username, credentials.password),
+            timeout=10
+        )
+        if code < 400:
+            true_remote_following.add(following)
+
     # Intersect two sets to find friends (mutual following)
-    remote_friends = remote_followers & remote_following
+    # remote_friends = remote_followers & remote_following
+    remote_friends = remote_followers & true_remote_following
 
     # Fetch recipients by different visibilities
     if visibility in {"PUBLIC", "UNLISTED"}:

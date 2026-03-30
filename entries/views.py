@@ -318,9 +318,23 @@ def stream_view(request):
     # Public entries from IncomingNode; UNLISTED from following; FRIENDS from remote friends (mutual follow)
     from core.models import RemoteFollow, RemoteFollower
     from core.remote import fetch_remote_public_entries
-    following_remote_fqids = list(
+    following_remote = RemoteFollow.objects.filter(follower=viewer)
+    following_remote_fqids = []
+    for following in following_remote:
+        remote_host = following.followed_fqid[:following.followed_fqid.index("/api")] + "/"
+        credentials = IncomingNode.objects.filter(url = remote_host)
+        code = requests.get(
+            f"{following.followed_fqid}/followers/{viewer.id}",
+            headers={"Accept": "application/json"},
+            auth=(credentials.username, credentials.password),
+            timeout=10
+        )
+        if code < 400:
+            following_remote_fqids.append(following)
+
+    """ following_remote_fqids = list(
         RemoteFollow.objects.filter(follower=viewer).values_list("followed_fqid", flat=True)
-    )
+    ) """
     # Remote friends = we follow them AND they follow us
     followers_remote_fqids = set(
         RemoteFollower.objects.filter(target=viewer).values_list("actor_fqid", flat=True)
@@ -674,10 +688,20 @@ def RemoteEntry(request,fqid):
     # Creates the list of allowed things to view
     allowed_visibility = ["PUBLIC"]
     if RemoteFollow.objects.filter(follower = logged_in_id,followed_fqid__endswith = entry.get("author").get("id").rstrip("/").split("/")[-1]).exists():
-        allowed_visibility.append("UNLISTED")
-        if RemoteFollower.objects.filter(actor_fqid__endswith = entry.get("author").get("id").rstrip("/").split("/")[-1],target = logged_in_id).exists():
-            allowed_visibility.append("FRIENDS")
-    allowed = entry.get("visibility") in allowed_visibility
+        is_following = RemoteFollow.objects.filter(follower = logged_in_id,followed_fqid__endswith = entry.get("author").get("id").rstrip("/").split("/")[-1])
+        remote_host = is_following.followed_fqid[:is_following.followed_fqid.index("/api")] + "/"
+        credentials = IncomingNode.objects.filter(url = remote_host)
+        code = requests.get(
+            f"{is_following.followed_fqid}/followers/{logged_in_id}",
+            headers={"Accept": "application/json"},
+            auth=(credentials.username, credentials.password),
+            timeout=10
+        )
+        if code < 400:
+            allowed_visibility.append("UNLISTED")
+            if RemoteFollower.objects.filter(actor_fqid__endswith = entry.get("author").get("id").rstrip("/").split("/")[-1],target = logged_in_id).exists():
+                allowed_visibility.append("FRIENDS")
+        allowed = entry.get("visibility") in allowed_visibility
     comments = []
     # HARDCODE SOLUTION FOR fuschia
     if fuschia:
