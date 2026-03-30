@@ -608,6 +608,7 @@ def stream_view(request):
         else:
             stored_remote_entries_qs2.append(entry)
     stored_remote_entries_qs = stored_remote_entries_qs2
+    print("========================stored_remote_entries_qs", stored_remote_entries_qs)
     
     stored_remote_entries = [
         _stored_remote_entry_to_stream_obj(remote_entry, viewer_fqid=viewer_fqid) for remote_entry in stored_remote_entries_qs
@@ -619,6 +620,10 @@ def stream_view(request):
         friends_remote_fqids=friends_remote_fqids,
         requested_by_fqid=viewer_fqid,
     )
+    print("<-------------------------------------->")
+    for entry in remote_entries:
+        print(entry.title)
+    print("<-------------------------------------->")
     
     # Combine and sort by published (newest first)
     def _sort_key(entry):
