@@ -468,6 +468,9 @@ def ApiInbox(request, author_id):
         obj = unquote(data.get("object",""))
         data["object"] = obj
         id = unquote(data.get("id",""))
+        # HARDCODED solution for fuchsia sending improper id
+        if "fuchsia" in id:
+            id = re.sub("https?://[^/]+/api/authors/https://?","https://",id)
         data["id"] = id
         print(id)
 
