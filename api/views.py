@@ -464,6 +464,9 @@ def ApiInbox(request, author_id):
         if not isinstance(data, dict):
             data = {}
         obj_type = str(data.get("type") or "like").lower()
+        # Unpercent encodes the urls of the object and author
+        obj = unquote(data.get("object",""))
+
         logger.info("Inbox POST author_id=%s type=%s", author_id, obj_type)
         if obj_type == "follow":
             return _inbox_handle_follow(request, author_id, data)
@@ -625,7 +628,7 @@ def _inbox_handle_entry(request, author_id, data=None):
     data = data or request.data or {}
     recipient = get_object_or_404(Author, id=author_id)
     # Check entry FQID
-    fqid = _normalize_remote_url(data.get("id"))
+    fqid = _normalize_remote_url(unquote(data.get("id")))
     if not fqid:
         logger.warning(
             "Inbox entry rejected: missing entry id for recipient=%s",
@@ -705,7 +708,7 @@ def _inbox_handle_like(request, author_id, data=None):
     like = Like(
         author=author_url,
         object=obj_url.rstrip("/"),
-        id=data.get("id",f"{request.build_absolute_uri('/')[:-1]}/likes/{like_uuid}"),
+        id=data.get("id",f"{request.build_absolute_uri('/')[:-1]}/liked/{like_uuid}"),
         uuid=like_uuid,
     )
     like.save()

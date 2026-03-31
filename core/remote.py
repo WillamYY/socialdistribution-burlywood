@@ -126,7 +126,7 @@ def fetch_remote_public_entries(following_remote_fqids=None, friends_remote_fqid
                 author_fqid = _normalize_fqid(author_id_str if author_id_str.startswith("http") else f"{node_base.rstrip('/')}/api/authors/{author_num_id}")
                 include_unlisted = author_fqid in following_normalized
                 include_friends = author_fqid in friends_normalized
-
+                print(author_fqid)
                 entries_url = f"{node_base}/api/authors/{author_num_id}/entries/"
                 headers = {"Accept": "application/json"}
                 if include_friends and requested_by_fqid:
@@ -169,8 +169,10 @@ def fetch_remote_public_entries(following_remote_fqids=None, friends_remote_fqid
                         elif vis == "UNLISTED" and include_unlisted:
                             pass
                         elif vis == "FRIENDS" and include_friends:
+                            print("FRIEND YOU CAN SEE")
                             pass
                         else:
+                            print("TESTING",)
                             continue
                         eid_raw = item.get("id") or ""
                         eid = _resolve_entry_fqid(node_base, author_num_id, eid_raw)
@@ -277,20 +279,23 @@ def get_remote_entry_recipients(author, visibility: str):
     remote_following = {
         _normalize_fqid(x) for x in RemoteFollow.objects.filter(follower=author).values_list("followed_fqid", flat=True)
     }
+    authorfqid = author.host + "/authors/" + str(author.id)
 
     true_remote_following = set()
     for following in remote_following:
-        remote_host = following[:following.index("/api")] + "/"
-        credentials = IncomingNode.objects.get(url = remote_host)
-        response = requests.get(
-            f"{following}/followers/{author.id}",
-            headers={"Accept": "application/json"},
-            auth=(credentials.username, credentials.password),
-            timeout=10
-        )
-        if response.status_code < 400:
-            true_remote_following.add(following)
-
+        try:
+            remote_host = following[:following.index("/api")] + "/"
+            credentials = IncomingNode.objects.get(url = remote_host)
+            response = requests.get(
+                f"{following}/followers/{authorfqid}",
+                headers={"Accept": "application/json"},
+                auth=(credentials.username, credentials.password),
+                timeout=10
+            )
+            if response.status_code < 400:
+                true_remote_following.add(following)
+        except:
+            pass
     # Intersect two sets to find friends (mutual following)
     # remote_friends = remote_followers & remote_following
     remote_friends = remote_followers & true_remote_following
