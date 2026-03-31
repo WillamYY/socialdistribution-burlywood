@@ -469,6 +469,7 @@ def ApiInbox(request, author_id):
         data["object"] = obj
         id = unquote(data.get("id",""))
         data["id"] = id
+        print(id)
 
         logger.info("Inbox POST author_id=%s type=%s", author_id, obj_type)
         if obj_type == "follow":
