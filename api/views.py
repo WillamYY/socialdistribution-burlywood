@@ -466,6 +466,13 @@ def ApiInbox(request, author_id):
         obj_type = str(data.get("type") or "like").lower()
         # Unpercent encodes the urls of the object and author
         obj = unquote(data.get("object",""))
+        data["object"] = obj
+        id = unquote(data.get("id",""))
+        # HARDCODED solution for fuchsia sending improper id
+        if "fuchsia" in id:
+            id = re.sub("https?://[^/]+/api/authors/https://?","https://",id)
+        data["id"] = id
+        print(id)
 
         logger.info("Inbox POST author_id=%s type=%s", author_id, obj_type)
         if obj_type == "follow":
