@@ -124,13 +124,9 @@ def fetch_remote_public_entries(following_remote_fqids=None, friends_remote_fqid
                     node_base = base
 
                 author_fqid = _normalize_fqid(author_id_str if author_id_str.startswith("http") else f"{node_base.rstrip('/')}/api/authors/{author_num_id}")
-                print(author_fqid)
-                print(following_normalized)
-                print(friends_normalized)
                 include_unlisted = author_fqid in following_normalized
                 include_friends = author_fqid in friends_normalized
-                print(include_unlisted,include_friends)
-
+                print(author_fqid)
                 entries_url = f"{node_base}/api/authors/{author_num_id}/entries/"
                 headers = {"Accept": "application/json"}
                 if include_friends and requested_by_fqid:
@@ -175,6 +171,7 @@ def fetch_remote_public_entries(following_remote_fqids=None, friends_remote_fqid
                         elif vis == "FRIENDS" and include_friends:
                             pass
                         else:
+                            print("TESTING",)
                             continue
                         eid_raw = item.get("id") or ""
                         eid = _resolve_entry_fqid(node_base, author_num_id, eid_raw)
