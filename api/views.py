@@ -464,9 +464,12 @@ def ApiInbox(request, author_id):
         if not isinstance(data, dict):
             data = {}
         obj_type = str(data.get("type") or "like").lower()
-        # Unpercent encodes the urls of the object
+        # Unpercent encodes the urls of the object and author
         obj = unquote(data.get("object",""))
+        authorID = unquote(data.get("author",{}).get("id",""))
         data["object"] = obj
+        data["author"]["id"] = authorID
+
         logger.info("Inbox POST author_id=%s type=%s", author_id, obj_type)
         if obj_type == "follow":
             return _inbox_handle_follow(request, author_id, data)
