@@ -169,6 +169,7 @@ def fetch_remote_public_entries(following_remote_fqids=None, friends_remote_fqid
                         elif vis == "UNLISTED" and include_unlisted:
                             pass
                         elif vis == "FRIENDS" and include_friends:
+                            print("FRIEND YOU CAN SEE")
                             pass
                         else:
                             print("TESTING",)
