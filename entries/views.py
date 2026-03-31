@@ -543,6 +543,7 @@ def stream_view(request):
     # Auto-sync GitHub activity so new pushes/events show up without user action (User Story #5)
     maybe_sync_github_for_stream()
     viewer = get_object_or_404(Author, id=request.session["author_id"])
+    viewer_fqid = f"{base_url_for_fetch}/api/authors/{viewer.id}"
 
     # Authors I follow
     following_ids = list(viewer.following.values_list("id", flat=True))
@@ -574,9 +575,9 @@ def stream_view(request):
         print(remote_host)
         try:
             credentials = IncomingNode.objects.get(url = remote_host)
-            print(f"{following}/followers/{viewer.id}")
+            print(f"{following}/followers/{viewer_fqid}")
             response = requests.get(
-                f"{following}/followers/{viewer.id}",
+                f"{following}/followers/{viewer_fqid}",
                 headers={"Accept": "application/json"},
                 auth=(credentials.username, credentials.password),
                 timeout=10
@@ -590,11 +591,10 @@ def stream_view(request):
     followers_remote_fqids = set(
         RemoteFollower.objects.filter(target=viewer).values_list("actor_fqid", flat=True)
     )
-    print(viewer.id)
+    print(following_remote_fqids)
     print(followers_remote_fqids)
     friends_remote_fqids = [f for f in following_remote_fqids if f in followers_remote_fqids]
     base_url_for_fetch = request.build_absolute_uri("/")[:-1]
-    viewer_fqid = f"{base_url_for_fetch}/api/authors/{viewer.id}"
     remote_entries = fetch_remote_public_entries(
         following_remote_fqids=following_remote_fqids,
         friends_remote_fqids=friends_remote_fqids,
