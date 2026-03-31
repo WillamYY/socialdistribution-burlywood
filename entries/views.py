@@ -585,7 +585,8 @@ def stream_view(request):
             print(3)
             if response.status_code < 400:
                 following_remote_fqids2.append(following)
-        except:
+        except Exception as e:
+            print(e)
             pass
     following_remote_fqids = following_remote_fqids2
     # Remote friends = we follow them AND they follow us
