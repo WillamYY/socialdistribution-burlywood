@@ -587,6 +587,7 @@ def stream_view(request):
     followers_remote_fqids = set(
         RemoteFollower.objects.filter(target=viewer).values_list("actor_fqid", flat=True)
     )
+    print(viewer.id)
     print(following_remote_fqids)
     print(followers_remote_fqids)
     friends_remote_fqids = [f for f in following_remote_fqids if f in followers_remote_fqids]
