@@ -537,20 +537,17 @@ def stream_view(request):
     US#31: Sorted with most recent entries first.
     GitHub activity is auto-synced when stream is viewed (throttled).
     """
-    print(1)
     if not request.session.get("author_id"):
         return redirect("/app/login")
 
     # Auto-sync GitHub activity so new pushes/events show up without user action (User Story #5)
     maybe_sync_github_for_stream()
-    print(2)
     viewer = get_object_or_404(Author, id=request.session["author_id"])
 
     # Authors I follow
     following_ids = list(viewer.following.values_list("id", flat=True))
     # Friends = mutual follow
     friend_ids = list(viewer.friends().values_list("id", flat=True))
-    print(3)
     # US#26: All PUBLIC entries from any author on the node
     # US#27: UNLISTED from following (and viewer's own); FRIENDS from friends (and viewer's own)
     # US#29: No DELETED (hard-delete removes from DB)
@@ -564,33 +561,32 @@ def stream_view(request):
         .select_related("author")
         .order_by("-published")
     )
-    print(4)
     # Public entries from IncomingNode; UNLISTED from following; FRIENDS from remote friends (mutual follow)
     from core.models import RemoteFollow, RemoteFollower
     from core.remote import fetch_remote_public_entries
     following_remote_fqids = list(
         RemoteFollow.objects.filter(follower=viewer).values_list("followed_fqid", flat=True)
     )
-    print(5)
     following_remote_fqids2 = []
     for following in following_remote_fqids:
         remote_host = following[:following.index("/api")] + "/"
-        credentials = IncomingNode.objects.get(url = remote_host)
-        response = requests.get(
-            f"{following}/followers/{viewer.id}",
-            headers={"Accept": "application/json"},
-            auth=(credentials.username, credentials.password),
-            timeout=10
-        )
-        if response.status_code < 400:
-            following_remote_fqids2.append(following)
+        try:
+            credentials = IncomingNode.objects.get(url = remote_host)
+            response = requests.get(
+                f"{following}/followers/{viewer.id}",
+                headers={"Accept": "application/json"},
+                auth=(credentials.username, credentials.password),
+                timeout=10
+            )
+            if response.status_code < 400:
+                following_remote_fqids2.append(following)
+        except:
+            pass
     following_remote_fqids = following_remote_fqids2
-    print(6)
     # Remote friends = we follow them AND they follow us
     followers_remote_fqids = set(
         RemoteFollower.objects.filter(target=viewer).values_list("actor_fqid", flat=True)
     )
-    print(7)
     friends_remote_fqids = [f for f in following_remote_fqids if f in followers_remote_fqids]
     base_url_for_fetch = request.build_absolute_uri("/")[:-1]
     viewer_fqid = f"{base_url_for_fetch}/api/authors/{viewer.id}"
@@ -599,9 +595,7 @@ def stream_view(request):
         friends_remote_fqids=friends_remote_fqids,
         requested_by_fqid=viewer_fqid,
     )
-    print(8)
     logger.info("STREAM VIEW viewer=%s local_entries=%s remote_entries=%s", viewer.id, len(local_entries), len(remote_entries))
-    print(9)
     # Combine and sort by published (newest first)
     def _sort_key(e):
         p = getattr(e, "published", None)
@@ -614,13 +608,11 @@ def stream_view(request):
         key=_sort_key,
         reverse=True,
     )
-    print(10)
     # Build the current user's URL
     base_url = request.build_absolute_uri('/')[:-1]
     entries_local = []
     entries_remote = []
     for entry in entries:
-        print(11)
         if getattr(entry, "is_remote", False):
             if "author_id" in request.session:
                 partial_fqid = f"{request.get_host()}/api/authors/{request.session['author_id']}"
