@@ -628,7 +628,7 @@ def _inbox_handle_entry(request, author_id, data=None):
     data = data or request.data or {}
     recipient = get_object_or_404(Author, id=author_id)
     # Check entry FQID
-    fqid = _normalize_remote_url(data.get("id"))
+    fqid = _normalize_remote_url(unquote(data.get("id")))
     if not fqid:
         logger.warning(
             "Inbox entry rejected: missing entry id for recipient=%s",
@@ -671,7 +671,7 @@ def _inbox_handle_entry(request, author_id, data=None):
     # Save to DB
     remote_entry, created = RemoteEntry.objects.update_or_create(
         recipient=recipient,
-        fqid=unquote(fqid),
+        fqid=fqid,
         defaults=defaults,
     )
     logger.info(
