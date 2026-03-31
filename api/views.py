@@ -708,7 +708,7 @@ def _inbox_handle_like(request, author_id, data=None):
     like = Like(
         author=author_url,
         object=obj_url.rstrip("/"),
-        id=data.get("id",f"{request.build_absolute_uri('/')[:-1]}/likes/{like_uuid}"),
+        id=data.get("id",f"{request.build_absolute_uri('/')[:-1]}/liked/{like_uuid}"),
         uuid=like_uuid,
     )
     like.save()
