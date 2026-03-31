@@ -569,14 +569,11 @@ def stream_view(request):
     following_remote_fqids = list(
         RemoteFollow.objects.filter(follower=viewer).values_list("followed_fqid", flat=True)
     )
-    print(following_remote_fqids)
     following_remote_fqids2 = []
     for following in following_remote_fqids:
         remote_host = following[:following.index("/api")] + "/"
-        print(remote_host)
         try:
             credentials = IncomingNode.objects.get(url = remote_host)
-            print(f"{following}/followers/{viewer_fqid}")
             response = requests.get(
                 f"{following}/followers/{viewer_fqid}",
                 headers={"Accept": "application/json"},

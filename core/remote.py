@@ -124,6 +124,9 @@ def fetch_remote_public_entries(following_remote_fqids=None, friends_remote_fqid
                     node_base = base
 
                 author_fqid = _normalize_fqid(author_id_str if author_id_str.startswith("http") else f"{node_base.rstrip('/')}/api/authors/{author_num_id}")
+                print(author_fqid)
+                print(following_normalized)
+                print(friends_normalized)
                 include_unlisted = author_fqid in following_normalized
                 include_friends = author_fqid in friends_normalized
 
