@@ -281,6 +281,8 @@ def get_remote_entry_recipients(author, visibility: str):
     }
     print(remote_followers)
     print(remote_following)
+    authorfqid = author.host + "/authors/" + str(author.id)
+    print(authorfqid)
 
     true_remote_following = set()
     for following in remote_following:
@@ -288,7 +290,7 @@ def get_remote_entry_recipients(author, visibility: str):
             remote_host = following[:following.index("/api")] + "/"
             credentials = IncomingNode.objects.get(url = remote_host)
             response = requests.get(
-                f"{following}/followers/{author.id}",
+                f"{following}/followers/{authorfqid}",
                 headers={"Accept": "application/json"},
                 auth=(credentials.username, credentials.password),
                 timeout=10
