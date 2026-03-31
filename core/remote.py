@@ -282,16 +282,19 @@ def get_remote_entry_recipients(author, visibility: str):
 
     true_remote_following = set()
     for following in remote_following:
-        remote_host = following[:following.index("/api")] + "/"
-        credentials = IncomingNode.objects.get(url = remote_host)
-        response = requests.get(
-            f"{following}/followers/{author.id}",
-            headers={"Accept": "application/json"},
-            auth=(credentials.username, credentials.password),
-            timeout=10
-        )
-        if response.status_code < 400:
-            true_remote_following.add(following)
+        try:
+            remote_host = following[:following.index("/api")] + "/"
+            credentials = IncomingNode.objects.get(url = remote_host)
+            response = requests.get(
+                f"{following}/followers/{author.id}",
+                headers={"Accept": "application/json"},
+                auth=(credentials.username, credentials.password),
+                timeout=10
+            )
+            if response.status_code < 400:
+                true_remote_following.add(following)
+        except:
+            pass
 
     # Intersect two sets to find friends (mutual following)
     # remote_friends = remote_followers & remote_following
