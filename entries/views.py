@@ -587,6 +587,8 @@ def stream_view(request):
     followers_remote_fqids = set(
         RemoteFollower.objects.filter(target=viewer).values_list("actor_fqid", flat=True)
     )
+    print(following_remote_fqids)
+    print(followers_remote_fqids)
     friends_remote_fqids = [f for f in following_remote_fqids if f in followers_remote_fqids]
     base_url_for_fetch = request.build_absolute_uri("/")[:-1]
     viewer_fqid = f"{base_url_for_fetch}/api/authors/{viewer.id}"
