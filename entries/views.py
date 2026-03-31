@@ -994,7 +994,7 @@ def get_remote_entry(request,fqid):
             allowed_visibility.append("UNLISTED")
             if RemoteFollower.objects.filter(actor_fqid__endswith = entry.get("author").get("id").rstrip("/").split("/")[-1],target = logged_in_id).exists():
                 allowed_visibility.append("FRIENDS")
-        allowed = entry.get("visibility") in allowed_visibility
+    allowed = entry.get("visibility") in allowed_visibility
     comments = []
     # HARDCODE SOLUTION FOR fuschia
     if fuschia:
