@@ -279,6 +279,8 @@ def get_remote_entry_recipients(author, visibility: str):
     remote_following = {
         _normalize_fqid(x) for x in RemoteFollow.objects.filter(follower=author).values_list("followed_fqid", flat=True)
     }
+    print(remote_followers)
+    print(remote_following)
 
     true_remote_following = set()
     for following in remote_following:
@@ -295,7 +297,7 @@ def get_remote_entry_recipients(author, visibility: str):
                 true_remote_following.add(following)
         except:
             pass
-
+    print(true_remote_following)
     # Intersect two sets to find friends (mutual following)
     # remote_friends = remote_followers & remote_following
     remote_friends = remote_followers & true_remote_following
