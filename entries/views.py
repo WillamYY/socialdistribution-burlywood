@@ -537,19 +537,20 @@ def stream_view(request):
     US#31: Sorted with most recent entries first.
     GitHub activity is auto-synced when stream is viewed (throttled).
     """
+    print(1)
     if not request.session.get("author_id"):
         return redirect("/app/login")
 
     # Auto-sync GitHub activity so new pushes/events show up without user action (User Story #5)
     maybe_sync_github_for_stream()
-
+    print(2)
     viewer = get_object_or_404(Author, id=request.session["author_id"])
 
     # Authors I follow
     following_ids = list(viewer.following.values_list("id", flat=True))
     # Friends = mutual follow
     friend_ids = list(viewer.friends().values_list("id", flat=True))
-
+    print(3)
     # US#26: All PUBLIC entries from any author on the node
     # US#27: UNLISTED from following (and viewer's own); FRIENDS from friends (and viewer's own)
     # US#29: No DELETED (hard-delete removes from DB)
@@ -563,7 +564,7 @@ def stream_view(request):
         .select_related("author")
         .order_by("-published")
     )
-
+    print(4)
     # Public entries from IncomingNode; UNLISTED from following; FRIENDS from remote friends (mutual follow)
     from core.models import RemoteFollow, RemoteFollower
     from core.remote import fetch_remote_public_entries
