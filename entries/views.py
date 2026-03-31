@@ -573,20 +573,17 @@ def stream_view(request):
         remote_host = following[:following.index("/api")] + "/"
         print(remote_host)
         try:
-            print(1)
             credentials = IncomingNode.objects.get(url = remote_host)
-            print(2)
+            print(f"{following}/followers/{viewer.id}")
             response = requests.get(
                 f"{following}/followers/{viewer.id}",
                 headers={"Accept": "application/json"},
                 auth=(credentials.username, credentials.password),
                 timeout=10
             )
-            print(3)
             if response.status_code < 400:
                 following_remote_fqids2.append(following)
         except Exception as e:
-            print(e)
             pass
     following_remote_fqids = following_remote_fqids2
     # Remote friends = we follow them AND they follow us
