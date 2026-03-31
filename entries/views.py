@@ -567,7 +567,7 @@ def stream_view(request):
     following_remote_fqids = list(
         RemoteFollow.objects.filter(follower=viewer).values_list("followed_fqid", flat=True)
     )
-    print(followers_remote_fqids)
+    print(following_remote_fqids)
     following_remote_fqids2 = []
     for following in following_remote_fqids:
         remote_host = following[:following.index("/api")] + "/"
