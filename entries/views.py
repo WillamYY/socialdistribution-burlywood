@@ -571,6 +571,7 @@ def stream_view(request):
     following_remote_fqids = list(
         RemoteFollow.objects.filter(follower=viewer).values_list("followed_fqid", flat=True)
     )
+    print(5)
     following_remote_fqids2 = []
     for following in following_remote_fqids:
         remote_host = following[:following.index("/api")] + "/"
@@ -584,10 +585,12 @@ def stream_view(request):
         if response.status_code < 400:
             following_remote_fqids2.append(following)
     following_remote_fqids = following_remote_fqids2
+    print(6)
     # Remote friends = we follow them AND they follow us
     followers_remote_fqids = set(
         RemoteFollower.objects.filter(target=viewer).values_list("actor_fqid", flat=True)
     )
+    print(7)
     friends_remote_fqids = [f for f in following_remote_fqids if f in followers_remote_fqids]
     base_url_for_fetch = request.build_absolute_uri("/")[:-1]
     viewer_fqid = f"{base_url_for_fetch}/api/authors/{viewer.id}"
@@ -596,8 +599,9 @@ def stream_view(request):
         friends_remote_fqids=friends_remote_fqids,
         requested_by_fqid=viewer_fqid,
     )
+    print(8)
     logger.info("STREAM VIEW viewer=%s local_entries=%s remote_entries=%s", viewer.id, len(local_entries), len(remote_entries))
-
+    print(9)
     # Combine and sort by published (newest first)
     def _sort_key(e):
         p = getattr(e, "published", None)
@@ -610,13 +614,13 @@ def stream_view(request):
         key=_sort_key,
         reverse=True,
     )
-
+    print(10)
     # Build the current user's URL
     base_url = request.build_absolute_uri('/')[:-1]
-
     entries_local = []
     entries_remote = []
     for entry in entries:
+        print(11)
         if getattr(entry, "is_remote", False):
             if "author_id" in request.session:
                 partial_fqid = f"{request.get_host()}/api/authors/{request.session['author_id']}"
