@@ -498,7 +498,7 @@ def ApiInbox(request, author_id):
 def _inbox_handle_follow(request, author_id, data=None):
     """Handle follow request: actor wants to follow object (our author)."""
     from core.models import RemoteFollowRequest
-
+    print(1)
     data = data or request.data or {}
     target = get_object_or_404(Author, id=author_id)
     actor_raw = data.get("actor")
@@ -509,12 +509,12 @@ def _inbox_handle_follow(request, author_id, data=None):
     actor_id_str = (actor_data.get("id") or "").strip().rstrip("/")
     if not actor_id_str:
         return Response({"detail": "Missing actor"}, status=400)
-
+    print(2)
     base = request.build_absolute_uri("/")[:-1]
     is_local_actor = actor_id_str.startswith(base) or (
         request.get_host() in actor_id_str and "/api/authors/" in actor_id_str
     )
-
+    print(3)
     if is_local_actor:
         try:
             actor_local_id = int(actor_id_str.split("/")[-1])
@@ -531,12 +531,15 @@ def _inbox_handle_follow(request, author_id, data=None):
             return Response({"detail": "Already following"}, status=409)
         FollowRequest.objects.create(requester=actor, target=target)
     else:
+        print(4)
         actor_fqid = actor_id_str
         if actor_fqid.startswith("http://"):
             actor_fqid = "https" + actor_fqid[4:]
         actor_display_name = str(actor_data.get("displayName") or actor_data.get("username") or "Remote author")[:255]
+        print(5)
         if RemoteFollowRequest.objects.filter(actor_fqid=actor_fqid, target=target).exists():
             return Response({"detail": "Follow request already sent"}, status=409)
+        print(6)
         RemoteFollowRequest.objects.create(
             actor_fqid=actor_fqid,
             actor_url=actor_fqid,  # armdb uses actor_url as NOT NULL column
