@@ -657,6 +657,10 @@ def _inbox_handle_entry(request, author_id, data=None):
     # Extract the universal fields
     content_type = data.get("contentType") or "text/plain"
     visibility = str(data.get("visibility") or "PUBLIC").upper()
+    # Handling for fuchsia delete
+    is_deleted = data.get("is_deleted",False)
+    if is_deleted:
+        visibility = "DELETED"
     if visibility not in {"PUBLIC", "FRIENDS", "UNLISTED", "DELETED"}:
         visibility = "PUBLIC"
         
