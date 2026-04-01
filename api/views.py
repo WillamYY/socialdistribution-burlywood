@@ -465,8 +465,6 @@ def ApiInbox(request, author_id):
             data = {}
         obj_type = str(data.get("type") or "like").lower()
         # Unpercent encodes the urls of the object and author
-        obj = unquote(data.get("object",""))
-        data["object"] = obj
         id = unquote(data.get("id",""))
         # HARDCODED solution for fuchsia sending improper id
         if "fuchsia" in id:
