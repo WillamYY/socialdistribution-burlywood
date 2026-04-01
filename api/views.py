@@ -657,6 +657,7 @@ def _inbox_handle_entry(request, author_id, data=None):
     # Extract the universal fields
     content_type = data.get("contentType") or "text/plain"
     visibility = str(data.get("visibility") or "PUBLIC").upper()
+    print(visibility)
     if visibility not in {"PUBLIC", "FRIENDS", "UNLISTED", "DELETED"}:
         visibility = "PUBLIC"
         
