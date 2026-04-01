@@ -1020,21 +1020,17 @@ def get_remote_entry(request,fqid):
     entry = json.loads(entryInfo.text)
     # Creates the list of allowed things to view
     allowed_visibility = ["PUBLIC","UNLISTED"]
-    allowed_visibility.append("FRIENDS")
     if RemoteFollow.objects.filter(follower = logged_in_id,followed_fqid__endswith = entry.get("author").get("id").rstrip("/").split("/")[-1]).exists():
         is_following = RemoteFollow.objects.get(follower = logged_in_id,followed_fqid__endswith = entry.get("author").get("id").rstrip("/").split("/")[-1])
         remote_host = is_following.followed_fqid[:is_following.followed_fqid.index("/api")] + "/"
         credentials = IncomingNode.objects.get(url = remote_host)
-        print(f"{is_following.followed_fqid}/followers/{author_fqid}")
         response = requests.get(
             f"{is_following.followed_fqid}/followers/{author_fqid}",
             headers={"Accept": "application/json"},
             auth=(credentials.username, credentials.password),
             timeout=10
         )
-        print(1)
         if response.status_code < 400:
-            print(2)
             if RemoteFollower.objects.filter(actor_fqid__endswith = entry.get("author").get("id").rstrip("/").split("/")[-1],target = logged_in_id).exists():
                 allowed_visibility.append("FRIENDS")
     allowed = entry.get("visibility") in allowed_visibility
