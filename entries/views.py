@@ -1006,8 +1006,10 @@ Handles displaying the page for remote entries
 def get_remote_entry(request,fqid):
     # Handles hardcoded solutions variables
     fuschia = False
-    if re.match("https?://socialdist-fuchsia-oabbasi-feef8b354ae5.herokuapp.com",fqid):
+    if re.match("https?://[^/]*fuchsia[^/]*",fqid):
         fuschia = True
+    # Queries to find the correct fqid (Handles being sent distorted fqid)
+    fqid = re.search("https?://[^/]+/api/authors/[^/]+/entries/[^/]+",fqid).group(0)
     fqid = fqid.rstrip("/").replace("http://", "https://")
     if "/api/" not in fqid:
         return HttpResponse(status=404)
