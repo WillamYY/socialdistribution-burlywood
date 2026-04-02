@@ -595,12 +595,14 @@ def stream_view(request):
         _stored_remote_entry_to_stream_obj(remote_entry, viewer_fqid=viewer_fqid) for remote_entry in stored_remote_entries_qs
     ]
     
+    """
     # Truly live-fetched remote entries
     remote_entries = fetch_remote_public_entries(
         following_remote_fqids=following_remote_fqids,
         friends_remote_fqids=friends_remote_fqids,
         requested_by_fqid=viewer_fqid,
     )
+    """
     
     # Combine and sort by published (newest first)
     def _sort_key(entry):
@@ -611,7 +613,7 @@ def stream_view(request):
     
     # Keep both stored remote entries and live-fetched entries for temporary transition
     # Prefer the former over the latter
-    combined_entries = local_entries + stored_remote_entries + remote_entries
+    combined_entries = local_entries + stored_remote_entries #+ remote_entries
     
     live_remote_duped = 0
     seen_remote_ids = set()
@@ -627,6 +629,7 @@ def stream_view(request):
             seen_remote_ids.add(remote_id)
         deduped_entries.append(entry)
         
+    """
     logger.info(
         "STREAM VIEW viewer=%s local=%s stored_remote=%s live_remote=%s deduped_live_remote=%s final=%s",
         viewer.id,
@@ -636,6 +639,7 @@ def stream_view(request):
         live_remote_duped,
         len(deduped_entries),
     )
+    """
 
     entries = sorted(
         deduped_entries,
@@ -1002,8 +1006,10 @@ Handles displaying the page for remote entries
 def get_remote_entry(request,fqid):
     # Handles hardcoded solutions variables
     fuschia = False
-    if re.match("https?://socialdist-fuchsia-oabbasi-feef8b354ae5.herokuapp.com",fqid):
+    if re.match("https?://[^/]*fuchsia[^/]*",fqid):
         fuschia = True
+    # Queries to find the correct fqid (Handles being sent distorted fqid)
+    fqid = re.search("https?://[^/]+/api/authors/[^/]+/entries/[^/]+",fqid).group(0)
     fqid = fqid.rstrip("/").replace("http://", "https://")
     if "/api/" not in fqid:
         return HttpResponse(status=404)
@@ -1018,8 +1024,9 @@ def get_remote_entry(request,fqid):
     entryInfo = requests.get(fqid.rstrip("/"), auth=(node_credentials.username, node_credentials.password))
     entryInfo.raise_for_status()
     entry = json.loads(entryInfo.text)
+    """
     # Creates the list of allowed things to view
-    allowed_visibility = ["PUBLIC","UNLISTED"]
+    allowed_visibility = ["PUBLIC","UNLISTED","FRIENDS"]
     if RemoteFollow.objects.filter(follower = logged_in_id,followed_fqid__endswith = entry.get("author").get("id").rstrip("/").split("/")[-1]).exists():
         is_following = RemoteFollow.objects.get(follower = logged_in_id,followed_fqid__endswith = entry.get("author").get("id").rstrip("/").split("/")[-1])
         remote_host = is_following.followed_fqid[:is_following.followed_fqid.index("/api")] + "/"
@@ -1033,7 +1040,8 @@ def get_remote_entry(request,fqid):
         if response.status_code < 400:
             if RemoteFollower.objects.filter(actor_fqid__endswith = entry.get("author").get("id").rstrip("/").split("/")[-1],target = logged_in_id).exists():
                 allowed_visibility.append("FRIENDS")
-    allowed = entry.get("visibility") in allowed_visibility
+    """
+    allowed = True
     comments = []
     # HARDCODE SOLUTION FOR fuschia
     if fuschia:

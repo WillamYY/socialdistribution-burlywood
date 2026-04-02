@@ -44,6 +44,8 @@
         {% endif %}
     </div>
 
+    {% if entry.is_remote %}
+    {% else %}
     <div class="interaction-row" onclick="event.stopPropagation();">
         {% if request.session.author_id %}
         <form method="POST" action="{% if entry.is_remote %}{% url 'interactions:add_remote_like' entry.id %}{% else %}{% url 'interactions:add_like' entry.id %}{% endif %}">
@@ -67,4 +69,5 @@
             </span>
         </div>
     </div>
+    {% endif %}
 </article>
