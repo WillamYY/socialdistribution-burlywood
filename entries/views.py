@@ -595,12 +595,14 @@ def stream_view(request):
         _stored_remote_entry_to_stream_obj(remote_entry, viewer_fqid=viewer_fqid) for remote_entry in stored_remote_entries_qs
     ]
     
+    """
     # Truly live-fetched remote entries
     remote_entries = fetch_remote_public_entries(
         following_remote_fqids=following_remote_fqids,
         friends_remote_fqids=friends_remote_fqids,
         requested_by_fqid=viewer_fqid,
     )
+    """
     
     # Combine and sort by published (newest first)
     def _sort_key(entry):
@@ -611,7 +613,7 @@ def stream_view(request):
     
     # Keep both stored remote entries and live-fetched entries for temporary transition
     # Prefer the former over the latter
-    combined_entries = local_entries + stored_remote_entries + remote_entries
+    combined_entries = local_entries + stored_remote_entries #+ remote_entries
     
     live_remote_duped = 0
     seen_remote_ids = set()
@@ -627,6 +629,7 @@ def stream_view(request):
             seen_remote_ids.add(remote_id)
         deduped_entries.append(entry)
         
+    """
     logger.info(
         "STREAM VIEW viewer=%s local=%s stored_remote=%s live_remote=%s deduped_live_remote=%s final=%s",
         viewer.id,
@@ -636,6 +639,7 @@ def stream_view(request):
         live_remote_duped,
         len(deduped_entries),
     )
+    """
 
     entries = sorted(
         deduped_entries,
