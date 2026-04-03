@@ -334,6 +334,8 @@ def _post_payload_to_single_remote(payload, recipient_fqid: str) -> bool:
 
     try:
         # POST
+        print("==============INBOX URL", inbox_url)
+        print("==============PAYLOAD", payload)
         response = requests.post(
             inbox_url,
             json=payload,
@@ -341,6 +343,8 @@ def _post_payload_to_single_remote(payload, recipient_fqid: str) -> bool:
             auth=auth,
             timeout=10,
         )
+        print(response.content, response.status_code)
+
         # Check status from the response
         if response.status_code in {200, 201, 202}:
             return True # Success
