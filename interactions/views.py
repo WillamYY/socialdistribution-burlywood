@@ -199,7 +199,7 @@ def add_remote_comment(request, entry_id):
         }
         comment_uuid = uuid.uuid4()
         comment_fqid = f"{local_author_fqid}/commented/{comment_uuid}"
-        id = f"{request.build_absolute_uri('/')[:-1]}/api/authors/{author_id}/commented/{comment_uuid}"
+
         payload = {
             "type": "comment",
             "author": author_info,
@@ -235,12 +235,12 @@ def add_remote_comment(request, entry_id):
             # Only add it to our database if it was successful
             if 200 <= resp.status_code < 300:
                 Comment.objects.create(
-                    id=id,
+                    id=comment_fqid,
                     author=local_author_fqid,
                     entry=remote_entry_url,
                     comment=comment_text,
                     contentType="text/plain"
-                ).save()
+                )
             print("REMOTE COMMENT POST BODY:", resp.text)
         except Exception as e:
             print("REMOTE COMMENT POST ERROR:", str(e))
