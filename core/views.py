@@ -679,7 +679,7 @@ def follow_remote_author(request, fqid):
                 actor_info.get("id"),
                 normalized,
             )
-
+            print("=========================PAYLOAD:", payload)
             resp = requests.post(
                 inbox_url,
                 json=payload,
