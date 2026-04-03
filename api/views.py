@@ -633,6 +633,7 @@ def _inbox_handle_comment(request, author_id, data=None):
 
 def _inbox_handle_entry(request, author_id, data=None):
     """Handle incoming entry: store for stream (basic support)."""
+    print("HANDLING INBOX ENTRY")
     data = data or request.data or {}
     recipient = get_object_or_404(Author, id=author_id)
     # Check entry FQID
@@ -643,7 +644,8 @@ def _inbox_handle_entry(request, author_id, data=None):
             author_id,
         )
         return Response({"detail": "Missing entry id"}, status=400)
-    
+    print(f"FQID {fqid}")
+
     # Check author FQID
     author_data = data.get("author") or {}
     remote_author_info = _extract_remote_author_info(author_data)
@@ -654,6 +656,7 @@ def _inbox_handle_entry(request, author_id, data=None):
             fqid,
         )
         return Response({"detail": "Missing author id"}, status=400)
+    print(f"AUTHOR DATA {author_data}")
     
     # Extract the universal fields
     content_type = data.get("contentType") or "text/plain"
@@ -667,6 +670,7 @@ def _inbox_handle_entry(request, author_id, data=None):
         
     content = data.get("content") or ""
     content_raw = content if content_type in {"text/plain", "text/markdown"} else None
+    print(f"CONTENT_RAW {content_raw}")
     
     defaults = {
         "web": _normalize_remote_url(data.get("web")),
@@ -686,6 +690,8 @@ def _inbox_handle_entry(request, author_id, data=None):
         fqid=fqid,
         defaults=defaults,
     )
+    print(f"REMOTE ENTRY: {remote_entry}")
+
     logger.info(
         "Inbox remote entry %s: recipient=%s fqid=%s author=%s",
         "created" if created else "updated",
