@@ -680,6 +680,7 @@ def follow_remote_author(request, fqid):
             normalized,
         )
         print("=========================PAYLOAD:", payload)
+        print("=========================INBOX URL", inbox_url)
         resp = requests.post(
             inbox_url,
             json=payload,
