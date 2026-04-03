@@ -16,8 +16,15 @@ from api.serializers import EntrySerializer
 import re
 import base64
 from entries.views import render_safe_markdown
+from urllib.parse import quote
 
 logger = logging.getLogger(__name__)
+
+def _remote_followers_check_url(remote_author_fqid, local_author_fqid):
+    """
+    Build the remote follower-check endpoint using percent-encoded local author FQID.
+    """
+    return f"{_normalize_fqid(remote_author_fqid)}/followers/{quote(_normalize_fqid(local_author_fqid), safe='')}"
 
 def SignUpView(request):
     """
@@ -235,6 +242,24 @@ def profile_view(request):
 
     # Remote: same logic as connections view
     remote_followings_raw = list(RemoteFollow.objects.filter(follower=author).order_by("created_at"))
+    remote_followings_raw2 = []
+    local_author_fqid = _normalize_fqid(f"{author.host}/authors/{author.id}")
+    for following in remote_followings_raw:
+        try:
+            remote_host = following.followed_fqid[:following.followed_fqid.index("/api")] + "/"
+            credentials = IncomingNode.objects.get(url = remote_host)
+            response = requests.get(
+                _remote_followers_check_url(following.followed_fqid, local_author_fqid),
+                headers={"Accept": "application/json"},
+                auth=(credentials.username, credentials.password),
+                timeout=10
+            )
+            if response.status_code < 400:
+                remote_followings_raw2.append(following)
+        except:
+            pass
+    remote_followings_raw = remote_followings_raw2
+
     remote_followers_raw = list(RemoteFollower.objects.filter(target=author).order_by("created_at"))
     following_fqids = {_normalize_fqid(rf.followed_fqid) for rf in remote_followings_raw}
     follower_by_fqid = {_normalize_fqid(r.actor_fqid): r for r in remote_followers_raw}
@@ -506,6 +531,24 @@ def connections(request):
     remote_followings = list(
         RemoteFollow.objects.filter(follower=author).order_by("created_at")
     )
+    remote_followings2 = []
+    local_author_fqid = _normalize_fqid(f"{author.host}/authors/{author.id}")
+    for following in remote_followings:
+        try:
+            remote_host = following.followed_fqid[:following.followed_fqid.index("/api")] + "/"
+            credentials = IncomingNode.objects.get(url = remote_host)
+            response = requests.get(
+                _remote_followers_check_url(following.followed_fqid, local_author_fqid),
+                headers={"Accept": "application/json"},
+                auth=(credentials.username, credentials.password),
+                timeout=10
+            )
+            if response.status_code < 400:
+                remote_followings2.append(following)
+        except:
+            pass
+    remote_followings = remote_followings2
+
     # Remote followers: remote actors who follow us (approved)
     remote_followers_raw = list(
         RemoteFollower.objects.filter(target=author).order_by("created_at")
@@ -655,8 +698,19 @@ def follow_remote_author(request, fqid):
             )
             logger.info("Follow POST response status=%s url=%s body=%s", resp.status_code, inbox_url, resp.text[:200] if resp.text else "")
             if resp.status_code in (301, 302, 307, 308):
+                pass
+                """
                 loc = resp.headers.get("Location", "")
                 if loc and loc != inbox_url:
+                    print("\n\n\n")
+                    print(loc[:loc.index("/api")] + "/")
+                    credentials = get_object_or_404(IncomingNode, url = loc[:loc.index("/api")] + "/")
+                    resp = requests.post(loc, json=payload, headers=headers, timeout=15, auth=(credentials.username, credentials.password))
+                """
+            if not RemoteFollow.objects.filter(follower=me, followed_fqid=normalized).exists():
+                RemoteFollow.objects.create(follower=me, followed_fqid=normalized)
+            """ if resp.status_code in (200, 202, 204):
+                RemoteFollow.objects.create(follower=me, followed_fqid=normalized)
                     redirect_auth = _credentials_for_remote_author(loc)
                     if not redirect_auth:
                         redirect_auth = auth
@@ -684,13 +738,8 @@ def follow_remote_author(request, fqid):
                     request,
                     f"Inbox rejected ({resp.status_code}): {err_detail}",
                 )
-                logger.warning(
-                    "Follow inbox rejected status=%s body=%s",
-                    resp.status_code,
-                    resp.text[:300],
-                )
-
-        except requests.RequestException as e:
+                logger.warning("Follow inbox rejected status=%s body=%s", resp.status_code, resp.text[:300]) """
+        except requests.exceptions.RequestException as e:
             messages.error(request, f"Could not reach remote inbox: {str(e)[:100]}")
             logger.warning("Follow POST failed: %s", e)
 
@@ -959,6 +1008,16 @@ def RemoteProfileDisplay(request, fqid):
         is_following = RemoteFollow.objects.filter(
             follower_id=logged_in_id, followed_fqid=normalized_fqid
         ).exists()
+        if is_following:
+            base_host = remote_author_url.split("/api/authors/")[0]
+            credentials = get_object_or_404(IncomingNode, url = base_host + "/")
+            response = requests.get(
+                f"{remote_author_url}/followers/{quote(user_fqid, safe="")}",
+                headers={"Accept": "application/json"},
+                auth=(credentials.username, credentials.password),
+                timeout=10
+            )
+            is_following = response.status_code < 400
 
     request_sent = False
 
