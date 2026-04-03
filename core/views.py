@@ -36,6 +36,28 @@ def SignUpView(request):
         message_string += message.message
     return render(request, "signup.html", {"message": message_string})
 
+def _normalize_url_for_match(url):
+    if not url:
+        return ""
+    url = str(url).strip().rstrip("/")
+    if url.startswith("http://"):
+        url = "https://" + url[len("http://"):]
+    return url
+
+def _comment_matches_entry(comment_entry_url, canonical_entry_fqid):
+    left = _normalize_url_for_match(comment_entry_url)
+    right = _normalize_url_for_match(canonical_entry_fqid)
+
+    if not left or not right:
+        return False
+
+    if left == right:
+        return True
+
+    left_tail = left.split("/")[-1]
+    right_tail = right.split("/")[-1]
+    return left_tail == right_tail
+
 def SignUpProcessing(request):
     """
     Handles form submission for signup.
@@ -887,9 +909,14 @@ def RemoteProfileDisplay(request, fqid):
             remote_comments = []
 
         # local backup comments that we saved after posting to remote
-        local_comments_qs = Comment.objects.filter(entry=clean_id).order_by("published", "id")
+        all_local_comments = Comment.objects.all().order_by("published", "id")
+        local_comments_qs = [
+            c for c in all_local_comments
+            if _comment_matches_entry(c.entry, clean_id)
+        ]
+
         print("LOOKUP CLEAN ID:", clean_id)
-        print("LOCAL COMMENTS COUNT:", local_comments_qs.count())
+        print("LOCAL COMMENTS COUNT:", len(local_comments_qs))
         for lc in local_comments_qs:
             print("MATCHED LOCAL COMMENT ID:", lc.id)
             print("MATCHED LOCAL COMMENT ENTRY:", lc.entry)
