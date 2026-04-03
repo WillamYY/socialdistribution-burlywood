@@ -4,6 +4,7 @@ from core import api_views
 urlpatterns = [
     path('api/authors/<int:author_id>/following/', api_views.api_list_following, name='api-list-following'),
     path('api/authors/<int:author_id>/following/<int:foreign_author_id>/', api_views.api_unfollow_author, name='api-unfollow-author'),
+    path('api/authors/<int:author_id>/following/<path:foreign_author_fqid>/', api_views.api_following_detail, name='api-following-detail'),
     # Followers API (User Story #69)
     path('api/authors/<int:author_id>/followers/', api_views.api_list_followers, name='api-list-followers'),
     path('api/authors/<int:author_id>/followers/<path:foreign_author_fqid>/', api_views.api_follower_detail, name='api-follower-detail'),
