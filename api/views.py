@@ -620,7 +620,13 @@ def _inbox_handle_comment(request, author_id, data=None):
     if not comment_id:
         comment_id = f"{author_url}/commented/{uuid.uuid4()}"
 
-    Comment.objects.get_or_create(
+    print("INBOX COMMENT ENTRY URL:", entry_url)
+    print("INBOX COMMENT ID:", comment_id)
+    print("INBOX COMMENT AUTHOR:", author_url)
+    print("INBOX STORED ENTRY_FQID:", entry_fqid)
+    print("INBOX RAW DATA:", data)
+
+    comment_obj, created = Comment.objects.get_or_create(
         id=comment_id,
         defaults={
             "author": author_url,
@@ -629,6 +635,9 @@ def _inbox_handle_comment(request, author_id, data=None):
             "contentType": data.get("contentType", "text/plain"),
         },
     )
+    print("INBOX COMMENT CREATED:", created)
+    print("INBOX COMMENT FINAL ENTRY:", comment_obj.entry)
+    print("INBOX COMMENT FINAL ID:", comment_obj.id)
 
     return Response({"detail": "Comment received"}, status=202)
 
