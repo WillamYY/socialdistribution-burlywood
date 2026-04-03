@@ -590,10 +590,34 @@ def stream_view(request):
     stored_remote_entries_qs = (
         RemoteEntry.objects.filter(recipient=viewer).exclude(visibility="DELETED")
     )
-    
-    stored_remote_entries = [
-        _stored_remote_entry_to_stream_obj(remote_entry, viewer_fqid=viewer_fqid) for remote_entry in stored_remote_entries_qs
-    ]
+
+    # Check current relationship before showing stored remote inbox entries in stream
+    stored_remote_entries = []
+    following_remote_set = set(following_remote_fqids)
+    friends_remote_set = set(friends_remote_fqids)
+
+    for remote_entry in stored_remote_entries_qs:
+        remote_author_fqid = _normalize_fqid_local(remote_entry.author_fqid)
+        visibility = remote_entry.visibility
+
+        if visibility == "PUBLIC":
+            pass
+
+        elif visibility == "UNLISTED":
+            if remote_author_fqid not in following_remote_set:
+                continue
+
+        elif visibility == "FRIENDS":
+            if remote_author_fqid not in friends_remote_set:
+                continue
+
+        else:
+            # Like DELETED
+            continue
+
+        stored_remote_entries.append(
+            _stored_remote_entry_to_stream_obj(remote_entry, viewer_fqid=viewer_fqid)
+        )
     
     """
     # Truly live-fetched remote entries
