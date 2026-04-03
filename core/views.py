@@ -20,6 +20,12 @@ from urllib.parse import quote
 
 logger = logging.getLogger(__name__)
 
+def _remote_followers_check_url(remote_author_fqid, local_author_fqid):
+    """
+    Build the remote follower-check endpoint using percent-encoded local author FQID.
+    """
+    return f"{_normalize_fqid(remote_author_fqid)}/followers/{quote(_normalize_fqid(local_author_fqid), safe='')}"
+
 def SignUpView(request):
     """
     Displays the signup form.
@@ -237,12 +243,13 @@ def profile_view(request):
     # Remote: same logic as connections view
     remote_followings_raw = list(RemoteFollow.objects.filter(follower=author).order_by("created_at"))
     remote_followings_raw2 = []
+    local_author_fqid = _normalize_fqid(f"{author.host}/authors/{author.id}")
     for following in remote_followings_raw:
         try:
             remote_host = following.followed_fqid[:following.followed_fqid.index("/api")] + "/"
             credentials = IncomingNode.objects.get(url = remote_host)
             response = requests.get(
-                f"{following.followed_fqid}/followers/{author.id}",
+                _remote_followers_check_url(following.followed_fqid, local_author_fqid),
                 headers={"Accept": "application/json"},
                 auth=(credentials.username, credentials.password),
                 timeout=10
@@ -525,12 +532,13 @@ def connections(request):
         RemoteFollow.objects.filter(follower=author).order_by("created_at")
     )
     remote_followings2 = []
+    local_author_fqid = _normalize_fqid(f"{author.host}/authors/{author.id}")
     for following in remote_followings:
         try:
             remote_host = following.followed_fqid[:following.followed_fqid.index("/api")] + "/"
             credentials = IncomingNode.objects.get(url = remote_host)
             response = requests.get(
-                f"{following.followed_fqid}/followers/{author.id}",
+                _remote_followers_check_url(following.followed_fqid, local_author_fqid),
                 headers={"Accept": "application/json"},
                 auth=(credentials.username, credentials.password),
                 timeout=10
