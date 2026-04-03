@@ -818,10 +818,13 @@ def RemoteProfileDisplay(request, fqid):
         )
 
     for entry in raw_entries:
+        print("RAW REMOTE ENTRY ID:", entry.get("id"))
+
         if entry.get("visibility") != "PUBLIC":
             continue
 
         clean_id = (entry.get("id") or "").rstrip("/")
+        print("CLEAN REMOTE ENTRY ID:", clean_id)
         if not clean_id:
             continue
         entry["clean_id"] = clean_id
