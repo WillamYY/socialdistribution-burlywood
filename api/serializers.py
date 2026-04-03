@@ -1,8 +1,9 @@
 from rest_framework import serializers
-from core.models import Author
+from core.models import Author, IncomingNode
 from entries.models import Entry
 from interactions.models import Like, Comment
 import re
+import requests
 
 """
 Serializes author objects
@@ -185,11 +186,48 @@ class CommentSerializer(serializers.ModelSerializer):
                 if author_obj:
                     return AuthorSerializer(author_obj).data
 
+            # Try to preserve the real displayName by fetching the author object
+            remote_display_name = author_id_part if author_id_part else "Remote Author"
+            remote_host = ""
+
+            if "/api/authors/" in author_url:
+                remote_host = author_url.split("/api/authors/")[0]
+
+            try:
+                if remote_host:
+                    node = IncomingNode.objects.filter(url=remote_host + "/").first()
+                    if node:
+                        resp = requests.get(
+                            author_url,
+                            auth=(node.username, node.password),
+                            timeout=5,
+                            headers={"Accept": "application/json"},
+                        )
+                        if resp.status_code < 400:
+                            author_json = resp.json()
+                            remote_display_name = (
+                                author_json.get("displayName") or remote_display_name
+                            )
+                            remote_host = (
+                                author_json.get("host") or remote_host
+                            )
+                            return {
+                                "type": "author",
+                                "id": author_json.get("id") or author_value,
+                                "host": remote_host,
+                                "displayName": remote_display_name,
+                                "github": author_json.get("github", ""),
+                                "profileImage": author_json.get("profileImage", ""),
+                                "web": author_json.get("web", ""),
+                            }
+            except Exception:
+                pass
+            
             return {
                 "type": "author",
                 "id": author_value,
-                "host": "",
-                "displayName": author_id_part if author_id_part else "Unknown",
+                "host": remote_host,
+                "displayName": remote_display_name,
                 "github": "",
                 "profileImage": "",
                 "web": ""
