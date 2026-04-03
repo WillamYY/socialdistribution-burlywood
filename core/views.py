@@ -689,6 +689,7 @@ def follow_remote_author(request, fqid):
             allow_redirects=False,
             auth=auth,
         )
+        print(resp.status_code, resp.content)
         logger.info("Follow POST response status=%s url=%s body=%s", resp.status_code, inbox_url, resp.text[:200] if resp.text else "")
         if resp.status_code in (301, 302, 307, 308):
             pass
