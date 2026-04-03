@@ -839,6 +839,12 @@ def RemoteProfileDisplay(request, fqid):
 
         # local backup comments that we saved after posting to remote
         local_comments_qs = Comment.objects.filter(entry=clean_id).order_by("published", "id")
+        print("LOOKUP CLEAN ID:", clean_id)
+        print("LOCAL COMMENTS COUNT:", local_comments_qs.count())
+        for lc in local_comments_qs:
+            print("MATCHED LOCAL COMMENT ID:", lc.id)
+            print("MATCHED LOCAL COMMENT ENTRY:", lc.entry)
+            print("MATCHED LOCAL COMMENT TEXT:", lc.comment)
 
         local_comments = []
         for lc in local_comments_qs:

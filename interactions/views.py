@@ -216,6 +216,9 @@ def add_remote_comment(request, entry_id):
         print("LOCAL AUTHOR HOST:", author.host)
         print("REMOTE COMMENT PAYLOAD AUTHOR:", payload["author"])
         print("REMOTE COMMENT FULL PAYLOAD:", payload)
+        print("REMOTE ENTRY URL FINAL:", remote_entry_url)
+        print("REMOTE HOST BASE:", remote_host_base)
+        print("REMOTE INBOX URL:", inbox_url)
         try:
             credentials = IncomingNode.objects.filter(url__in=[remote_host_base, remote_host_base + "/"]).first()
             if not credentials:
@@ -234,13 +237,16 @@ def add_remote_comment(request, entry_id):
             print("REMOTE COMMENT POST STATUS:", resp.status_code)
             # Only add it to our database if it was successful
             if 200 <= resp.status_code < 300:
-                Comment.objects.create(
+                saved_comment = Comment.objects.create(
                     id=comment_fqid,
                     author=local_author_fqid,
                     entry=remote_entry_url,
                     comment=comment_text,
                     contentType="text/plain"
                 )
+                print("LOCAL COMMENT SAVED ID:", saved_comment.id)
+                print("LOCAL COMMENT SAVED ENTRY:", saved_comment.entry)
+                print("LOCAL COMMENT SAVED TEXT:", saved_comment.comment)
             print("REMOTE COMMENT POST BODY:", resp.text)
         except Exception as e:
             print("REMOTE COMMENT POST ERROR:", str(e))
