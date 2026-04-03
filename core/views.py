@@ -640,6 +640,7 @@ def follow_remote_author(request, fqid):
         return redirect(request.META.get("HTTP_REFERER", "/"))
 
     if RemoteFollow.objects.filter(follower=me, followed_fqid=normalized).exists():
+        print("===========================ALREADY FOLLOWING")
         messages.info(request, "You are already following this author.")
     else:
         try:
