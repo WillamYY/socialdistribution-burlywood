@@ -688,6 +688,7 @@ def stream_view(request):
                 entry.markdown = render_safe_markdown(entry.content)
             # Handles an image being stored in wrong way
             if hasattr(entry,"image"):
+                entry.contentType = "image"
                 entry.content = getattr(entry,"image")
             continue
 
