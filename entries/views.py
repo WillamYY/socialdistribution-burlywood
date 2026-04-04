@@ -1142,6 +1142,10 @@ def get_remote_entry(request,fqid):
     # Handles Markdown
     if "markdown" in entry.get("contentType"):
         entry["markdown"] = render_safe_markdown(entry.get("content"))
+    # Handles an image being stored in wrong way
+    if hasattr(entry,"image"):
+        entry.contentType = "image"
+        entry.content = getattr(entry,"image")
     # Handles getting likes
     likes_obj = entry.get("likes") or {}
     entry["like_count"] = likes_obj.get("count", 0)
