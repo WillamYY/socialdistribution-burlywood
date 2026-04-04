@@ -619,14 +619,14 @@ def stream_view(request):
             _stored_remote_entry_to_stream_obj(remote_entry, viewer_fqid=viewer_fqid)
         )
     
-    """
+    
     # Truly live-fetched remote entries
     remote_entries = fetch_remote_public_entries(
         following_remote_fqids=following_remote_fqids,
         friends_remote_fqids=friends_remote_fqids,
         requested_by_fqid=viewer_fqid,
     )
-    """
+    
     
     # Combine and sort by published (newest first)
     def _sort_key(entry):
@@ -637,7 +637,7 @@ def stream_view(request):
     
     # Keep both stored remote entries and live-fetched entries for temporary transition
     # Prefer the former over the latter
-    combined_entries = local_entries + stored_remote_entries #+ remote_entries
+    combined_entries = local_entries + stored_remote_entries + remote_entries
     
     live_remote_duped = 0
     seen_remote_ids = set()
@@ -1073,7 +1073,6 @@ def get_remote_entry(request,fqid):
         entry["comments"] = {}
         entry["comments"]["src"] = entry.get("commentsSrc", {})
     """
-    # END HARDCODED SOLUTION
     entry_comments = entry.get("comments", {}).get("src") or []
 
     def _incoming_node_for_comment_host(host_base_raw):
