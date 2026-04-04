@@ -1164,6 +1164,7 @@ def get_remote_entry(request,fqid):
         entry_liked_by_user(entry_fqid_for_like, user_fqid_remote) if user_fqid_remote else False
     )
     entry["fetched_comments"] = comments
+    print(entry)
 
     return_url = request.session.get('last_feed_url', reverse('stream'))
     return render(request, "entries/remoteentry.html", {
