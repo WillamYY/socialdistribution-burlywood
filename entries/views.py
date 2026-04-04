@@ -1152,7 +1152,7 @@ def get_remote_entry(request,fqid):
         entry_id = re.search("/entries/([^/]+)",fqid).group(1)
         print(entry_id)
         if RemoteEntry.objects.filter(fqid__endswith = entry_id).exists():
-            remote_entry = RemoteEntry.objects.get(fqid__endswith = entry_id)
+            remote_entry = RemoteEntry.objects.filter(fqid__endswith = entry_id).first()
             entry["content"] = remote_entry["content"]
     # Handles getting likes
     likes_obj = entry.get("likes") or {}
