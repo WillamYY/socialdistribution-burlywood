@@ -1143,14 +1143,13 @@ def get_remote_entry(request,fqid):
     if "markdown" in entry.get("contentType"):
         entry["markdown"] = render_safe_markdown(entry.get("content"))
     # Handles an image being stored in wrong way
-    if entry.get("image",None) != None:
+    if entry.get("image",'') != '':
         entry["contentType"] = "image"
         entry["content"] = entry.get("image")
     # Handles special check for image from fuchsia
     if fuchsia:
         # Gets the entry id for fuchsia
         entry_id = re.search("/entries/([^/]+)",fqid).group(1)
-        print(entry_id)
         if RemoteEntry.objects.filter(fqid__endswith = entry_id).exists():
             remote_entry = RemoteEntry.objects.filter(fqid__endswith = entry_id).first()
             entry["content"] = remote_entry.content
