@@ -687,8 +687,8 @@ def stream_view(request):
             if "markdown" in entry.contentType:
                 entry.markdown = render_safe_markdown(entry.content)
             # Handles an image being stored in wrong way
-            if entry.get("image",None) != None:
-                entry.content = entry.get("image")
+            if entry.image:
+                entry.content = entry.image
             continue
 
         # If local, check local interactoins
