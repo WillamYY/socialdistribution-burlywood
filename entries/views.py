@@ -1052,6 +1052,7 @@ def get_remote_entry(request,fqid):
     entryInfo = requests.get(fqid.rstrip("/"), auth=(node_credentials.username, node_credentials.password))
     entryInfo.raise_for_status()
     entry = json.loads(entryInfo.text)
+    print(entry)
     """
     # Creates the list of allowed things to view
     allowed_visibility = ["PUBLIC","UNLISTED","FRIENDS"]
