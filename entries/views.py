@@ -1148,9 +1148,9 @@ def get_remote_entry(request,fqid):
         entry["content"] = entry.get("image")
     # Handles special check for image from fuchsia
     if fuchsia:
-        print(entry["fqid"])
+        print(entry["id"])
         if RemoteEntry.objects.filter(fqid = entry["id"]).exists():
-            remote_entry = RemoteEntry.objects.get(id = entry["fqid"])
+            remote_entry = RemoteEntry.objects.get(fqid = entry["id"])
             entry["content"] = remote_entry["content"]
     # Handles getting likes
     likes_obj = entry.get("likes") or {}
