@@ -1033,9 +1033,9 @@ Handles displaying the page for remote entries
 """
 def get_remote_entry(request,fqid):
     # Handles hardcoded solutions variables
-    fuschia = False
+    fuchsia = False
     if re.match("https?://[^/]*fuchsia[^/]*",fqid):
-        fuschia = True
+        fuchsia = True
     # Queries to find the correct fqid (Handles being sent distorted fqid)
     fqid = re.search("https?://[^/]+/api/authors/[^/]+/entries/[^/]+",fqid).group(0)
     fqid = fqid.rstrip("/").replace("http://", "https://")
@@ -1146,6 +1146,12 @@ def get_remote_entry(request,fqid):
     if entry.get("image",None) != None:
         entry["contentType"] = "image"
         entry["content"] = entry.get("image")
+    # Handles special check for image from fuchsia
+    if fuchsia:
+        print(entry["id"])
+        if RemoteEntry.objects.filter(id = entry["id"]).exists():
+            remote_entry = RemoteEntry.objects.get(id = entry["id"])
+            entry["content"] = remote_entry["content"]
     # Handles getting likes
     likes_obj = entry.get("likes") or {}
     entry["like_count"] = likes_obj.get("count", 0)
