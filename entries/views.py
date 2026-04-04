@@ -1052,7 +1052,6 @@ def get_remote_entry(request,fqid):
     entryInfo = requests.get(fqid.rstrip("/"), auth=(node_credentials.username, node_credentials.password))
     entryInfo.raise_for_status()
     entry = json.loads(entryInfo.text)
-    print(entry)
     """
     # Creates the list of allowed things to view
     allowed_visibility = ["PUBLIC","UNLISTED","FRIENDS"]
@@ -1151,7 +1150,6 @@ def get_remote_entry(request,fqid):
     if fuchsia:
         # Gets the entry id for fuchsia
         entry_id = re.search("/entries/([^/]+)",fqid).group(1)
-        print(entry_id)
         if RemoteEntry.objects.filter(fqid__endswith = entry_id).exists():
             remote_entry = RemoteEntry.objects.filter(fqid__endswith = entry_id).first()
             entry["content"] = remote_entry.content
@@ -1165,7 +1163,6 @@ def get_remote_entry(request,fqid):
         entry_liked_by_user(entry_fqid_for_like, user_fqid_remote) if user_fqid_remote else False
     )
     entry["fetched_comments"] = comments
-    print(entry)
 
     return_url = request.session.get('last_feed_url', reverse('stream'))
     return render(request, "entries/remoteentry.html", {
