@@ -1067,10 +1067,12 @@ def get_remote_entry(request,fqid):
     """
     allowed = True
     comments = []
+    """
     # HARDCODE SOLUTION FOR fuschia
     if fuschia:
         entry["comments"] = {}
         entry["comments"]["src"] = entry.get("commentsSrc", {})
+    """
     # END HARDCODED SOLUTION
     entry_comments = entry.get("comments", {}).get("src") or []
 
@@ -1137,12 +1139,9 @@ def get_remote_entry(request,fqid):
     # Handles Markdown
     if "markdown" in entry.get("contentType"):
         entry["markdown"] = render_safe_markdown(entry.get("content"))
-    # HARCODED SOLUTION FOR fuschia
-    if fuschia:
-        entry["like_count"] = entry.get("count", 0)
-    else:
-        likes_obj = entry.get("likes") or {}
-        entry["like_count"] = likes_obj.get("count", 0)
+    # Handles getting likes
+    likes_obj = entry.get("likes") or {}
+    entry["like_count"] = likes_obj.get("count", 0)
     base_url = request.build_absolute_uri("/")[:-1]
     entry_fqid_for_like = (entry.get("id") or fqid).strip().rstrip("/")
     user_fqid_remote = f"{base_url}/api/authors/{logged_in_id}" if logged_in_id else None
