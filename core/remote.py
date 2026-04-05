@@ -284,6 +284,7 @@ def get_remote_entry_recipients(author, visibility: str):
     }
     authorfqid = author.host + "/authors/" + str(author.id)
 
+    """
     true_remote_following = set()
     for following in remote_following:
         try:
@@ -299,9 +300,10 @@ def get_remote_entry_recipients(author, visibility: str):
                 true_remote_following.add(following)
         except:
             pass
+    """
     # Intersect two sets to find friends (mutual following)
-    # remote_friends = remote_followers & remote_following
-    remote_friends = remote_followers & true_remote_following
+    remote_friends = remote_followers & remote_following
+    #remote_friends = remote_followers & true_remote_following
 
     # Fetch recipients by different visibilities
     if visibility in {"PUBLIC", "UNLISTED"}:
