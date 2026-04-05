@@ -1049,8 +1049,14 @@ def get_remote_entry(request,fqid):
     fqid = fqid.rstrip("/").replace("http://", "https://")
     # Gets the entry
     node_credentials = get_object_or_404(IncomingNode, url=fqid[:index] + "/")
-    entryInfo = requests.get(fqid.rstrip("/"), auth=(node_credentials.username, node_credentials.password))
-    entryInfo.raise_for_status()
+    # Hardcoded solution
+    if "crimson" in fqid:
+        if RemoteEntry.objects.filter(fqid = fqid).exists():
+            entry = RemoteEntry.objects.filter(fqid = fqid).first()
+            entryInfo = entry.raw_payload
+    else:
+        entryInfo = requests.get(fqid.rstrip("/"), auth=(node_credentials.username, node_credentials.password))
+        entryInfo.raise_for_status()
     entry = json.loads(entryInfo.text)
     """
     # Creates the list of allowed things to view
