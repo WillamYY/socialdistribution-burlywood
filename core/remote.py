@@ -110,7 +110,7 @@ def fetch_remote_public_entries(following_remote_fqids=None, friends_remote_fqid
 
             for author in authors:
                 # Handles being sent more entries then we should
-                if re.match("https?://[^/]+/").group(0) != node.url:
+                if re.match("https?://[^/]+/",author.get("id")).group(0) != node.url:
                     pass
                 if not isinstance(author, dict):
                     continue
