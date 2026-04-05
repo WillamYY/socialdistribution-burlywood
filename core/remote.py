@@ -284,6 +284,7 @@ def get_remote_entry_recipients(author, visibility: str):
     }
     authorfqid = author.host + "/authors/" + str(author.id)
 
+    """
     true_remote_following = set()
     for following in remote_following:
         try:
@@ -299,9 +300,10 @@ def get_remote_entry_recipients(author, visibility: str):
                 true_remote_following.add(following)
         except:
             pass
+    """
     # Intersect two sets to find friends (mutual following)
-    # remote_friends = remote_followers & remote_following
-    remote_friends = remote_followers & true_remote_following
+    remote_friends = remote_followers & remote_following
+    #remote_friends = remote_followers & true_remote_following
 
     # Fetch recipients by different visibilities
     if visibility in {"PUBLIC", "UNLISTED"}:
@@ -336,6 +338,7 @@ def _post_payload_to_single_remote(payload, recipient_fqid: str) -> bool:
     headers = {"Accept": "application/json", "Content-Type": "application/json"}
 
     try:
+        print(inbox_url,payload,headers,auth)
         # POST
         response = requests.post(
             inbox_url,
@@ -344,6 +347,7 @@ def _post_payload_to_single_remote(payload, recipient_fqid: str) -> bool:
             auth=auth,
             timeout=10,
         )
+        print(response.status_code)
         # Check status from the response
         if response.status_code in {200, 201, 202}:
             return True # Success
