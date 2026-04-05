@@ -1056,18 +1056,18 @@ def get_remote_entry(request,fqid):
         entriesInfo.raise_for_status()
         entriesInfo = json.loads(entriesInfo.text)
         fqid_id = re.search("/entries/([^/]+)",fqid).group(0)
-        entryInfo = None
+        entry = None
         for entry_json in entriesInfo.get("src",{}):
             entry_json_id = re.search("/entries/([^/]+)",entry_json.get("id","")).group(0)
             if entry_json_id == fqid_id:
-                entryInfo = entry_json
+                entry = entry_json
                 break
-        if entryInfo == None:
+        if entry == None:
             return HttpResponse(status=404)
     else:
         entryInfo = requests.get(fqid.rstrip("/"), auth=(node_credentials.username, node_credentials.password))
         entryInfo.raise_for_status()
-    entry = json.loads(entryInfo.text)
+        entry = json.loads(entryInfo.text)
     """
     # Creates the list of allowed things to view
     allowed_visibility = ["PUBLIC","UNLISTED","FRIENDS"]
