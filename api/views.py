@@ -7,7 +7,7 @@ import uuid
 
 logger = logging.getLogger(__name__)
 import requests
-from urllib.parse import unquote
+from urllib.parse import quote, unquote
 from django.http import HttpResponse, HttpResponseForbidden
 from django.shortcuts import render, get_object_or_404
 from django.utils import timezone
@@ -181,8 +181,9 @@ def check_visibility(entry, viewer_id, is_list=False, requested_by_fqid=None):
                 they_follow_us = RemoteFollower.objects.filter(actor_fqid=norm, target=entry.author).exists()
                 we_follow_them = RemoteFollow.objects.filter(follower=entry.author, followed_fqid=norm).exists()
                 credentials = IncomingNode.objects.get(url = norm[:norm.index("/api")] + "/")
+                local_author_fqid = _normalize_fqid_for_check(f"{entry.author.host}/authors/{entry.author.id}")
                 we_follow_them = requests.get(
-                    f"{norm}/followers/{entry.author.id}",
+                    f"{norm}/followers/{quote(local_author_fqid, safe='')}",
                     headers={"Accept": "application/json"},
                     auth=(credentials.username, credentials.password),
                     timeout=10

@@ -20,6 +20,12 @@ from urllib.parse import quote
 
 logger = logging.getLogger(__name__)
 
+def _remote_followers_check_url(remote_author_fqid, local_author_fqid):
+    """
+    Build the remote follower-check endpoint using percent-encoded local author FQID.
+    """
+    return f"{_normalize_fqid(remote_author_fqid)}/followers/{quote(_normalize_fqid(local_author_fqid), safe='')}"
+
 def SignUpView(request):
     """
     Displays the signup form.
@@ -93,6 +99,8 @@ def NodeDisplay(request):
 
             base = node.url.rstrip("/")
             for author in authors:
+                if re.match("https?://[^/]+/",author.get("id")).group(0) != node.url:
+                    continue
                 if not isinstance(author, dict):
                     continue
                 aid = author.get("id")
@@ -237,12 +245,13 @@ def profile_view(request):
     # Remote: same logic as connections view
     remote_followings_raw = list(RemoteFollow.objects.filter(follower=author).order_by("created_at"))
     remote_followings_raw2 = []
+    local_author_fqid = _normalize_fqid(f"{author.host}/authors/{author.id}")
     for following in remote_followings_raw:
         try:
             remote_host = following.followed_fqid[:following.followed_fqid.index("/api")] + "/"
             credentials = IncomingNode.objects.get(url = remote_host)
             response = requests.get(
-                f"{following.followed_fqid}/followers/{author.id}",
+                _remote_followers_check_url(following.followed_fqid, local_author_fqid),
                 headers={"Accept": "application/json"},
                 auth=(credentials.username, credentials.password),
                 timeout=10
@@ -525,12 +534,13 @@ def connections(request):
         RemoteFollow.objects.filter(follower=author).order_by("created_at")
     )
     remote_followings2 = []
+    local_author_fqid = _normalize_fqid(f"{author.host}/authors/{author.id}")
     for following in remote_followings:
         try:
             remote_host = following.followed_fqid[:following.followed_fqid.index("/api")] + "/"
             credentials = IncomingNode.objects.get(url = remote_host)
             response = requests.get(
-                f"{following.followed_fqid}/followers/{author.id}",
+                _remote_followers_check_url(following.followed_fqid, local_author_fqid),
                 headers={"Accept": "application/json"},
                 auth=(credentials.username, credentials.password),
                 timeout=10
@@ -858,27 +868,86 @@ def RemoteProfileDisplay(request, fqid):
         )
 
     for entry in raw_entries:
+        print("RAW REMOTE ENTRY ID:", entry.get("id"))
+
         if entry.get("visibility") != "PUBLIC":
             continue
 
         clean_id = (entry.get("id") or "").rstrip("/")
+        print("CLEAN REMOTE ENTRY ID:", clean_id)
         if not clean_id:
             continue
         entry["clean_id"] = clean_id
-        # HARDCODED SOLUTION FOR fuchsia
-        if base_host == "https://socialdist-fuchsia-oabbasi-feef8b354ae5.herokuapp.com":
-            remote_comments = entry.get("commentsSrc") or {}
-        else:
-            remote_comments = ((entry.get("comments") or {}).get("src")) or []
+        remote_comments = ((entry.get("comments") or {}).get("src")) or []
 
-        # Fix comment author: remote may return entry author instead of commenter.
-        # If comment author id matches our user, use our local username.
+        if not isinstance(remote_comments, list):
+            remote_comments = []
+
+        # local backup comments that we saved after posting to remote
+        local_comments_qs = Comment.objects.filter(entry=clean_id).order_by("published", "id")
+        print("LOOKUP CLEAN ID:", clean_id)
+        print("LOCAL COMMENTS COUNT:", local_comments_qs.count())
+        for lc in local_comments_qs:
+            print("MATCHED LOCAL COMMENT ID:", lc.id)
+            print("MATCHED LOCAL COMMENT ENTRY:", lc.entry)
+            print("MATCHED LOCAL COMMENT TEXT:", lc.comment)
+
+        local_comments = []
+        for lc in local_comments_qs:
+            author_display = "Unknown"
+            author_url = (lc.author or "").rstrip("/")
+
+            if logged_in_id and user_fqid and _normalize_fqid(author_url) == _normalize_fqid(user_fqid):
+                try:
+                    me = Author.objects.get(id=logged_in_id)
+                    author_display = me.username
+                except Author.DoesNotExist:
+                    author_display = author_url.split("/")[-1] if author_url else "Unknown"
+            else:
+                author_display = author_url.split("/")[-1] if author_url else "Unknown"
+
+            local_comments.append({
+                "type": "comment",
+                "id": str(lc.id).rstrip("/"),
+                "author": {
+                    "id": author_url,
+                    "displayName": author_display,
+                },
+                "comment": lc.comment,
+                "contentType": lc.contentType,
+                "published": lc.published.isoformat() if lc.published else "",
+            })
+
+        # dedupe by comment id first, fallback to (author id + comment text)
+        seen = set()
+        merged_comments = []
+
+        for c in remote_comments + local_comments:
+            if not isinstance(c, dict):
+                continue
+
+            c_id = str(c.get("id") or "").rstrip("/")
+            c_author = c.get("author") or {}
+            if isinstance(c_author, dict):
+                c_author_id = str(c_author.get("id") or "").rstrip("/")
+            else:
+                c_author_id = str(c_author or "").rstrip("/")
+
+            c_text = str(c.get("comment") or "").strip()
+
+            key = c_id if c_id else f"{c_author_id}::{c_text}"
+            if key in seen:
+                continue
+            seen.add(key)
+            merged_comments.append(c)
+
+        # Fix comment author display for current local user
         if logged_in_id and user_fqid:
             try:
                 me = Author.objects.get(id=logged_in_id)
                 my_display = me.username
 
-                for c in remote_comments:
+                for c in merged_comments:
                     if not isinstance(c, dict):
                         continue
 
@@ -888,7 +957,7 @@ def RemoteProfileDisplay(request, fqid):
                     else:
                         cid = str(auth or "").rstrip("/")
 
-                    cid_tail = cid.rstrip("/").split("/")[-1] if cid else ""
+                    cid_tail = cid.split("/")[-1] if cid else ""
                     user_tail = user_fqid.rstrip("/").split("/")[-1] if user_fqid else ""
 
                     if cid and (
@@ -903,12 +972,11 @@ def RemoteProfileDisplay(request, fqid):
             except Author.DoesNotExist:
                 pass
 
+        entry["fetched_comments"] = merged_comments
+        entry["comment_count"] = len(merged_comments)
+
         remote_likes_src = (entry.get("likes") or {}).get("src", [])
         remote_like_count = (entry.get("likes") or {}).get("count", 0)
-
-        entry["fetched_comments"] = remote_comments
-        entry["comment_count"] = len(remote_comments)
-
         remote_user_liked = False
         for like in remote_likes_src:
             like_author = (like.get("author") or {}).get("id")
@@ -919,11 +987,7 @@ def RemoteProfileDisplay(request, fqid):
 
         entry["liked_by_user"] = remote_user_liked
 
-        # HARDCODED SOLUTION FOR fuchsia
-        if base_host == "https://socialdist-fuchsia-oabbasi-feef8b354ae5.herokuapp.com":
-            entry["like_count"]  = entry.get("count") or 0
-        else:
-            entry["like_count"] = entry["likes"]["count"]
+        entry["like_count"] = entry["likes"]["count"]
         # Fixes markdown content
         if "markdown" in entry.get("contentType"):
             entry["markdown"] = render_safe_markdown(entry.get("content"))
