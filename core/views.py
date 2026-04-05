@@ -99,6 +99,8 @@ def NodeDisplay(request):
 
             base = node.url.rstrip("/")
             for author in authors:
+                if re.match("https?://[^/]+/",author.get("id")).group(0) != node.url:
+                    continue
                 if not isinstance(author, dict):
                     continue
                 aid = author.get("id")
