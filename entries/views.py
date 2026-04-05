@@ -1054,6 +1054,8 @@ def get_remote_entry(request,fqid):
         if RemoteEntry.objects.filter(fqid = fqid).exists():
             entry = RemoteEntry.objects.filter(fqid = fqid).first()
             entryInfo = entry.raw_payload
+        else:
+            return HttpResponse(status=404)
     else:
         entryInfo = requests.get(fqid.rstrip("/"), auth=(node_credentials.username, node_credentials.password))
         entryInfo.raise_for_status()
