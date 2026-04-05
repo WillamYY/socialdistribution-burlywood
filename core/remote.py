@@ -107,8 +107,14 @@ def fetch_remote_public_entries(following_remote_fqids=None, friends_remote_fqid
             if not isinstance(authors, list):
                 logger.warning("STREAM FETCH authors bad-shape node=%s data=%s", base, str(data)[:200])
                 continue
-
+            print("\n\n\n")
             for author in authors:
+                # Handles being sent more entries then we should
+                print(re.match("https?://[^/]+/",author.get("id")).group(0))
+                print(author.get("id"))
+                print(node.url)
+                if re.match("https?://[^/]+/",author.get("id")).group(0) != node.url:
+                    continue
                 if not isinstance(author, dict):
                     continue
                 author_id_raw = author.get("id")
@@ -126,7 +132,6 @@ def fetch_remote_public_entries(following_remote_fqids=None, friends_remote_fqid
                 author_fqid = _normalize_fqid(author_id_str if author_id_str.startswith("http") else f"{node_base.rstrip('/')}/api/authors/{author_num_id}")
                 include_unlisted = author_fqid in following_normalized
                 include_friends = author_fqid in friends_normalized
-                print(author_fqid)
                 entries_url = f"{node_base}/api/authors/{author_num_id}/entries/"
                 headers = {"Accept": "application/json"}
                 if include_friends and requested_by_fqid:
@@ -169,10 +174,8 @@ def fetch_remote_public_entries(following_remote_fqids=None, friends_remote_fqid
                         elif vis == "UNLISTED" and include_unlisted:
                             pass
                         elif vis == "FRIENDS" and include_friends:
-                            print("FRIEND YOU CAN SEE")
                             pass
                         else:
-                            print("TESTING",)
                             continue
                         eid_raw = item.get("id") or ""
                         eid = _resolve_entry_fqid(node_base, author_num_id, eid_raw)

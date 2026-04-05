@@ -1049,9 +1049,25 @@ def get_remote_entry(request,fqid):
     fqid = fqid.rstrip("/").replace("http://", "https://")
     # Gets the entry
     node_credentials = get_object_or_404(IncomingNode, url=fqid[:index] + "/")
-    entryInfo = requests.get(fqid.rstrip("/"), auth=(node_credentials.username, node_credentials.password))
-    entryInfo.raise_for_status()
-    entry = json.loads(entryInfo.text)
+    # Hardcoded solution
+    if "crimson" in fqid:
+        entry_author_fqid = re.match("https://[^/]+/api/authors/[^/]+",fqid).group(0)
+        entriesInfo = requests.get(entry_author_fqid + "/entries",auth=(node_credentials.username, node_credentials.password))
+        entriesInfo.raise_for_status()
+        entriesInfo = json.loads(entriesInfo.text)
+        fqid_id = re.search("/entries/([^/]+)",fqid).group(0)
+        entry = None
+        for entry_json in entriesInfo.get("src",{}):
+            entry_json_id = re.search("/entries/([^/]+)",entry_json.get("id","")).group(0)
+            if entry_json_id == fqid_id:
+                entry = entry_json
+                break
+        if entry == None:
+            return HttpResponse(status=404)
+    else:
+        entryInfo = requests.get(fqid.rstrip("/"), auth=(node_credentials.username, node_credentials.password))
+        entryInfo.raise_for_status()
+        entry = json.loads(entryInfo.text)
     """
     # Creates the list of allowed things to view
     allowed_visibility = ["PUBLIC","UNLISTED","FRIENDS"]
