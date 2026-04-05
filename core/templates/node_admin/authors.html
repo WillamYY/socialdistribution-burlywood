@@ -37,6 +37,7 @@
             <tr>
               <th>Username</th>
               <th>Name</th>
+              <th>Superuser list</th>
               <th>ID</th>
               <th></th>
             </tr>
@@ -46,6 +47,13 @@
             <tr>
               <td><strong>{{ a.username }}</strong></td>
               <td>{{ a.name|default:"—" }}</td>
+              <td>
+                {% if a.username in super_usernames %}
+                  {% if a.listed_publicly %}<span class="muted">Listed</span>{% else %}<span class="muted">Hidden</span>{% endif %}
+                {% else %}
+                  <span class="muted">Always</span>
+                {% endif %}
+              </td>
               <td class="muted">{{ a.id }}</td>
               <td class="node-admin-table__actions">
                 <a href="{% url 'ProfileDisplay' a.id %}" class="button">View</a>

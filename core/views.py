@@ -10,6 +10,7 @@ from django.contrib.auth import get_user_model
 from django.db import IntegrityError, transaction
 
 from .db_sequence import repair_author_pk_sequence
+from .author_visibility import author_profile_visible_to_viewer, authors_for_public_directory_qs
 from django.urls import reverse, resolve, Resolver404
 from .services import sync_author_github_activity
 from .validators import validate_username, validate_password, validate_github_url
@@ -82,7 +83,7 @@ def NodeDisplay(request):
     """
     Displays all authors in the node.
     """
-    node_authors = Author.objects.all()
+    node_authors = authors_for_public_directory_qs()
     other_node_authors = []
 
     for node in IncomingNode.objects.all():
@@ -160,6 +161,7 @@ def login_view(request):
                         username=username,
                         name=display_name,
                         host=host_default,
+                        listed_publicly=False,
                     )
                     a.set_password(password)
                     a.save()
@@ -349,6 +351,8 @@ def ProfileDisplay(request, id):
     Displays the profile of another user.
     """
     author = get_object_or_404(Author, pk=id)
+    if not author_profile_visible_to_viewer(request, author):
+        raise Http404()
     logged_in_id = request.session.get("author_id")
     is_following = False
     request_sent = False

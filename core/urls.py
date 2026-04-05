@@ -9,6 +9,11 @@ urlpatterns = [
     path("login/", views.login_view, name="Login"),
     path("logout/", views.logout_view, name="Logout"),
     path("node-admin/", node_admin_views.node_admin_dashboard, name="node_admin_dashboard"),
+    path(
+        "node-admin/my-visibility/",
+        node_admin_views.node_admin_set_listed_publicly,
+        name="node_admin_set_listed_publicly",
+    ),
     path("node-admin/signups/", node_admin_views.node_admin_signups, name="node_admin_signups"),
     path(
         "node-admin/signups/<int:pk>/approve/",

@@ -14,6 +14,23 @@
     {% include 'node_admin/_nav.html' with active='dash' %}
     {% include 'node_admin/_messages.html' %}
 
+    {% if admin_is_superuser_author %}
+    <section class="card node-admin-visibility-card" style="padding:18px 20px;margin-bottom:20px;">
+      <h2 class="node-admin-h2" style="margin-top:0;">Superuser visibility on this node</h2>
+      <p class="muted" style="margin:0 0 14px;font-size:0.9rem;">
+        This setting applies only to your <strong>Django superuser</strong> author (same username as <code>/admin/</code>). Regular authors are always listed. Choose whether <em>this</em> account appears on <strong>Home</strong> and in <code>/api/authors/</code> for other people and remote nodes. Hiding does not affect Node admin or your own session.
+      </p>
+      <form method="post" action="{% url 'node_admin_set_listed_publicly' %}" class="form-stack" style="gap:12px;">
+        {% csrf_token %}
+        <label class="node-admin-checkbox-label">
+          <input type="checkbox" name="listed_publicly" value="1" {% if admin_author.listed_publicly %}checked{% endif %}>
+          List my superuser account on Home and in the public author API
+        </label>
+        <button type="submit" class="button success">Save visibility</button>
+      </form>
+    </section>
+    {% endif %}
+
     <div class="node-admin-stats">
       <div class="node-admin-stat card">
         <span class="node-admin-stat__val">{{ author_count }}</span>
