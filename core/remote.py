@@ -107,9 +107,12 @@ def fetch_remote_public_entries(following_remote_fqids=None, friends_remote_fqid
             if not isinstance(authors, list):
                 logger.warning("STREAM FETCH authors bad-shape node=%s data=%s", base, str(data)[:200])
                 continue
-
+            print("/n/n/n")
             for author in authors:
                 # Handles being sent more entries then we should
+                print(re.match("https?://[^/]+/",author.get("id")).group(0))
+                print(author.get("id"))
+                print(node.url)
                 if re.match("https?://[^/]+/",author.get("id")).group(0) != node.url:
                     pass
                 if not isinstance(author, dict):
