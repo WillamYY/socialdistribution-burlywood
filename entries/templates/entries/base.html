@@ -33,6 +33,12 @@
             </a>
             {% if request.session.author_id %}
             <a href="{% url 'create_entry' %}" class="shell-rail__create">＋ New post</a>
+            {% if is_node_admin %}
+            <a href="{% url 'node_admin_dashboard' %}" class="shell-rail__link{% if request.resolver_match.url_name and 'node_admin' in request.resolver_match.url_name %} shell-rail__link--active{% endif %}">
+                <span class="shell-rail__emoji" aria-hidden="true">⚙</span>
+                <span>Admin</span>
+            </a>
+            {% endif %}
             <a href="{% url 'ProfileView' %}" class="shell-rail__link{% if url_name == 'ProfileView' or url_name == 'EditProfileView' %} shell-rail__link--active{% endif %}">
                 <span class="shell-rail__emoji" aria-hidden="true">☺</span>
                 <span>Profile</span>

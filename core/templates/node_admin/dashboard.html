@@ -1,0 +1,46 @@
+{% extends 'entries/base.html' %}
+
+{% block body_extra_class %}shell-wide{% endblock %}
+
+{% block title %}Node admin{% endblock %}
+
+{% block content %}
+<div class="page authors-directory-page">
+  <div class="card authors-home-card">
+    <header class="authors-home-header">
+      <h1 class="authors-home-title">Node admin</h1>
+      <p class="muted authors-home-lead">Manage authors, signups, posts, and federation nodes. Requires Django superuser login.</p>
+    </header>
+    {% include 'node_admin/_nav.html' with active='dash' %}
+    {% include 'node_admin/_messages.html' %}
+
+    <div class="node-admin-stats">
+      <div class="node-admin-stat card">
+        <span class="node-admin-stat__val">{{ author_count }}</span>
+        <span class="node-admin-stat__label">Authors</span>
+        <a href="{% url 'node_admin_authors' %}" class="button">Manage</a>
+      </div>
+      <div class="node-admin-stat card">
+        <span class="node-admin-stat__val">{{ pending_signups }}</span>
+        <span class="node-admin-stat__label">Pending signups</span>
+        <a href="{% url 'node_admin_signups' %}" class="button">Review</a>
+      </div>
+      <div class="node-admin-stat card">
+        <span class="node-admin-stat__val">{{ entry_count }}</span>
+        <span class="node-admin-stat__label">Posts (non-deleted)</span>
+        <a href="{% url 'node_admin_entries' %}" class="button">Manage</a>
+      </div>
+      <div class="node-admin-stat card">
+        <span class="node-admin-stat__val">{{ incoming_count }}</span>
+        <span class="node-admin-stat__label">Incoming nodes</span>
+        <a href="{% url 'node_admin_incoming_nodes' %}" class="button">Manage</a>
+      </div>
+      <div class="node-admin-stat card">
+        <span class="node-admin-stat__val">{{ outgoing_count }}</span>
+        <span class="node-admin-stat__label">Outgoing nodes</span>
+        <a href="{% url 'node_admin_outgoing_nodes' %}" class="button">Manage</a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,54 @@
+{% extends 'entries/base.html' %}
+
+{% block body_extra_class %}shell-wide{% endblock %}
+
+{% block title %}Pending signups · Node admin{% endblock %}
+
+{% block content %}
+<div class="page authors-directory-page">
+  <div class="card authors-home-card">
+    <header class="authors-home-header">
+      <h1 class="authors-home-title">Pending signups</h1>
+      <p class="muted authors-home-lead">Approve to create an author account, or reject to discard the request.</p>
+    </header>
+    {% include 'node_admin/_nav.html' with active='signups' %}
+    {% include 'node_admin/_messages.html' %}
+
+    {% if requests %}
+    <div class="node-admin-table-wrap">
+      <table class="node-admin-table">
+        <thead>
+          <tr>
+            <th>Username</th>
+            <th>Name</th>
+            <th>Host</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in requests %}
+          <tr>
+            <td><strong>{{ r.username }}</strong></td>
+            <td>{{ r.name }}</td>
+            <td class="muted">{{ r.host|default:"—" }}</td>
+            <td class="node-admin-table__actions">
+              <form method="post" action="{% url 'node_admin_signup_approve' r.pk %}" style="display:inline;">
+                {% csrf_token %}
+                <button type="submit" class="button success">Approve</button>
+              </form>
+              <form method="post" action="{% url 'node_admin_signup_reject' r.pk %}" style="display:inline;" onsubmit="return confirm('Reject this signup?');">
+                {% csrf_token %}
+                <button type="submit" class="button">Reject</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="muted">No pending signup requests.</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

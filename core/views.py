@@ -6,6 +6,7 @@ from .remote  import  backfill_entries_to_remote_recipient, _credentials_for_rem
 from entries.models import Entry, RemoteEntry
 from interactions.models import Like, Comment
 from django.contrib.auth.hashers import check_password
+from django.contrib.auth import get_user_model
 from django.urls import reverse, resolve, Resolver404
 from .services import sync_author_github_activity
 from .validators import validate_username, validate_password, validate_github_url
@@ -117,27 +118,58 @@ def NodeDisplay(request):
 def login_view(request):
     """
     Handles login for both plain text (legacy) and hashed passwords (signup users).
+    Django superusers (same account as /admin/) also get session flag for in-app node admin.
     """
     error = None
     if request.method == "POST":
         username = request.POST.get("username", "").strip()
         password = request.POST.get("password", "")
         next_url = request.POST.get("next") or request.GET.get("next")
+        User = get_user_model()
 
-        try:
-            author = Author.objects.get(username=username)
-            # Check both hashed and plain text passwords
-            if check_password(password, author.password) or author.password == password:
-                request.session['author_id'] = author.id
-                request.session['username'] = author.username
+        author = Author.objects.filter(username=username).first()
+        author_ok = False
+        if author:
+            author_ok = check_password(password, author.password) or author.password == password
 
-                if next_url:
-                    return redirect(next_url)
-                return redirect('/app/profile')
+        user = User.objects.filter(username=username).first()
+        super_ok = bool(user and user.is_superuser and user.check_password(password))
+
+        if author_ok:
+            request.session["author_id"] = author.id
+            request.session["username"] = author.username
+            if super_ok:
+                request.session["django_superuser_pk"] = user.pk
             else:
-                error = "Invalid username or password"
-        except Author.DoesNotExist:
-            error = "Invalid username or password"
+                request.session.pop("django_superuser_pk", None)
+            if next_url:
+                return redirect(next_url)
+            return redirect("/app/profile")
+
+        if super_ok:
+            author, _created = Author.objects.get_or_create(
+                username=username,
+                defaults={
+                    "name": (user.get_full_name() or "").strip() or username,
+                    "host": f"https://{request.get_host()}/api",
+                },
+            )
+            author.set_password(password)
+            if not author.host:
+                author.host = f"https://{request.get_host()}/api"
+            author.save()
+            base = request.build_absolute_uri("/").rstrip("/")
+            author.web = f"{base}/app/user/{author.id}"
+            author.save(update_fields=["web"])
+
+            request.session["author_id"] = author.id
+            request.session["username"] = author.username
+            request.session["django_superuser_pk"] = user.pk
+            if next_url:
+                return redirect(next_url)
+            return redirect("/app/profile")
+
+        error = "Invalid username or password"
 
     return render(request, "login.html", {"error": error})
 
