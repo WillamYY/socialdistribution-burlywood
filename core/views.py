@@ -7,6 +7,9 @@ from entries.models import Entry, RemoteEntry
 from interactions.models import Like, Comment
 from django.contrib.auth.hashers import check_password
 from django.contrib.auth import get_user_model
+from django.db import IntegrityError, transaction
+
+from .db_sequence import repair_author_pk_sequence
 from django.urls import reverse, resolve, Resolver404
 from .services import sync_author_github_activity
 from .validators import validate_username, validate_password, validate_github_url
@@ -147,17 +150,42 @@ def login_view(request):
             return redirect("/app/profile")
 
         if super_ok:
-            author, _created = Author.objects.get_or_create(
-                username=username,
-                defaults={
-                    "name": (user.get_full_name() or "").strip() or username,
-                    "host": f"https://{request.get_host()}/api",
-                },
-            )
-            author.set_password(password)
-            if not author.host:
-                author.host = f"https://{request.get_host()}/api"
-            author.save()
+            author = Author.objects.filter(username=username).first()
+            host_default = f"https://{request.get_host()}/api"
+            display_name = (user.get_full_name() or "").strip() or username
+
+            if author is None:
+                def _create_superuser_author():
+                    a = Author(
+                        username=username,
+                        name=display_name,
+                        host=host_default,
+                    )
+                    a.set_password(password)
+                    a.save()
+                    return a
+
+                try:
+                    with transaction.atomic():
+                        author = _create_superuser_author()
+                except IntegrityError:
+                    repair_author_pk_sequence()
+                    author = Author.objects.filter(username=username).first()
+                    if author is None:
+                        try:
+                            with transaction.atomic():
+                                author = _create_superuser_author()
+                        except IntegrityError:
+                            author = Author.objects.filter(username=username).first()
+                if author is None:
+                    error = "Could not create your author profile (database conflict). Try again in a moment."
+                    return render(request, "login.html", {"error": error})
+            else:
+                author.set_password(password)
+                if not author.host:
+                    author.host = host_default
+                author.save()
+
             base = request.build_absolute_uri("/").rstrip("/")
             author.web = f"{base}/app/user/{author.id}"
             author.save(update_fields=["web"])
