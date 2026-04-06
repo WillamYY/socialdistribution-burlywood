@@ -22,6 +22,11 @@ class Author(models.Model):
 
     host = models.URLField(blank=True)
     web = models.URLField(blank=True)
+    # False: hidden from Home author list and GET /api/authors/ (federation discovery).
+    listed_publicly = models.BooleanField(
+        default=True,
+        help_text="Only used when username matches a Django superuser: if false, omit from Home and /api/authors/.",
+    )
 
     def __str__(self):
         return self.username

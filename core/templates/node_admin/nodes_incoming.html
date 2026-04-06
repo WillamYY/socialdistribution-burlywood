@@ -1,0 +1,65 @@
+{% extends 'entries/base.html' %}
+
+{% block body_extra_class %}shell-wide{% endblock %}
+
+{% block title %}Incoming nodes · Node admin{% endblock %}
+
+{% block content %}
+<div class="page authors-directory-page">
+  <div class="card authors-home-card">
+    <header class="authors-home-header">
+      <h1 class="authors-home-title">Incoming nodes</h1>
+      <p class="muted authors-home-lead">Nodes we fetch from (URL must end with <code>/</code>, e.g. <code>https://team.herokuapp.com/</code>).</p>
+    </header>
+    {% include 'node_admin/_nav.html' with active='incoming' %}
+    {% include 'node_admin/_messages.html' %}
+
+    <section class="node-admin-section">
+      <h2 class="node-admin-h2">Add incoming node</h2>
+      <form method="post" class="form-stack card" style="padding:20px;">
+        {% csrf_token %}
+        <label for="in_url">Base URL</label>
+        <input id="in_url" name="url" type="url" required placeholder="https://example.com/">
+        <label for="in_user">HTTP basic username</label>
+        <input id="in_user" name="username" type="text">
+        <label for="in_pass">HTTP basic password</label>
+        <input id="in_pass" name="password" type="password" required>
+        <button type="submit" class="button success">Add</button>
+      </form>
+    </section>
+
+    <section class="node-admin-section">
+      <h2 class="node-admin-h2">Registered</h2>
+      {% if nodes %}
+      <div class="node-admin-table-wrap">
+        <table class="node-admin-table">
+          <thead>
+            <tr>
+              <th>URL</th>
+              <th>Username</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for n in nodes %}
+            <tr>
+              <td><code style="font-size:0.85rem;">{{ n.url }}</code></td>
+              <td>{{ n.username|default:"—" }}</td>
+              <td>
+                <form method="post" action="{% url 'node_admin_incoming_delete' n.pk %}" style="display:inline;" onsubmit="return confirm('Remove this node?');">
+                  {% csrf_token %}
+                  <button type="submit" class="button">Remove</button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="muted">No incoming nodes.</p>
+      {% endif %}
+    </section>
+  </div>
+</div>
+{% endblock %}
