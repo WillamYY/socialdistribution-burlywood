@@ -121,6 +121,8 @@ def NodeDisplay(request):
 
             base = node.url.rstrip("/")
             for author in authors:
+                if re.match("https?://[^/]+/",author.get("id")).group(0) != node.url:
+                    continue
                 if not isinstance(author, dict):
                     continue
                 aid = author.get("id")
@@ -899,11 +901,7 @@ def RemoteProfileDisplay(request, fqid):
         if not clean_id:
             continue
         entry["clean_id"] = clean_id
-        # HARDCODED SOLUTION FOR fuchsia
-        if base_host == "https://socialdist-fuchsia-oabbasi-feef8b354ae5.herokuapp.com":
-            remote_comments = entry.get("commentsSrc") or []
-        else:
-            remote_comments = ((entry.get("comments") or {}).get("src")) or []
+        remote_comments = ((entry.get("comments") or {}).get("src")) or []
 
         if not isinstance(remote_comments, list):
             remote_comments = []
@@ -1017,11 +1015,7 @@ def RemoteProfileDisplay(request, fqid):
 
         entry["liked_by_user"] = remote_user_liked
 
-        # HARDCODED SOLUTION FOR fuchsia
-        if base_host == "https://socialdist-fuchsia-oabbasi-feef8b354ae5.herokuapp.com":
-            entry["like_count"]  = entry.get("count") or 0
-        else:
-            entry["like_count"] = entry["likes"]["count"]
+        entry["like_count"] = entry["likes"]["count"]
         # Fixes markdown content
         if "markdown" in entry.get("contentType"):
             entry["markdown"] = render_safe_markdown(entry.get("content"))

@@ -619,14 +619,14 @@ def stream_view(request):
             _stored_remote_entry_to_stream_obj(remote_entry, viewer_fqid=viewer_fqid)
         )
     
-    """
+    
     # Truly live-fetched remote entries
     remote_entries = fetch_remote_public_entries(
         following_remote_fqids=following_remote_fqids,
         friends_remote_fqids=friends_remote_fqids,
         requested_by_fqid=viewer_fqid,
     )
-    """
+    
     
     # Combine and sort by published (newest first)
     def _sort_key(entry):
@@ -637,7 +637,7 @@ def stream_view(request):
     
     # Keep both stored remote entries and live-fetched entries for temporary transition
     # Prefer the former over the latter
-    combined_entries = local_entries + stored_remote_entries #+ remote_entries
+    combined_entries = local_entries + stored_remote_entries + remote_entries
     
     live_remote_duped = 0
     seen_remote_ids = set()
@@ -686,6 +686,10 @@ def stream_view(request):
             # Handles turning content into markdown
             if "markdown" in entry.contentType:
                 entry.markdown = render_safe_markdown(entry.content)
+            # Handles an image being stored in wrong way
+            if hasattr(entry,"image"):
+                entry.contentType = "image"
+                entry.content = getattr(entry,"image")
             continue
 
         # If local, check local interactoins
@@ -1029,9 +1033,9 @@ Handles displaying the page for remote entries
 """
 def get_remote_entry(request,fqid):
     # Handles hardcoded solutions variables
-    fuschia = False
+    fuchsia = False
     if re.match("https?://[^/]*fuchsia[^/]*",fqid):
-        fuschia = True
+        fuchsia = True
     # Queries to find the correct fqid (Handles being sent distorted fqid)
     fqid = re.search("https?://[^/]+/api/authors/[^/]+/entries/[^/]+",fqid).group(0)
     fqid = fqid.rstrip("/").replace("http://", "https://")
@@ -1045,9 +1049,25 @@ def get_remote_entry(request,fqid):
     fqid = fqid.rstrip("/").replace("http://", "https://")
     # Gets the entry
     node_credentials = get_object_or_404(IncomingNode, url=fqid[:index] + "/")
-    entryInfo = requests.get(fqid.rstrip("/"), auth=(node_credentials.username, node_credentials.password))
-    entryInfo.raise_for_status()
-    entry = json.loads(entryInfo.text)
+    # Hardcoded solution
+    if "crimson" in fqid:
+        entry_author_fqid = re.match("https://[^/]+/api/authors/[^/]+",fqid).group(0)
+        entriesInfo = requests.get(entry_author_fqid + "/entries",auth=(node_credentials.username, node_credentials.password))
+        entriesInfo.raise_for_status()
+        entriesInfo = json.loads(entriesInfo.text)
+        fqid_id = re.search("/entries/([^/]+)",fqid).group(0)
+        entry = None
+        for entry_json in entriesInfo.get("src",{}):
+            entry_json_id = re.search("/entries/([^/]+)",entry_json.get("id","")).group(0)
+            if entry_json_id == fqid_id:
+                entry = entry_json
+                break
+        if entry == None:
+            return HttpResponse(status=404)
+    else:
+        entryInfo = requests.get(fqid.rstrip("/"), auth=(node_credentials.username, node_credentials.password))
+        entryInfo.raise_for_status()
+        entry = json.loads(entryInfo.text)
     """
     # Creates the list of allowed things to view
     allowed_visibility = ["PUBLIC","UNLISTED","FRIENDS"]
@@ -1067,11 +1087,12 @@ def get_remote_entry(request,fqid):
     """
     allowed = True
     comments = []
+    """
     # HARDCODE SOLUTION FOR fuschia
     if fuschia:
         entry["comments"] = {}
         entry["comments"]["src"] = entry.get("commentsSrc", {})
-    # END HARDCODED SOLUTION
+    """
     entry_comments = entry.get("comments", {}).get("src") or []
 
     def _incoming_node_for_comment_host(host_base_raw):
@@ -1137,12 +1158,20 @@ def get_remote_entry(request,fqid):
     # Handles Markdown
     if "markdown" in entry.get("contentType"):
         entry["markdown"] = render_safe_markdown(entry.get("content"))
-    # HARCODED SOLUTION FOR fuschia
-    if fuschia:
-        entry["like_count"] = entry.get("count", 0)
-    else:
-        likes_obj = entry.get("likes") or {}
-        entry["like_count"] = likes_obj.get("count", 0)
+    # Handles an image being stored in wrong way
+    if entry.get("image",'') != '':
+        entry["contentType"] = "image"
+        entry["content"] = entry.get("image")
+    # Handles special check for image from fuchsia
+    if fuchsia:
+        # Gets the entry id for fuchsia
+        entry_id = re.search("/entries/([^/]+)",fqid).group(1)
+        if RemoteEntry.objects.filter(fqid__endswith = entry_id).exists():
+            remote_entry = RemoteEntry.objects.filter(fqid__endswith = entry_id).first()
+            entry["content"] = remote_entry.content
+    # Handles getting likes
+    likes_obj = entry.get("likes") or {}
+    entry["like_count"] = likes_obj.get("count", 0)
     base_url = request.build_absolute_uri("/")[:-1]
     entry_fqid_for_like = (entry.get("id") or fqid).strip().rstrip("/")
     user_fqid_remote = f"{base_url}/api/authors/{logged_in_id}" if logged_in_id else None
