@@ -18,6 +18,7 @@ from rest_framework.response import Response
 from core.authentication import NodeBasicAuthentication
 from core.remote import federate_entry_create_or_update, federate_entry_deleted
 from core.models import Author, AuthorRequest, FollowRequest, RemoteFollower, RemoteFollow, IncomingNode
+from core.author_visibility import authors_for_public_directory_qs
 from entries.models import Entry, RemoteEntry
 from interactions.models import Like, Comment
 from .serializers import AuthorSerializer, LikesSerializer, LikeSerializer, EntrySerializer, EntriesSerializer, CommentSerializer
@@ -264,7 +265,7 @@ def ApiAuthors(request):
     if request.GET.get("size") and request.GET.get("size").isdigit():
         size = int(request.GET.get("size"))
 
-    allAuthors = Author.objects.all()
+    allAuthors = authors_for_public_directory_qs()
     authors = []
     base_url = request.build_absolute_uri("/api/").rstrip("/")
     for author in allAuthors:

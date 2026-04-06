@@ -1062,3 +1062,172 @@ body.app-shell-social .author-tile__cta {
   color: var(--shell-accent);
 }
 
+/* ——— In-app node admin (superuser) ——— */
+body.app-shell-social .node-admin-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+body.app-shell-social .node-admin-nav__link {
+  padding: 8px 14px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #5c5c66;
+  background: #f2f2f5;
+  border: 1px solid #e4e4ea;
+  border-radius: 10px;
+  text-decoration: none;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+body.app-shell-social .node-admin-nav__link:hover {
+  background: #eaeaf0;
+  color: #0a0a0b;
+}
+
+body.app-shell-social .node-admin-nav__link--active {
+  background: linear-gradient(135deg, rgba(254, 44, 85, 0.12), rgba(255, 152, 0, 0.1));
+  border-color: rgba(254, 44, 85, 0.35);
+  color: #0a0a0b;
+}
+
+body.app-shell-social .node-admin-msgs {
+  margin-bottom: 16px;
+}
+
+body.app-shell-social .node-admin-msg {
+  margin: 0 0 8px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 0.9rem;
+  background: #f0f4ff;
+  border: 1px solid #c7d6ff;
+  color: #1e3a5f;
+}
+
+body.app-shell-social .node-admin-msg--error,
+body.app-shell-social .node-admin-msg--danger {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #7f1d1d;
+}
+
+body.app-shell-social .node-admin-msg--success {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+  color: #064e3b;
+}
+
+body.app-shell-social .node-admin-stats {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+@media (min-width: 560px) {
+  body.app-shell-social .node-admin-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 900px) {
+  body.app-shell-social .node-admin-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+body.app-shell-social .node-admin-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 16px 18px;
+}
+
+body.app-shell-social .node-admin-stat__val {
+  font-family: var(--shell-font-display);
+  font-size: 1.75rem;
+  font-weight: 800;
+  color: #0a0a0b;
+}
+
+body.app-shell-social .node-admin-stat__label {
+  font-size: 0.85rem;
+  color: #6b6b76;
+}
+
+body.app-shell-social .node-admin-section {
+  margin-top: 28px;
+}
+
+body.app-shell-social .node-admin-h2 {
+  margin: 0 0 12px;
+  font-size: 1rem;
+  font-weight: 800;
+  color: #2a2a30;
+}
+
+body.app-shell-social .node-admin-table-wrap {
+  overflow-x: auto;
+  border-radius: 14px;
+  border: 1px solid #e8e8ee;
+  background: #fafafb;
+}
+
+body.app-shell-social .node-admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+body.app-shell-social .node-admin-table th,
+body.app-shell-social .node-admin-table td {
+  padding: 12px 14px;
+  text-align: left;
+  border-bottom: 1px solid #ececf0;
+}
+
+body.app-shell-social .node-admin-table th {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #6b6b76;
+  background: #f4f4f7;
+}
+
+body.app-shell-social .node-admin-table tr:last-child td {
+  border-bottom: none;
+}
+
+body.app-shell-social .node-admin-table__actions {
+  white-space: nowrap;
+}
+
+body.app-shell-social .node-admin-table__actions form {
+  margin-left: 6px;
+}
+
+body.app-shell-social .node-admin-table__actions .button {
+  font-size: 0.78rem;
+  padding: 6px 12px;
+}
+
+body.app-shell-social .node-admin-checkbox-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: #2a2a30;
+  cursor: pointer;
+}
+
+body.app-shell-social .node-admin-checkbox-label input {
+  margin-top: 3px;
+  flex-shrink: 0;
+}
+

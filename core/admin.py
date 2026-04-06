@@ -10,8 +10,8 @@ import re
 
 @admin.register(Author)
 class AuthorAdmin(admin.ModelAdmin):
-    list_display = ('username', 'name', 'github')  # columns in list
-    search_fields = ('username', 'name')          # search box
+    list_display = ('username', 'name', 'github')
+    search_fields = ('username', 'name')
 
 @admin.register(AuthorRequest)
 class AuthorRequestAdmin(admin.ModelAdmin):
