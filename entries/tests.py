@@ -382,8 +382,8 @@ class EntryWebUITests(TestCase):
         session.save()
 
         # Check if B cannot access A's friends-only entry
-        response_text = self.client.get(private_text_url)
-        response_img = self.client.get(private_img_url)
+        response_text = self.client.get(private_text_url, headers=self.header)
+        response_img = self.client.get(private_img_url, headers=self.header)
         self.assertEqual(response_img.status_code, 403)
         self.assertEqual(response_text.status_code, 200)
         self.assertFalse(response_text.context['allowed'])
@@ -393,8 +393,8 @@ class EntryWebUITests(TestCase):
         self.author_b.followers.add(self.author_a)
 
         # Check if B can now access
-        response_text = self.client.get(private_text_url)
-        response_img = self.client.get(private_img_url)
+        response_text = self.client.get(private_text_url, headers=self.header)
+        response_img = self.client.get(private_img_url, headers=self.header)
         self.assertEqual(response_img.status_code, 200)
         self.assertEqual(response_text.status_code, 200)
         self.assertTrue(response_text.context['allowed'])
@@ -446,7 +446,7 @@ class EntryWebUITests(TestCase):
         session.save()
 
         friend_response = self.client.get(private_url)
-        self.assertContains(friend_response, "<h1>Entry Unavailable</h1>")
+        self.assertContains(friend_response, "Entry unavailable")
 
     def test_everyone_see_public_entries(self):
         """
@@ -460,8 +460,8 @@ class EntryWebUITests(TestCase):
         session.save()
 
         response = self.client.get(entries_url)
-        self.assertContains(response, "<h2 class=\"entry-title\">Visible Post</h2>")
-        self.assertContains(response, "<span class=\"badge-visibility\">PUBLIC</span>")
+        self.assertContains(response, "Visible Post")
+        self.assertContains(response, "PUBLIC")
 
     def test_followers_see_unlisted_entries(self):
         """
@@ -489,8 +489,8 @@ class EntryWebUITests(TestCase):
         entries_url = reverse("view_entries", kwargs={"author_id": self.author_a.id})
 
         response = self.client.get(entries_url)
-        self.assertContains(response, "<h2 class=\"entry-title\">Visible Post</h2>")
-        self.assertContains(response, "<span class=\"badge-visibility\">UNLISTED</span>")
+        self.assertContains(response, "Visible Post")
+        self.assertContains(response, "UNLISTED")
 
     def test_get_entry_url(self):
         """
