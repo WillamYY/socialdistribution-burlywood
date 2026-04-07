@@ -644,6 +644,7 @@ def _inbox_handle_comment(request, author_id, data=None):
 
 def _inbox_handle_entry(request, author_id, data=None):
     """Handle incoming entry: store for stream (basic support)."""
+    print("HANDLING INBOX ENTRY")
     data = data or request.data or {}
     recipient = get_object_or_404(Author, id=author_id)
     # Check entry FQID
@@ -654,7 +655,8 @@ def _inbox_handle_entry(request, author_id, data=None):
             author_id,
         )
         return Response({"detail": "Missing entry id"}, status=400)
-    
+    print(f"FQID {fqid}")
+
     # Check author FQID
     author_data = data.get("author") or {}
     remote_author_info = _extract_remote_author_info(author_data)
@@ -665,6 +667,7 @@ def _inbox_handle_entry(request, author_id, data=None):
             fqid,
         )
         return Response({"detail": "Missing author id"}, status=400)
+    print(f"AUTHOR DATA {author_data}")
     
     # Extract the universal fields
     content_type = data.get("contentType") or "text/plain"
@@ -678,6 +681,7 @@ def _inbox_handle_entry(request, author_id, data=None):
         
     content = data.get("content") or ""
     content_raw = content if content_type in {"text/plain", "text/markdown"} else None
+    print(f"CONTENT_RAW {content_raw}")
     
     defaults = {
         "web": _normalize_remote_url(data.get("web")),
@@ -697,6 +701,8 @@ def _inbox_handle_entry(request, author_id, data=None):
         fqid=fqid,
         defaults=defaults,
     )
+    print(f"REMOTE ENTRY: {remote_entry}")
+
     logger.info(
         "Inbox remote entry %s: recipient=%s fqid=%s author=%s",
         "created" if created else "updated",
@@ -1290,6 +1296,13 @@ def ApiAddComment(request, author_id, entry_id):
     serializer = CommentSerializer(new_comment)
     return Response(serializer.data, status=201)
 
+@api_view(["GET"])
+def ApiCommentsFqid(request, comment_fqid):
+    url = request.build_absolute_uri()
+    entry_fqid = url[:url.index("/comments")]
+    comment = get_object_or_404(id=comment_fqid, object=entry_fqid)
+    return Response(CommentSerializer(comment).data)
+
 @api_view(['GET'])
 def ApiBrowsePublicEntries(request):
     """
@@ -1333,3 +1346,66 @@ def ApiCommented(request,author_id,comment_id):
     comment = get_object_or_404(Comment,id = author_fqid + "/commented/" + str(comment_id))
     comment_serializer = CommentSerializer(comment)
     return Response(comment_serializer.data)
+
+@api_view(["GET", "POST"])
+def ApiAuthorCommented(request, author_id):
+    if request.method == "GET":
+        if request.GET.get("page_number") and request.GET.get("page_number").isnumeric():
+            if int(request.GET.get("page_number")) > 0:
+                page_number = int(request.GET.get("page_number"))
+            else:
+                page_number = 1
+        else:
+            page_number = 1
+        if request.GET.get("size") and request.GET.get("size").isnumeric():
+            if int(request.GET.get("size")) > 0:
+                size = int(request.GET.get("size"))
+            else:
+                size = 5
+        else:
+            size = 5
+
+        author = get_object_or_404(Author, id = author_id)
+        author_fqid = author.host + "/authors/" + str(author.id)
+
+        comments = Comment.objects.filter(author = author_fqid)
+        start = (page_number - 1) * size
+        end = start + size
+        res = comments[start:end]
+        return Response([CommentSerializer(comment).data for comment in res])
+
+    elif request.method == "POST":
+        if request.data.get("type", None) != "comment":
+            return Response(status=400)
+        try:
+            entry = request.data.get("entry")
+            host = entry[:entry.index("/api")] + "/"
+            author_fqid = entry[:entry.index("/entries/")]
+        except:
+            return Response(status=400)
+        credentials = get_object_or_404(host)
+        response = requests.post(f"{author_fqid}/inbox", data=request.data, auth=(credentials.username, credentials.password))
+        response.raise_for_status()
+        return Response(status=201)
+
+@api_view(["GET"])
+def ApiAuthorFqidCommented(request, author_fqid):
+    comments = Comment.objects.filter(author = author_fqid)
+    return Response([CommentSerializer(comment).data for comment in comments])
+
+@api_view(["GET"])
+def ApiCommentFqid(request, comment_fqid):
+    try:
+        host = comment_fqid[:comment_fqid.index("/api")] + "/"
+    except:
+        return Response(status=400)
+    local_endpoint = request.build_absolute_uri()
+    local_host = local_endpoint[:local_endpoint.index("/api")] + "/"
+
+    if local_host == host:
+        response = requests.get(comment_fqid, headers={"Accept": "application/json"})
+    else:
+        credentials = get_object_or_404(IncomingNode, url=host)
+        response = requests.get(comment_fqid, headers={"Accept": "application/json"}, auth=(credentials.username, credentials.password))
+    response.raise_for_status()
+    return Response(response.content)

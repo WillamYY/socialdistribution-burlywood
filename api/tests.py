@@ -1052,7 +1052,8 @@ class CommentApiTest(TestCase):
                 "author": f"http://testserver/authors/{self.author.id}",
                 "comment": "Nice post!"
             },
-            format="json"
+            format="json",
+            headers=self.header
         )
 
         self.assertEqual(response.status_code, 201)
@@ -1112,7 +1113,8 @@ class CommentApiTest(TestCase):
                 "author": f"http://testserver/authors/{self.author.id}",
                 "comment": "Invalid"
             },
-            format="json"
+            format="json",
+            headers=self.header
         )
 
         self.assertEqual(response.status_code, 404)
@@ -1683,7 +1685,7 @@ class APIObjectsTest(APITestCase):
             name = "name1",
             description = "description1",
             github = "github1",
-            host = f"https://localhost:8000/",
+            host = f"http://testserver/",
         )
 
         author2 = Author.objects.create(
@@ -1692,12 +1694,12 @@ class APIObjectsTest(APITestCase):
             name = "name2",
             description = "description2",
             github = "github2",
-            host = f"https://localhost:8000/"
+            host = f"http://testserver/"
         )
 
         author2.followers.add(author1)
 
-        author1_fqid = f"{author1.host}/api/authors/{author1.id}"
+        author1_fqid = f"{author1.host}api/authors/{author1.id}"
         response = self.client.get(reverse("api-follower-detail", kwargs = {"author_id": author2.id, "foreign_author_fqid": author1_fqid}), headers=self.header)
         self.assertEqual(response.status_code, 200)
 

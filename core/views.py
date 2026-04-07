@@ -735,101 +735,100 @@ def follow_remote_author(request, fqid):
         messages.error(request, "Invalid author.")
         return redirect(request.META.get("HTTP_REFERER", "/"))
 
-    if RemoteFollow.objects.filter(follower=me, followed_fqid=normalized).exists():
+    """ if RemoteFollow.objects.filter(follower=me, followed_fqid=normalized).exists():
         messages.info(request, "You are already following this author.")
-    else:
-        try:
-            base = request.build_absolute_uri("/")[:-1]
-            author_base = (me.host or "").strip().rstrip("/") or base
-            if "/api" not in author_base:
-                author_base = f"{author_base.rstrip('/')}/api"
-            if author_base.startswith("http://"):
-                author_base = "https" + author_base[4:]
-            actor_id = f"{author_base}/authors/{me.id}"
-            actor_info = {
-                "type": "author",
-                "id": actor_id,
-                "host": author_base,
-                "displayName": me.name or me.username,
-                "github": me.github or "",
-                "profileImage": getattr(me, "picture_url", None) or "",
-                "web": me.web or "",
-            }
-            object_info = {"type": "author", "id": normalized}
-            inbox_url = f"{normalized.rstrip('/')}/inbox"
-            headers = {
-                "Content-Type": "application/json",
-                "User-Agent": "SocialDistribution/1.0 (+https://github.com/uofa-cmput404/w26-socialdistribution-project-burlywood)",
-            }
-            payload = {"type": "follow", "actor": actor_info, "object": object_info}
+    else: """
+    try:
+        base = request.build_absolute_uri("/")[:-1]
+        author_base = (me.host or "").strip().rstrip("/") or base
+        if "/api" not in author_base:
+            author_base = f"{author_base.rstrip('/')}/api"
+        if author_base.startswith("http://"):
+            author_base = "https" + author_base[4:]
+        actor_id = f"{author_base}/authors/{me.id}"
+        actor_info = {
+            "type": "author",
+            "id": actor_id,
+            "host": author_base,
+            "displayName": me.name or me.username,
+            "github": me.github or "",
+            "profileImage": getattr(me, "picture_url", None) or "",
+            "web": me.web or "",
+        }
+        object_info = {"type": "author", "id": normalized}
+        inbox_url = f"{normalized.rstrip('/')}/inbox"
+        headers = {
+            "Content-Type": "application/json",
+            "User-Agent": "SocialDistribution/1.0 (+https://github.com/uofa-cmput404/w26-socialdistribution-project-burlywood)",
+        }
+        payload = {"type": "follow", "actor": actor_info, "object": object_info}
 
-            auth = _credentials_for_remote_author(normalized)
-            if not auth:
-                messages.error(request, "No node credentials configured for that remote author.")
-                logger.warning("Follow POST: no credentials for %s", normalized)
-                return redirect(request.META.get("HTTP_REFERER", "/"))
+        auth = _credentials_for_remote_author(normalized)
+        if not auth:
+            messages.error(request, "No node credentials configured for that remote author.")
+            logger.warning("Follow POST: no credentials for %s", normalized)
+            return redirect(request.META.get("HTTP_REFERER", "/"))
 
-            logger.info(
-                "Sending follow to inbox url=%s actor=%s object=%s",
-                inbox_url,
-                actor_info.get("id"),
-                normalized,
-            )
-
-            resp = requests.post(
-                inbox_url,
-                json=payload,
-                headers=headers,
-                timeout=15,
-                allow_redirects=False,
-                auth=auth,
-            )
-            logger.info("Follow POST response status=%s url=%s body=%s", resp.status_code, inbox_url, resp.text[:200] if resp.text else "")
-            if resp.status_code in (301, 302, 307, 308):
-                pass
-                """
-                loc = resp.headers.get("Location", "")
-                if loc and loc != inbox_url:
-                    print("\n\n\n")
-                    print(loc[:loc.index("/api")] + "/")
-                    credentials = get_object_or_404(IncomingNode, url = loc[:loc.index("/api")] + "/")
-                    resp = requests.post(loc, json=payload, headers=headers, timeout=15, auth=(credentials.username, credentials.password))
-                """
-            if not RemoteFollow.objects.filter(follower=me, followed_fqid=normalized).exists():
-                RemoteFollow.objects.create(follower=me, followed_fqid=normalized)
-            """ if resp.status_code in (200, 202, 204):
-                RemoteFollow.objects.create(follower=me, followed_fqid=normalized)
-                    redirect_auth = _credentials_for_remote_author(loc)
-                    if not redirect_auth:
-                        redirect_auth = auth
-                    resp = requests.post(
-                        loc,
-                        json=payload,
-                        headers=headers,
-                        timeout=15,
-                        auth=redirect_auth,
-                    )
-
-            if resp.status_code in (200, 202, 204):
-                messages.success(request, "Follow request sent!", extra_tags="follow")
-            else:
-                err_detail = resp.reason or ""
-                try:
-                    err_json = resp.json() if resp.text else {}
-                    err_detail = err_json.get("error") or err_json.get("detail") or err_detail
-                except (ValueError, AttributeError):
-                    if resp.text and not resp.text.strip().startswith("<"):
-                        err_detail = resp.text[:150]
-                if not err_detail:
-                    err_detail = resp.text[:100] if resp.text else "no details"
-                messages.error(
-                    request,
-                    f"Inbox rejected ({resp.status_code}): {err_detail}",
+        logger.info(
+            "Sending follow to inbox url=%s actor=%s object=%s",
+            inbox_url,
+            actor_info.get("id"),
+            normalized,
+        )
+        resp = requests.post(
+            inbox_url,
+            json=payload,
+            headers=headers,
+            timeout=15,
+            allow_redirects=False,
+            auth=auth,
+        )
+        logger.info("Follow POST response status=%s url=%s body=%s", resp.status_code, inbox_url, resp.text[:200] if resp.text else "")
+        if resp.status_code in (301, 302, 307, 308):
+            pass
+            """
+            loc = resp.headers.get("Location", "")
+            if loc and loc != inbox_url:
+                print("\n\n\n")
+                print(loc[:loc.index("/api")] + "/")
+                credentials = get_object_or_404(IncomingNode, url = loc[:loc.index("/api")] + "/")
+                resp = requests.post(loc, json=payload, headers=headers, timeout=15, auth=(credentials.username, credentials.password))
+            """
+        if not RemoteFollow.objects.filter(follower=me, followed_fqid=normalized).exists():
+            RemoteFollow.objects.create(follower=me, followed_fqid=normalized)
+        """ if resp.status_code in (200, 202, 204):
+            RemoteFollow.objects.create(follower=me, followed_fqid=normalized)
+                redirect_auth = _credentials_for_remote_author(loc)
+                if not redirect_auth:
+                    redirect_auth = auth
+                resp = requests.post(
+                    loc,
+                    json=payload,
+                    headers=headers,
+                    timeout=15,
+                    auth=redirect_auth,
                 )
-                logger.warning("Follow inbox rejected status=%s body=%s", resp.status_code, resp.text[:300]) """
-        except requests.exceptions.RequestException as e:
-            messages.error(request, f"Could not reach remote inbox: {str(e)[:100]}")
-            logger.warning("Follow POST failed: %s", e)
+
+        if resp.status_code in (200, 202, 204):
+            messages.success(request, "Follow request sent!", extra_tags="follow")
+        else:
+            err_detail = resp.reason or ""
+            try:
+                err_json = resp.json() if resp.text else {}
+                err_detail = err_json.get("error") or err_json.get("detail") or err_detail
+            except (ValueError, AttributeError):
+                if resp.text and not resp.text.strip().startswith("<"):
+                    err_detail = resp.text[:150]
+            if not err_detail:
+                err_detail = resp.text[:100] if resp.text else "no details"
+            messages.error(
+                request,
+                f"Inbox rejected ({resp.status_code}): {err_detail}",
+            )
+            logger.warning("Follow inbox rejected status=%s body=%s", resp.status_code, resp.text[:300]) """
+    except requests.exceptions.RequestException as e:
+        messages.error(request, f"Could not reach remote inbox: {str(e)[:100]}")
+        logger.warning("Follow POST failed: %s", e)
 
     referer = request.META.get("HTTP_REFERER")
     if referer:

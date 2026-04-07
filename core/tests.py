@@ -16,6 +16,15 @@ class UnfollowAPITestCase(TestCase):
     Tests for Author model and related API endpoints.
     """
     def setUp(self):
+        self.outgoing_id = OutgoingNode.objects.create(
+            url = "test_url",
+            username = "correct_username",
+            password = "correct_password",
+            is_active = True
+        ).id
+        encoded_creds = base64.b64encode("correct_username:correct_password".encode("utf-8")).decode("ascii")
+        self.header = {"Authorization": f"Basic {encoded_creds}"}
+
         self.author1 = Author.objects.create(username='author1', password='pass1')
         self.author2 = Author.objects.create(username='author2', password='pass2')
 
@@ -29,7 +38,7 @@ class UnfollowAPITestCase(TestCase):
         """
         Test that an author can send a follow request to another author.
         """
-        response = self.client.delete(f'{self.url}?auth_id={self.author1.id}')
+        response = self.client.delete(f'{self.url}?auth_id={self.author1.id}', headers=self.header)
         self.assertEqual(response.status_code, 204)
         self.assertFalse(self.author2.followers.filter(id=self.author1.id).exists())
 
@@ -38,7 +47,7 @@ class UnfollowAPITestCase(TestCase):
         Test that trying to unfollow an author you aren't following returns 404.
         """
         self.author2.followers.remove(self.author1)
-        response = self.client.delete(f'{self.url}?auth_id={self.author1.id}')
+        response = self.client.delete(f'{self.url}?auth_id={self.author1.id}', headers=self.header)
         self.assertEqual(response.status_code, 404)
         self.assertIn('Not following', response.json()['detail'])
 
@@ -46,7 +55,7 @@ class UnfollowAPITestCase(TestCase):
         """
         Test that an author cannot unfollow another using invalid auth_id.
         """
-        response = self.client.delete(f'{self.url}?auth_id={self.author2.id}')
+        response = self.client.delete(f'{self.url}?auth_id={self.author2.id}', headers=self.header)
         self.assertEqual(response.status_code, 403)
         self.assertIn('Forbidden', response.json()['detail'])
 
@@ -55,6 +64,15 @@ class FriendsAPITestCase(TestCase):
     Tests the friends list API endpoint (mutual following).
     """
     def setUp(self):
+        self.outgoing_id = OutgoingNode.objects.create(
+            url = "test_url",
+            username = "correct_username",
+            password = "correct_password",
+            is_active = True
+        ).id
+        encoded_creds = base64.b64encode("correct_username:correct_password".encode("utf-8")).decode("ascii")
+        self.header = {"Authorization": f"Basic {encoded_creds}"}
+
         self.author1 = Author.objects.create(username='author1', password='pass1')
         self.author2 = Author.objects.create(username='author2', password='pass2')
         # Mutual following
@@ -67,7 +85,7 @@ class FriendsAPITestCase(TestCase):
         """
         Test that friends endpoint returns only mutual followers.
         """
-        response = self.client.get(f'{self.url}?auth_id={self.author1.id}')
+        response = self.client.get(f'{self.url}?auth_id={self.author1.id}', headers=self.header)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {"friends":[{"id": self.author2.id,"username":"author2"}]})
 
@@ -76,6 +94,15 @@ class FollowRequestsAPITestCase(TestCase):
     Tests listing pending follow requests for an author.
     """
     def setUp(self):
+        self.outgoing_id = OutgoingNode.objects.create(
+            url = "test_url",
+            username = "correct_username",
+            password = "correct_password",
+            is_active = True
+        ).id
+        encoded_creds = base64.b64encode("correct_username:correct_password".encode("utf-8")).decode("ascii")
+        self.header = {"Authorization": f"Basic {encoded_creds}"}
+
         self.author1 = Author.objects.create(username='author1', password='pass1')
         self.author2 = Author.objects.create(username='author2', password='pass2')
         # Author2 requests to follow Author1
@@ -87,7 +114,7 @@ class FollowRequestsAPITestCase(TestCase):
         """
         Test that pending follow requests are returned correctly.
         """
-        response = self.client.get(f'{self.url}?auth_id={self.author1.id}')
+        response = self.client.get(f'{self.url}?auth_id={self.author1.id}', headers=self.header)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.json()['follow_requests']), 1)
         self.assertEqual(response.json()['follow_requests'][0]['requester_username'], 'author2') 
@@ -97,6 +124,15 @@ class FollowRequestsApprovalTestCase(TestCase):
     Tests approving and denying follow requests.
     """
     def setUp(self):
+        self.outgoing_id = OutgoingNode.objects.create(
+            url = "test_url",
+            username = "correct_username",
+            password = "correct_password",
+            is_active = True
+        ).id
+        encoded_creds = base64.b64encode("correct_username:correct_password".encode("utf-8")).decode("ascii")
+        self.header = {"Authorization": f"Basic {encoded_creds}"}
+
         self.author1 = Author.objects.create(username='author1', password='pass1')
         self.author2 = Author.objects.create(username='author2', password='pass2')
         self.follow_req = FollowRequest.objects.create(requester=self.author2, target=self.author1)
@@ -104,7 +140,7 @@ class FollowRequestsApprovalTestCase(TestCase):
 
     def test_approve_follow(self):
         url = reverse('api-approve-follow', args=[self.follow_req.id])
-        response = self.client.post(f'{url}?auth_id={self.author1.id}')
+        response = self.client.post(f'{url}?auth_id={self.author1.id}', headers=self.header)
         self.assertEqual(response.status_code, 200)
         self.assertTrue(self.author2 in self.author1.followers.all())
         self.assertFalse(FollowRequest.objects.filter(id=self.follow_req.id).exists())
@@ -114,7 +150,7 @@ class FollowRequestsApprovalTestCase(TestCase):
         Test denying a follow request removes it without adding to followers.
         """
         url = reverse('api-deny-follow', args=[self.follow_req.id])
-        response = self.client.post(f'{url}?auth_id={self.author1.id}')
+        response = self.client.post(f'{url}?auth_id={self.author1.id}', headers=self.header)
         self.assertEqual(response.status_code, 200)
         self.assertFalse(FollowRequest.objects.filter(id=self.follow_req.id).exists())
         self.assertFalse(self.author2 in self.author1.followers.all())   
@@ -124,6 +160,15 @@ class FollowAPITestCase(TestCase):
     Tests the follow author API endpoint.
     """
     def setUp(self):
+        self.outgoing_id = OutgoingNode.objects.create(
+            url = "test_url",
+            username = "correct_username",
+            password = "correct_password",
+            is_active = True
+        ).id
+        encoded_creds = base64.b64encode("correct_username:correct_password".encode("utf-8")).decode("ascii")
+        self.header = {"Authorization": f"Basic {encoded_creds}"}
+    
         self.author1 = Author.objects.create(username='author1', password='pass1')
         self.author2 = Author.objects.create(username='author2', password='pass2')
 
@@ -131,7 +176,7 @@ class FollowAPITestCase(TestCase):
         self.url = reverse('api-follow-author', args=[self.author2.id])
 
     def test_follow_success(self):
-        response = self.client.post(f'{self.url}?auth_id={self.author1.id}')
+        response = self.client.post(f'{self.url}?auth_id={self.author1.id}', headers=self.header)
         self.assertEqual(response.status_code, 201)
         self.assertTrue(FollowRequest.objects.filter(requester=self.author1, target=self.author2).exists())
 
@@ -140,7 +185,7 @@ class FollowAPITestCase(TestCase):
         Test that an author cannot follow themselves.
         """
         url_self = reverse('api-follow-author', args=[self.author1.id])
-        response = self.client.post(f'{url_self}?auth_id={self.author1.id}')
+        response = self.client.post(f'{url_self}?auth_id={self.author1.id}', headers=self.header)
         self.assertEqual(response.status_code, 403)
         self.assertIn('Cannot follow yourself', response.json()['detail'])
 
@@ -149,7 +194,7 @@ class FollowAPITestCase(TestCase):
         Test that sending a duplicate follow request returns conflict.
         """
         FollowRequest.objects.create(requester=self.author1, target=self.author2)
-        response = self.client.post(f'{self.url}?auth_id={self.author1.id}')
+        response = self.client.post(f'{self.url}?auth_id={self.author1.id}', headers=self.header)
         self.assertEqual(response.status_code, 409)
         self.assertIn('Follow request already sent', response.json()['detail'])
 
@@ -278,10 +323,10 @@ class ProfileViewTestCase(TestCase):
         session.save()
 
         response = self.client.get(profile_url)
-        self.assertContains(response, f"<h2 class=\"entry-title\">{entry1.title}</h2>")
-        self.assertNotContains(response, f"<h2 class=\"entry-title\">{entry2.title}</h2>")
-        self.assertNotContains(response, f"<h2 class=\"entry-title\">{entry3.title}</h2>")
-        self.assertNotContains(response, f"<h2 class=\"entry-title\">{entry4.title}</h2>")
+        self.assertContains(response, entry1.title)
+        self.assertNotContains(response, entry2.title)
+        self.assertNotContains(response, entry3.title)
+        self.assertNotContains(response, entry4.title)
 
         # test database only gets the one entry
         self.assertEqual(Entry.objects.filter(author = self.author, visibility="PUBLIC").count(), 1)
