@@ -1362,9 +1362,15 @@ def ApiAuthorCommented(request, author_id):
         if request.data.get("type", None) != "comment":
             return Response(status=400)
         try:
-            pass
+            entry = request.data.get("entry")
+            host = entry[:entry.index("/api")] + "/"
+            author_fqid = entry[:entry.index("/entries/")]
         except:
-            pass
+            return Response(status=400)
+        credentials = get_object_or_404(host)
+        response = requests.post(f"{author_fqid}/inbox", data=request.data, auth=(credentials.username, credentials.password))
+        response.raise_for_status()
+        return Response(status=201)
 
 @api_view(["GET"])
 def ApiAuthorFqidCommented(request, author_fqid):
