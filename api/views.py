@@ -1379,6 +1379,17 @@ def ApiAuthorFqidCommented(request, author_fqid):
 
 @api_view(["GET"])
 def ApiCommentFqid(request, comment_fqid):
-    response = requests.get(comment_fqid, headers={"Accept": "application/json"})
+    try:
+        host = comment_fqid[:comment_fqid.index("/api")] + "/"
+    except:
+        return Response(status=400)
+    local_endpoint = request.build_absolute_uri()
+    local_host = local_endpoint[:local_endpoint.index("/api")] + "/"
+
+    if local_host == host:
+        response = requests.get(comment_fqid, headers={"Accept": "application/json"})
+    else:
+        credentials = get_object_or_404(IncomingNode, url=host)
+        response = requests.get(comment_fqid, headers={"Accept": "application/json"}, auth=(credentials.username, credentials.password))
     response.raise_for_status()
     return Response(response.content)
