@@ -338,10 +338,7 @@ def _post_payload_to_single_remote(payload, recipient_fqid: str) -> bool:
     headers = {"Accept": "application/json", "Content-Type": "application/json"}
 
     try:
-        print(inbox_url,payload,headers,auth)
         # POST
-        print("==============INBOX URL", inbox_url)
-        print("==============PAYLOAD", payload)
         response = requests.post(
             inbox_url,
             json=payload,
