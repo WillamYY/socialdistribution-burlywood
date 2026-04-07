@@ -1330,3 +1330,49 @@ def ApiCommented(request,author_id,comment_id):
     comment = get_object_or_404(Comment,id = author_fqid + "/commented/" + str(comment_id))
     comment_serializer = CommentSerializer(comment)
     return Response(comment_serializer.data)
+
+@api_view(["GET", "POST"])
+def ApiAuthorCommented(request, author_id):
+    if request.method == "GET":
+        if request.GET.get("page_number") and request.GET.get("page_number").isnumeric():
+            if int(request.GET.get("page_number")) > 0:
+                page_number = int(request.GET.get("page_number"))
+            else:
+                page_number = 1
+        else:
+            page_number = 1
+        if request.GET.get("size") and request.GET.get("size").isnumeric():
+            if int(request.GET.get("size")) > 0:
+                size = int(request.GET.get("size"))
+            else:
+                size = 5
+        else:
+            size = 5
+
+        author = get_object_or_404(Author, id = author_id)
+        author_fqid = author.host + "/authors/" + str(author.id)
+
+        comments = Comment.objects.filter(author = author_fqid)
+        start = (page_number - 1) * size
+        end = start + size
+        res = comments[start:end]
+        return Response([CommentSerializer(comment).data for comment in res])
+
+    elif request.method == "POST":
+        if request.data.get("type", None) != "comment":
+            return Response(status=400)
+        try:
+            pass
+        except:
+            pass
+
+@api_view(["GET"])
+def ApiAuthorFqidCommented(request, author_fqid):
+    comments = Comment.objects.filter(author = author_fqid)
+    return Response([CommentSerializer(comment).data for comment in comments])
+
+@api_view(["GET"])
+def ApiCommentFqid(request, comment_fqid):
+    response = requests.get(comment_fqid, headers={"Accept": "application/json"})
+    response.raise_for_status()
+    return Response(response.content)
