@@ -1,0 +1,7 @@
+{% if messages %}
+<div class="node-admin-msgs" role="status">
+  {% for message in messages %}
+  <p class="node-admin-msg node-admin-msg--{{ message.tags }}">{{ message }}</p>
+  {% endfor %}
+</div>
+{% endif %}

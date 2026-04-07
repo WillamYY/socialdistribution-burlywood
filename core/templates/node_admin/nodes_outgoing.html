@@ -1,0 +1,68 @@
+{% extends 'entries/base.html' %}
+
+{% block body_extra_class %}shell-wide{% endblock %}
+
+{% block title %}Outgoing nodes · Node admin{% endblock %}
+
+{% block content %}
+<div class="page authors-directory-page">
+  <div class="card authors-home-card">
+    <header class="authors-home-header">
+      <h1 class="authors-home-title">Outgoing nodes</h1>
+      <p class="muted authors-home-lead">Nodes allowed to call this server with HTTP basic (URL must end with <code>/</code>).</p>
+    </header>
+    {% include 'node_admin/_nav.html' with active='outgoing' %}
+    {% include 'node_admin/_messages.html' %}
+
+    <section class="node-admin-section">
+      <h2 class="node-admin-h2">Add outgoing node</h2>
+      <form method="post" class="form-stack card" style="padding:20px;">
+        {% csrf_token %}
+        <label for="out_url">Base URL</label>
+        <input id="out_url" name="url" type="url" required placeholder="https://example.com/">
+        <label for="out_user">HTTP basic username</label>
+        <input id="out_user" name="username" type="text">
+        <label for="out_pass">HTTP basic password</label>
+        <input id="out_pass" name="password" type="password" required>
+        <label><input type="checkbox" name="is_active" value="1" checked> Active</label>
+        <button type="submit" class="button success">Add</button>
+      </form>
+    </section>
+
+    <section class="node-admin-section">
+      <h2 class="node-admin-h2">Registered</h2>
+      {% if nodes %}
+      <div class="node-admin-table-wrap">
+        <table class="node-admin-table">
+          <thead>
+            <tr>
+              <th>URL</th>
+              <th>Username</th>
+              <th>Active</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for n in nodes %}
+            <tr>
+              <td><code style="font-size:0.85rem;">{{ n.url }}</code></td>
+              <td>{{ n.username|default:"—" }}</td>
+              <td>{% if n.is_active %}Yes{% else %}No{% endif %}</td>
+              <td>
+                <form method="post" action="{% url 'node_admin_outgoing_delete' n.pk %}" style="display:inline;" onsubmit="return confirm('Remove this node?');">
+                  {% csrf_token %}
+                  <button type="submit" class="button">Remove</button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="muted">No outgoing nodes.</p>
+      {% endif %}
+    </section>
+  </div>
+</div>
+{% endblock %}

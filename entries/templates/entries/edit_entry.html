@@ -7,8 +7,8 @@
 {% block content %}
 <div class="page-container">
     <header class="page-hero">
-        <h1 class="page-hero__title">Edit entry</h1>
-        <p class="page-hero__sub">Update visibility, content, or formatting.</p>
+        <h1 class="page-hero__title">{{ page_hero_title|default:"Edit entry" }}</h1>
+        <p class="page-hero__sub">{{ page_hero_sub|default:"Update visibility, content, or formatting." }}</p>
     </header>
 
     <div class="card form-card">
@@ -18,7 +18,7 @@
             <div class="form-footer">
                 <div class="footer-save-cancel-actions">
                     <button type="submit" class="btn-save">Save Changes</button>
-                    <a href="{% url 'view_my_entries' %}" class="btn-cancel">Cancel</a>
+                    <a href="{% if cancel_url %}{{ cancel_url }}{% else %}{% url 'view_my_entries' %}{% endif %}" class="btn-cancel">Cancel</a>
                 </div>
             </div>
         </form>

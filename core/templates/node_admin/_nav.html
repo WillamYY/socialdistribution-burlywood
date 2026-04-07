@@ -1,0 +1,8 @@
+<nav class="node-admin-nav" aria-label="Node admin sections">
+  <a href="{% url 'node_admin_dashboard' %}" class="node-admin-nav__link{% if active == 'dash' %} node-admin-nav__link--active{% endif %}">Overview</a>
+  <a href="{% url 'node_admin_signups' %}" class="node-admin-nav__link{% if active == 'signups' %} node-admin-nav__link--active{% endif %}">Signups</a>
+  <a href="{% url 'node_admin_authors' %}" class="node-admin-nav__link{% if active == 'authors' %} node-admin-nav__link--active{% endif %}">Authors</a>
+  <a href="{% url 'node_admin_entries' %}" class="node-admin-nav__link{% if active == 'entries' %} node-admin-nav__link--active{% endif %}">Posts</a>
+  <a href="{% url 'node_admin_incoming_nodes' %}" class="node-admin-nav__link{% if active == 'incoming' %} node-admin-nav__link--active{% endif %}">Incoming nodes</a>
+  <a href="{% url 'node_admin_outgoing_nodes' %}" class="node-admin-nav__link{% if active == 'outgoing' %} node-admin-nav__link--active{% endif %}">Outgoing nodes</a>
+</nav>
