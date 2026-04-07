@@ -1287,6 +1287,13 @@ def ApiAddComment(request, author_id, entry_id):
     serializer = CommentSerializer(new_comment)
     return Response(serializer.data, status=201)
 
+@api_view(["GET"])
+def ApiCommentsFqid(request, comment_fqid):
+    url = request.build_absolute_uri()
+    entry_fqid = url[:url.index("/comments")]
+    comment = get_object_or_404(id=comment_fqid, object=entry_fqid)
+    return Response(CommentSerializer(comment).data)
+
 @api_view(['GET'])
 def ApiBrowsePublicEntries(request):
     """

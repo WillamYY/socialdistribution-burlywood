@@ -27,6 +27,7 @@ urlpatterns = [
     path("entries/<path:entry_fqid>/image", views.ApiEntryImage, name="ApiEntryImageGlobal"),
     path("authors/<int:author_id>/entries/<uuid:entry_id>/comments", views.HandleApiEntryComments, name="ApiEntryCommentsNoSlash"),
     path("authors/<int:author_id>/entries/<uuid:entry_id>/comments/", views.HandleApiEntryComments, name="ApiEntryComments"),
+    path("authors/<int:author_id>/entries/<uuid:entry_id>/comments/<path:comment_fqid>", views.ApiCommentsFqid, name="ApiCommentsFqid"),
     path("authors/<int:author_id>/entries/<uuid:entry_id>/comments/<path:comment_fqid>/likes/", views.ApiCommentLikes, name="ApiCommentLikes"),
     path("authors/<int:author_id>/entries/<uuid:entry_id>/comments/add/", views.ApiAddComment, name="ApiAddComment"),
     path("authors/<int:author_id>/commented/<uuid:comment_id>", views.ApiCommented, name="ApiCommented"),
