@@ -1,0 +1,80 @@
+{% extends 'entries/base.html' %}
+
+{% block body_extra_class %}shell-wide{% endblock %}
+
+{% block title %}Authors · Node admin{% endblock %}
+
+{% block content %}
+<div class="page authors-directory-page">
+  <div class="card authors-home-card">
+    <header class="authors-home-header">
+      <h1 class="authors-home-title">Authors on this node</h1>
+      <p class="muted authors-home-lead">Add accounts or remove authors. Deleting an author removes their posts (cascade).</p>
+    </header>
+    {% include 'node_admin/_nav.html' with active='authors' %}
+    {% include 'node_admin/_messages.html' %}
+
+    <section class="node-admin-section">
+      <h2 class="node-admin-h2">Add author</h2>
+      <form method="post" class="form-stack card" style="padding:20px;">
+        {% csrf_token %}
+        <label for="na_username">Username</label>
+        <input id="na_username" name="username" type="text" required maxlength="40">
+        <label for="na_name">Display name</label>
+        <input id="na_name" name="name" type="text" maxlength="40" placeholder="Optional">
+        <label for="na_password">Password</label>
+        <input id="na_password" name="password" type="password" required>
+        <button type="submit" class="button success">Create author</button>
+      </form>
+    </section>
+
+    <section class="node-admin-section">
+      <h2 class="node-admin-h2">All authors</h2>
+      {% if authors %}
+      <div class="node-admin-table-wrap">
+        <table class="node-admin-table">
+          <thead>
+            <tr>
+              <th>Username</th>
+              <th>Name</th>
+              <th>Superuser list</th>
+              <th>ID</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for a in authors %}
+            <tr>
+              <td><strong>{{ a.username }}</strong></td>
+              <td>{{ a.name|default:"—" }}</td>
+              <td>
+                {% if a.username in super_usernames %}
+                  {% if a.listed_publicly %}<span class="muted">Listed</span>{% else %}<span class="muted">Hidden</span>{% endif %}
+                {% else %}
+                  <span class="muted">Always</span>
+                {% endif %}
+              </td>
+              <td class="muted">{{ a.id }}</td>
+              <td class="node-admin-table__actions">
+                <a href="{% url 'ProfileDisplay' a.id %}" class="button">View</a>
+                {% if a.id != request.session.author_id %}
+                <form method="post" action="{% url 'node_admin_author_delete' a.pk %}" style="display:inline;" onsubmit="return confirm('Delete {{ a.username }} and all of their posts? This cannot be undone.');">
+                  {% csrf_token %}
+                  <button type="submit" class="button" style="background:var(--danger, #b91c1c);color:#fff;border-color:transparent;">Delete</button>
+                </form>
+                {% else %}
+                <span class="muted">You</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="muted">No authors.</p>
+      {% endif %}
+    </section>
+  </div>
+</div>
+{% endblock %}

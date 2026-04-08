@@ -1,0 +1,55 @@
+{% extends 'entries/base.html' %}
+
+{% block body_extra_class %}shell-wide{% endblock %}
+
+{% block title %}Posts · Node admin{% endblock %}
+
+{% block content %}
+<div class="page authors-directory-page">
+  <div class="card authors-home-card">
+    <header class="authors-home-header">
+      <h1 class="authors-home-title">All posts</h1>
+      <p class="muted authors-home-lead">Edit any local entry or mark it deleted (soft delete + federation).</p>
+    </header>
+    {% include 'node_admin/_nav.html' with active='entries' %}
+    {% include 'node_admin/_messages.html' %}
+
+    {% if entries %}
+    <div class="node-admin-table-wrap">
+      <table class="node-admin-table">
+        <thead>
+          <tr>
+            <th>Title</th>
+            <th>Author</th>
+            <th>Visibility</th>
+            <th>Published</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for e in entries %}
+          <tr>
+            <td><strong>{{ e.title|truncatechars:48 }}</strong></td>
+            <td>{{ e.author.username }}</td>
+            <td><span class="badge-visibility" style="font-size:0.65rem;">{{ e.visibility }}</span></td>
+            <td class="muted">{{ e.published|date:"M j, Y g:i A" }}</td>
+            <td class="node-admin-table__actions">
+              <a href="{% url 'node_admin_entry_edit' e.id %}" class="button">Edit</a>
+              {% if e.visibility != 'DELETED' %}
+              <form method="post" action="{% url 'node_admin_entry_delete' e.id %}" style="display:inline;" onsubmit="return confirm('Mark this entry as deleted?');">
+                {% csrf_token %}
+                <button type="submit" class="button" style="background:var(--danger, #b91c1c);color:#fff;border-color:transparent;">Delete</button>
+              </form>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="muted">No entries.</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

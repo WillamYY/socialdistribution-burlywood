@@ -6,6 +6,11 @@ from .remote  import  backfill_entries_to_remote_recipient, _credentials_for_rem
 from entries.models import Entry, RemoteEntry
 from interactions.models import Like, Comment
 from django.contrib.auth.hashers import check_password
+from django.contrib.auth import get_user_model
+from django.db import IntegrityError, transaction
+
+from .db_sequence import repair_author_pk_sequence
+from .author_visibility import author_profile_visible_to_viewer, authors_for_public_directory_qs
 from django.urls import reverse, resolve, Resolver404
 from .services import sync_author_github_activity
 from .validators import validate_username, validate_password, validate_github_url
@@ -100,7 +105,7 @@ def NodeDisplay(request):
     """
     Displays all authors in the node.
     """
-    node_authors = Author.objects.all()
+    node_authors = authors_for_public_directory_qs()
     other_node_authors = []
 
     for node in IncomingNode.objects.all():
@@ -121,6 +126,8 @@ def NodeDisplay(request):
 
             base = node.url.rstrip("/")
             for author in authors:
+                if re.match("https?://[^/]+/",author.get("id")).group(0) != node.url:
+                    continue
                 if not isinstance(author, dict):
                     continue
                 aid = author.get("id")
@@ -139,27 +146,84 @@ def NodeDisplay(request):
 def login_view(request):
     """
     Handles login for both plain text (legacy) and hashed passwords (signup users).
+    Django superusers (same account as /admin/) also get session flag for in-app node admin.
     """
     error = None
     if request.method == "POST":
         username = request.POST.get("username", "").strip()
         password = request.POST.get("password", "")
         next_url = request.POST.get("next") or request.GET.get("next")
+        User = get_user_model()
 
-        try:
-            author = Author.objects.get(username=username)
-            # Check both hashed and plain text passwords
-            if check_password(password, author.password) or author.password == password:
-                request.session['author_id'] = author.id
-                request.session['username'] = author.username
+        author = Author.objects.filter(username=username).first()
+        author_ok = False
+        if author:
+            author_ok = check_password(password, author.password) or author.password == password
 
-                if next_url:
-                    return redirect(next_url)
-                return redirect('/app/profile')
+        user = User.objects.filter(username=username).first()
+        super_ok = bool(user and user.is_superuser and user.check_password(password))
+
+        if author_ok:
+            request.session["author_id"] = author.id
+            request.session["username"] = author.username
+            if super_ok:
+                request.session["django_superuser_pk"] = user.pk
             else:
-                error = "Invalid username or password"
-        except Author.DoesNotExist:
-            error = "Invalid username or password"
+                request.session.pop("django_superuser_pk", None)
+            if next_url:
+                return redirect(next_url)
+            return redirect("/app/profile")
+
+        if super_ok:
+            author = Author.objects.filter(username=username).first()
+            host_default = f"https://{request.get_host()}/api"
+            display_name = (user.get_full_name() or "").strip() or username
+
+            if author is None:
+                def _create_superuser_author():
+                    a = Author(
+                        username=username,
+                        name=display_name,
+                        host=host_default,
+                        listed_publicly=False,
+                    )
+                    a.set_password(password)
+                    a.save()
+                    return a
+
+                try:
+                    with transaction.atomic():
+                        author = _create_superuser_author()
+                except IntegrityError:
+                    repair_author_pk_sequence()
+                    author = Author.objects.filter(username=username).first()
+                    if author is None:
+                        try:
+                            with transaction.atomic():
+                                author = _create_superuser_author()
+                        except IntegrityError:
+                            author = Author.objects.filter(username=username).first()
+                if author is None:
+                    error = "Could not create your author profile (database conflict). Try again in a moment."
+                    return render(request, "login.html", {"error": error})
+            else:
+                author.set_password(password)
+                if not author.host:
+                    author.host = host_default
+                author.save()
+
+            base = request.build_absolute_uri("/").rstrip("/")
+            author.web = f"{base}/app/user/{author.id}"
+            author.save(update_fields=["web"])
+
+            request.session["author_id"] = author.id
+            request.session["username"] = author.username
+            request.session["django_superuser_pk"] = user.pk
+            if next_url:
+                return redirect(next_url)
+            return redirect("/app/profile")
+
+        error = "Invalid username or password"
 
     return render(request, "login.html", {"error": error})
 
@@ -311,6 +375,8 @@ def ProfileDisplay(request, id):
     Displays the profile of another user.
     """
     author = get_object_or_404(Author, pk=id)
+    if not author_profile_visible_to_viewer(request, author):
+        raise Http404()
     logged_in_id = request.session.get("author_id")
     is_following = False
     request_sent = False
@@ -669,101 +735,100 @@ def follow_remote_author(request, fqid):
         messages.error(request, "Invalid author.")
         return redirect(request.META.get("HTTP_REFERER", "/"))
 
-    if RemoteFollow.objects.filter(follower=me, followed_fqid=normalized).exists():
+    """ if RemoteFollow.objects.filter(follower=me, followed_fqid=normalized).exists():
         messages.info(request, "You are already following this author.")
-    else:
-        try:
-            base = request.build_absolute_uri("/")[:-1]
-            author_base = (me.host or "").strip().rstrip("/") or base
-            if "/api" not in author_base:
-                author_base = f"{author_base.rstrip('/')}/api"
-            if author_base.startswith("http://"):
-                author_base = "https" + author_base[4:]
-            actor_id = f"{author_base}/authors/{me.id}"
-            actor_info = {
-                "type": "author",
-                "id": actor_id,
-                "host": author_base,
-                "displayName": me.name or me.username,
-                "github": me.github or "",
-                "profileImage": getattr(me, "picture_url", None) or "",
-                "web": me.web or "",
-            }
-            object_info = {"type": "author", "id": normalized}
-            inbox_url = f"{normalized.rstrip('/')}/inbox"
-            headers = {
-                "Content-Type": "application/json",
-                "User-Agent": "SocialDistribution/1.0 (+https://github.com/uofa-cmput404/w26-socialdistribution-project-burlywood)",
-            }
-            payload = {"type": "follow", "actor": actor_info, "object": object_info}
+    else: """
+    try:
+        base = request.build_absolute_uri("/")[:-1]
+        author_base = (me.host or "").strip().rstrip("/") or base
+        if "/api" not in author_base:
+            author_base = f"{author_base.rstrip('/')}/api"
+        if author_base.startswith("http://"):
+            author_base = "https" + author_base[4:]
+        actor_id = f"{author_base}/authors/{me.id}"
+        actor_info = {
+            "type": "author",
+            "id": actor_id,
+            "host": author_base,
+            "displayName": me.name or me.username,
+            "github": me.github or "",
+            "profileImage": getattr(me, "picture_url", None) or "",
+            "web": me.web or "",
+        }
+        object_info = {"type": "author", "id": normalized}
+        inbox_url = f"{normalized.rstrip('/')}/inbox"
+        headers = {
+            "Content-Type": "application/json",
+            "User-Agent": "SocialDistribution/1.0 (+https://github.com/uofa-cmput404/w26-socialdistribution-project-burlywood)",
+        }
+        payload = {"type": "follow", "actor": actor_info, "object": object_info}
 
-            auth = _credentials_for_remote_author(normalized)
-            if not auth:
-                messages.error(request, "No node credentials configured for that remote author.")
-                logger.warning("Follow POST: no credentials for %s", normalized)
-                return redirect(request.META.get("HTTP_REFERER", "/"))
+        auth = _credentials_for_remote_author(normalized)
+        if not auth:
+            messages.error(request, "No node credentials configured for that remote author.")
+            logger.warning("Follow POST: no credentials for %s", normalized)
+            return redirect(request.META.get("HTTP_REFERER", "/"))
 
-            logger.info(
-                "Sending follow to inbox url=%s actor=%s object=%s",
-                inbox_url,
-                actor_info.get("id"),
-                normalized,
-            )
-
-            resp = requests.post(
-                inbox_url,
-                json=payload,
-                headers=headers,
-                timeout=15,
-                allow_redirects=False,
-                auth=auth,
-            )
-            logger.info("Follow POST response status=%s url=%s body=%s", resp.status_code, inbox_url, resp.text[:200] if resp.text else "")
-            if resp.status_code in (301, 302, 307, 308):
-                pass
-                """
-                loc = resp.headers.get("Location", "")
-                if loc and loc != inbox_url:
-                    print("\n\n\n")
-                    print(loc[:loc.index("/api")] + "/")
-                    credentials = get_object_or_404(IncomingNode, url = loc[:loc.index("/api")] + "/")
-                    resp = requests.post(loc, json=payload, headers=headers, timeout=15, auth=(credentials.username, credentials.password))
-                """
-            if not RemoteFollow.objects.filter(follower=me, followed_fqid=normalized).exists():
-                RemoteFollow.objects.create(follower=me, followed_fqid=normalized)
-            """ if resp.status_code in (200, 202, 204):
-                RemoteFollow.objects.create(follower=me, followed_fqid=normalized)
-                    redirect_auth = _credentials_for_remote_author(loc)
-                    if not redirect_auth:
-                        redirect_auth = auth
-                    resp = requests.post(
-                        loc,
-                        json=payload,
-                        headers=headers,
-                        timeout=15,
-                        auth=redirect_auth,
-                    )
-
-            if resp.status_code in (200, 202, 204):
-                messages.success(request, "Follow request sent!", extra_tags="follow")
-            else:
-                err_detail = resp.reason or ""
-                try:
-                    err_json = resp.json() if resp.text else {}
-                    err_detail = err_json.get("error") or err_json.get("detail") or err_detail
-                except (ValueError, AttributeError):
-                    if resp.text and not resp.text.strip().startswith("<"):
-                        err_detail = resp.text[:150]
-                if not err_detail:
-                    err_detail = resp.text[:100] if resp.text else "no details"
-                messages.error(
-                    request,
-                    f"Inbox rejected ({resp.status_code}): {err_detail}",
+        logger.info(
+            "Sending follow to inbox url=%s actor=%s object=%s",
+            inbox_url,
+            actor_info.get("id"),
+            normalized,
+        )
+        resp = requests.post(
+            inbox_url,
+            json=payload,
+            headers=headers,
+            timeout=15,
+            allow_redirects=False,
+            auth=auth,
+        )
+        logger.info("Follow POST response status=%s url=%s body=%s", resp.status_code, inbox_url, resp.text[:200] if resp.text else "")
+        if resp.status_code in (301, 302, 307, 308):
+            pass
+            """
+            loc = resp.headers.get("Location", "")
+            if loc and loc != inbox_url:
+                print("\n\n\n")
+                print(loc[:loc.index("/api")] + "/")
+                credentials = get_object_or_404(IncomingNode, url = loc[:loc.index("/api")] + "/")
+                resp = requests.post(loc, json=payload, headers=headers, timeout=15, auth=(credentials.username, credentials.password))
+            """
+        if not RemoteFollow.objects.filter(follower=me, followed_fqid=normalized).exists():
+            RemoteFollow.objects.create(follower=me, followed_fqid=normalized)
+        """ if resp.status_code in (200, 202, 204):
+            RemoteFollow.objects.create(follower=me, followed_fqid=normalized)
+                redirect_auth = _credentials_for_remote_author(loc)
+                if not redirect_auth:
+                    redirect_auth = auth
+                resp = requests.post(
+                    loc,
+                    json=payload,
+                    headers=headers,
+                    timeout=15,
+                    auth=redirect_auth,
                 )
-                logger.warning("Follow inbox rejected status=%s body=%s", resp.status_code, resp.text[:300]) """
-        except requests.exceptions.RequestException as e:
-            messages.error(request, f"Could not reach remote inbox: {str(e)[:100]}")
-            logger.warning("Follow POST failed: %s", e)
+
+        if resp.status_code in (200, 202, 204):
+            messages.success(request, "Follow request sent!", extra_tags="follow")
+        else:
+            err_detail = resp.reason or ""
+            try:
+                err_json = resp.json() if resp.text else {}
+                err_detail = err_json.get("error") or err_json.get("detail") or err_detail
+            except (ValueError, AttributeError):
+                if resp.text and not resp.text.strip().startswith("<"):
+                    err_detail = resp.text[:150]
+            if not err_detail:
+                err_detail = resp.text[:100] if resp.text else "no details"
+            messages.error(
+                request,
+                f"Inbox rejected ({resp.status_code}): {err_detail}",
+            )
+            logger.warning("Follow inbox rejected status=%s body=%s", resp.status_code, resp.text[:300]) """
+    except requests.exceptions.RequestException as e:
+        messages.error(request, f"Could not reach remote inbox: {str(e)[:100]}")
+        logger.warning("Follow POST failed: %s", e)
 
     referer = request.META.get("HTTP_REFERER")
     if referer:
@@ -899,11 +964,7 @@ def RemoteProfileDisplay(request, fqid):
         if not clean_id:
             continue
         entry["clean_id"] = clean_id
-        # HARDCODED SOLUTION FOR fuchsia
-        if base_host == "https://socialdist-fuchsia-oabbasi-feef8b354ae5.herokuapp.com":
-            remote_comments = entry.get("commentsSrc") or []
-        else:
-            remote_comments = ((entry.get("comments") or {}).get("src")) or []
+        remote_comments = ((entry.get("comments") or {}).get("src")) or []
 
         if not isinstance(remote_comments, list):
             remote_comments = []
@@ -1017,11 +1078,7 @@ def RemoteProfileDisplay(request, fqid):
 
         entry["liked_by_user"] = remote_user_liked
 
-        # HARDCODED SOLUTION FOR fuchsia
-        if base_host == "https://socialdist-fuchsia-oabbasi-feef8b354ae5.herokuapp.com":
-            entry["like_count"]  = entry.get("count") or 0
-        else:
-            entry["like_count"] = entry["likes"]["count"]
+        entry["like_count"] = entry["likes"]["count"]
         # Fixes markdown content
         if "markdown" in entry.get("contentType"):
             entry["markdown"] = render_safe_markdown(entry.get("content"))
